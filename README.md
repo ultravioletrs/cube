@@ -1,2 +1,2 @@
-# vault
-Vault AI
+# Vault AI
+Protects LLMs
