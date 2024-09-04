@@ -1,0 +1,7 @@
+# Cloud-init files
+cloud-init/user-data
+cloud-init/meta-data
+
+# QEMU files
+*.qcow2
+*.img
