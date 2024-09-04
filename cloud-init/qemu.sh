@@ -67,9 +67,6 @@ runcmd:
   - groupadd docker
   - usermod -aG docker $USER
   - newgrp docker
-  - cd /home/$USER
-  - wget https://gist.rodneyosodo.com/rodneyosodo/78f602893ccb493ba27bfd9d180adfbb/raw/HEAD/ollama-compose.yaml -O ollama-compose.yaml
-  - docker compose -f ollama-compose.yaml pull
 
 final_message: "Docker installation complete."
 EOF
