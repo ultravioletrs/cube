@@ -6,38 +6,6 @@ volumes:
   magistrala-invitations-db-volume:
 
 services:
-  nginx:
-    image: nginx:1.25.4-alpine
-    container_name: magistrala-nginx
-    restart: on-failure
-    volumes:
-      - ./nginx/nginx-${AUTH-key}.conf:/etc/nginx/nginx.conf.template
-      - ./nginx/entrypoint.sh:/docker-entrypoint.d/entrypoint.sh
-      - ./nginx/snippets:/etc/nginx/snippets
-      - ./ssl/authorization.js:/etc/nginx/authorization.js
-      - type: bind
-        source: ${MG_NGINX_SERVER_CERT:-./ssl/certs/magistrala-server.crt}
-        target: /etc/ssl/certs/magistrala-server.crt
-      - type: bind
-        source: ${MG_NGINX_SERVER_KEY:-./ssl/certs/magistrala-server.key}
-        target: /etc/ssl/private/magistrala-server.key
-      - type: bind
-        source: ${MG_NGINX_SERVER_CLIENT_CA:-./ssl/certs/ca.crt}
-        target: /etc/ssl/certs/ca.crt
-      - type: bind
-        source: ${MG_NGINX_SERVER_DHPARAM:-./ssl/dhparam.pem}
-        target: /etc/ssl/certs/dhparam.pem
-    ports:
-      - ${MG_NGINX_HTTP_PORT}:${MG_NGINX_HTTP_PORT}
-      - ${MG_NGINX_SSL_PORT}:${MG_NGINX_SSL_PORT}
-    env_file:
-      - .env
-    depends_on:
-      - auth
-      - users
-    networks:
-      - vault-network
-
   nats:
     image: nats:2.10.9-alpine
     container_name: magistrala-nats
