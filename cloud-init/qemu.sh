@@ -8,7 +8,7 @@ SEED_IMAGE="seed.img"
 USER_DATA="user-data"
 META_DATA="meta-data"
 VM_NAME="vault-ai-vm"
-RAM="24576"
+RAM="24576M"
 CPU="6"
 USER="ultraviolet"
 PASSWORD="password"
@@ -26,6 +26,11 @@ fi
 if ! command -v qemu-system-x86_64 &> /dev/null; then
   echo "qemu-system-x86_64 is not installed. Please install it and try again."
   exit 1
+fi
+
+if [[ $EUID -ne 0 ]]; then
+   echo "This script must be run as root" 1>&2
+   exit 1
 fi
 
 if [ ! -f $BASE_IMAGE ]; then
@@ -84,14 +89,20 @@ qemu-system-x86_64 \
   -name $VM_NAME \
   -m $RAM \
   -smp $CPU \
-  -cpu host \
+  -cpu EPYC \
   -machine q35 \
   -enable-kvm \
-  -drive file=${CUSTOM_IMAGE},if=virtio,format=qcow2 \
-  -cdrom $SEED_IMAGE \
   -boot d \
-  -netdev user,id=net0,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:11434,hostfwd=tcp::6192-:3000 \
-  -device e1000,netdev=net0 \
+  -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:11434,hostfwd=tcp::6192-:3000 \
+  -device e1000,netdev=vmnic,romfile= \
   -vnc :9 \
   -nographic \
-  -no-reboot 
+  -no-reboot \
+  -drive file=$SEED_IMAGE,media=cdrom \
+  -drive file=$CUSTOM_IMAGE,if=none,id=disk0,format=qcow2 \
+  -device virtio-scsi-pci,id=scsi,disable-legacy=on,iommu_platform=true \
+  -device scsi-hd,drive=disk0 \
+  -machine memory-encryption=sev0,confidential-guest-support=sev0 \
+  -object sev-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
+  -drive if=pflash,format=raw,unit=0,file=/usr/share/OVMF/OVMF_CODE.fd,readonly=on \
+  -drive if=pflash,format=raw,unit=1,file=/usr/share/OVMF/OVMF_VARS.fd
