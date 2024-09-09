@@ -103,4 +103,6 @@ qemu-system-x86_64 \
   -device virtio-scsi-pci,id=scsi,disable-legacy=on,iommu_platform=true \
   -device scsi-hd,drive=disk0 \
   -machine memory-encryption=sev0,confidential-guest-support=sev0 \
-  -object sev-guest,id=sev0,cbitpos=51,reduced-phys-bits=1
+  -object sev-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
+  -drive if=pflash,format=raw,unit=0,file=/usr/share/OVMF/OVMF_CODE.fd,readonly=on \
+  -drive if=pflash,format=raw,unit=1,file=/usr/share/OVMF/OVMF_VARS.fd
