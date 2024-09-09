@@ -1,0 +1,339 @@
+volumes:
+  magistrala-users-db-volume:
+  magistrala-broker-volume:
+  magistrala-spicedb-db-volume:
+  magistrala-auth-db-volume:
+  magistrala-invitations-db-volume:
+
+services:
+  nats:
+    image: nats:2.10.9-alpine
+    container_name: magistrala-nats
+    restart: on-failure
+    command: "--config=/etc/nats/nats.conf"
+    environment:
+      - MG_NATS_PORT=${MG_NATS_PORT}
+      - MG_NATS_HTTP_PORT=${MG_NATS_HTTP_PORT}
+      - MG_NATS_JETSTREAM_KEY=${MG_NATS_JETSTREAM_KEY}
+    ports:
+      - ${MG_NATS_PORT}:${MG_NATS_PORT}
+      - ${MG_NATS_HTTP_PORT}:${MG_NATS_HTTP_PORT}
+    volumes:
+      - magistrala-broker-volume:/data
+      - ./nats:/etc/nats
+    networks:
+      - vault-network
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.53.0
+    container_name: magistrala-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: ${MG_JAEGER_COLLECTOR_OTLP_ENABLED}
+    command: --memory.max-traces ${MG_JAEGER_MEMORY_MAX_TRACES}
+    ports:
+      - ${MG_JAEGER_FRONTEND}:${MG_JAEGER_FRONTEND}
+      - ${MG_JAEGER_OLTP_HTTP}:${MG_JAEGER_OLTP_HTTP}
+    networks:
+      - vault-network
+
+  spicedb:
+    image: "authzed/spicedb:v1.30.0"
+    container_name: magistrala-spicedb
+    command: "serve"
+    restart: "always"
+    ports:
+      - "8080:8080"
+      - "9091:9090"
+      - "50051:50051"
+    environment:
+      SPICEDB_GRPC_PRESHARED_KEY: ${MG_SPICEDB_PRE_SHARED_KEY}
+      SPICEDB_DATASTORE_ENGINE: ${MG_SPICEDB_DATASTORE_ENGINE}
+      SPICEDB_DATASTORE_CONN_URI: "${MG_SPICEDB_DATASTORE_ENGINE}://${MG_SPICEDB_DB_USER}:${MG_SPICEDB_DB_PASS}@spicedb-db:${MG_SPICEDB_DB_PORT}/${MG_SPICEDB_DB_NAME}?sslmode=disable"
+    depends_on:
+      - spicedb-migrate
+    networks:
+      - vault-network
+
+  spicedb-migrate:
+    image: "authzed/spicedb:v1.30.0"
+    container_name: magistrala-spicedb-migrate
+    command: "migrate head"
+    restart: "on-failure"
+    environment:
+      SPICEDB_DATASTORE_ENGINE: ${MG_SPICEDB_DATASTORE_ENGINE}
+      SPICEDB_DATASTORE_CONN_URI: "${MG_SPICEDB_DATASTORE_ENGINE}://${MG_SPICEDB_DB_USER}:${MG_SPICEDB_DB_PASS}@spicedb-db:${MG_SPICEDB_DB_PORT}/${MG_SPICEDB_DB_NAME}?sslmode=disable"
+    depends_on:
+      - spicedb-db
+    networks:
+      - vault-network
+
+  spicedb-db:
+    image: "postgres:16.2-alpine"
+    container_name: magistrala-spicedb-db
+    ports:
+      - "6010:5432"
+    environment:
+      POSTGRES_USER: ${MG_SPICEDB_DB_USER}
+      POSTGRES_PASSWORD: ${MG_SPICEDB_DB_PASS}
+      POSTGRES_DB: ${MG_SPICEDB_DB_NAME}
+    volumes:
+      - magistrala-spicedb-db-volume:/var/lib/postgresql/data
+    networks:
+      - vault-network
+
+  auth-db:
+    image: postgres:16.2-alpine
+    container_name: magistrala-auth-db
+    restart: on-failure
+    ports:
+      - 6004:5432
+    environment:
+      POSTGRES_USER: ${MG_AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${MG_AUTH_DB_PASS}
+      POSTGRES_DB: ${MG_AUTH_DB_NAME}
+    volumes:
+      - magistrala-auth-db-volume:/var/lib/postgresql/data
+    networks:
+      - vault-network
+
+  auth:
+    image: magistrala/auth:${MG_RELEASE_TAG}
+    container_name: magistrala-auth
+    depends_on:
+      - auth-db
+      - spicedb
+    expose:
+      - ${MG_AUTH_GRPC_PORT}
+    restart: on-failure
+    environment:
+      MG_AUTH_LOG_LEVEL: ${MG_AUTH_LOG_LEVEL}
+      MG_SPICEDB_SCHEMA_FILE: ${MG_SPICEDB_SCHEMA_FILE}
+      MG_SPICEDB_PRE_SHARED_KEY: ${MG_SPICEDB_PRE_SHARED_KEY}
+      MG_SPICEDB_HOST: ${MG_SPICEDB_HOST}
+      MG_SPICEDB_PORT: ${MG_SPICEDB_PORT}
+      MG_AUTH_ACCESS_TOKEN_DURATION: ${MG_AUTH_ACCESS_TOKEN_DURATION}
+      MG_AUTH_REFRESH_TOKEN_DURATION: ${MG_AUTH_REFRESH_TOKEN_DURATION}
+      MG_AUTH_INVITATION_DURATION: ${MG_AUTH_INVITATION_DURATION}
+      MG_AUTH_SECRET_KEY: ${MG_AUTH_SECRET_KEY}
+      MG_AUTH_HTTP_HOST: ${MG_AUTH_HTTP_HOST}
+      MG_AUTH_HTTP_PORT: ${MG_AUTH_HTTP_PORT}
+      MG_AUTH_HTTP_SERVER_CERT: ${MG_AUTH_HTTP_SERVER_CERT}
+      MG_AUTH_HTTP_SERVER_KEY: ${MG_AUTH_HTTP_SERVER_KEY}
+      MG_AUTH_GRPC_HOST: ${MG_AUTH_GRPC_HOST}
+      MG_AUTH_GRPC_PORT: ${MG_AUTH_GRPC_PORT}
+      ## Compose supports parameter expansion in environment,
+      ## Eg: ${VAR:+replacement} or ${VAR+replacement} -> replacement if VAR is set and non-empty, otherwise empty
+      ## Eg :${VAR:-default} or ${VAR-default}  -> value of VAR if set and non-empty, otherwise default
+      MG_AUTH_GRPC_SERVER_CERT: ${MG_AUTH_GRPC_SERVER_CERT:+/auth-grpc-server.crt}
+      MG_AUTH_GRPC_SERVER_KEY: ${MG_AUTH_GRPC_SERVER_KEY:+/auth-grpc-server.key}
+      MG_AUTH_GRPC_SERVER_CA_CERTS: ${MG_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      MG_AUTH_GRPC_CLIENT_CA_CERTS: ${MG_AUTH_GRPC_CLIENT_CA_CERTS:+/auth-grpc-client-ca.crt}
+      MG_AUTH_DB_HOST: ${MG_AUTH_DB_HOST}
+      MG_AUTH_DB_PORT: ${MG_AUTH_DB_PORT}
+      MG_AUTH_DB_USER: ${MG_AUTH_DB_USER}
+      MG_AUTH_DB_PASS: ${MG_AUTH_DB_PASS}
+      MG_AUTH_DB_NAME: ${MG_AUTH_DB_NAME}
+      MG_AUTH_DB_SSL_MODE: ${MG_AUTH_DB_SSL_MODE}
+      MG_AUTH_DB_SSL_CERT: ${MG_AUTH_DB_SSL_CERT}
+      MG_AUTH_DB_SSL_KEY: ${MG_AUTH_DB_SSL_KEY}
+      MG_AUTH_DB_SSL_ROOT_CERT: ${MG_AUTH_DB_SSL_ROOT_CERT}
+      MG_JAEGER_URL: ${MG_JAEGER_URL}
+      MG_JAEGER_TRACE_RATIO: ${MG_JAEGER_TRACE_RATIO}
+      MG_SEND_TELEMETRY: ${MG_SEND_TELEMETRY}
+      MG_AUTH_ADAPTER_INSTANCE_ID: ${MG_AUTH_ADAPTER_INSTANCE_ID}
+      MG_ES_URL: ${MG_ES_URL}
+    ports:
+      - ${MG_AUTH_HTTP_PORT}:${MG_AUTH_HTTP_PORT}
+      - ${MG_AUTH_GRPC_PORT}:${MG_AUTH_GRPC_PORT}
+    volumes:
+      - ./spicedb/schema.zed:${MG_SPICEDB_SCHEMA_FILE}
+      # Auth gRPC mTLS server certificates
+      - type: bind
+        source: ${MG_AUTH_GRPC_SERVER_CERT:-ssl/certs/dummy/server_cert}
+        target: /auth-grpc-server${MG_AUTH_GRPC_SERVER_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_SERVER_KEY:-ssl/certs/dummy/server_key}
+        target: /auth-grpc-server${MG_AUTH_GRPC_SERVER_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca_certs}
+        target: /auth-grpc-server-ca${MG_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_CLIENT_CA_CERTS:-ssl/certs/dummy/client_ca_certs}
+        target: /auth-grpc-client-ca${MG_AUTH_GRPC_CLIENT_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+    networks:
+      - vault-network
+
+  users-db:
+    image: postgres:16.2-alpine
+    container_name: magistrala-users-db
+    restart: on-failure
+    command: postgres -c "max_connections=${MG_POSTGRES_MAX_CONNECTIONS}"
+    environment:
+      POSTGRES_USER: ${MG_USERS_DB_USER}
+      POSTGRES_PASSWORD: ${MG_USERS_DB_PASS}
+      POSTGRES_DB: ${MG_USERS_DB_NAME}
+      MG_POSTGRES_MAX_CONNECTIONS: ${MG_POSTGRES_MAX_CONNECTIONS}
+    ports:
+      - 6000:5432
+    volumes:
+      - magistrala-users-db-volume:/var/lib/postgresql/data
+    networks:
+      - vault-network
+
+  users:
+    image: magistrala/users:${MG_RELEASE_TAG}
+    container_name: magistrala-users
+    depends_on:
+      - users-db
+      - auth
+      - nats
+    restart: on-failure
+    environment:
+      MG_USERS_LOG_LEVEL: ${MG_USERS_LOG_LEVEL}
+      MG_USERS_SECRET_KEY: ${MG_USERS_SECRET_KEY}
+      MG_USERS_ADMIN_EMAIL: ${MG_USERS_ADMIN_EMAIL}
+      MG_USERS_ADMIN_PASSWORD: ${MG_USERS_ADMIN_PASSWORD}
+      MG_USERS_PASS_REGEX: ${MG_USERS_PASS_REGEX}
+      MG_USERS_ACCESS_TOKEN_DURATION: ${MG_USERS_ACCESS_TOKEN_DURATION}
+      MG_USERS_REFRESH_TOKEN_DURATION: ${MG_USERS_REFRESH_TOKEN_DURATION}
+      MG_TOKEN_RESET_ENDPOINT: ${MG_TOKEN_RESET_ENDPOINT}
+      MG_USERS_HTTP_HOST: ${MG_USERS_HTTP_HOST}
+      MG_USERS_HTTP_PORT: ${MG_USERS_HTTP_PORT}
+      MG_USERS_HTTP_SERVER_CERT: ${MG_USERS_HTTP_SERVER_CERT}
+      MG_USERS_HTTP_SERVER_KEY: ${MG_USERS_HTTP_SERVER_KEY}
+      MG_USERS_DB_HOST: ${MG_USERS_DB_HOST}
+      MG_USERS_DB_PORT: ${MG_USERS_DB_PORT}
+      MG_USERS_DB_USER: ${MG_USERS_DB_USER}
+      MG_USERS_DB_PASS: ${MG_USERS_DB_PASS}
+      MG_USERS_DB_NAME: ${MG_USERS_DB_NAME}
+      MG_USERS_DB_SSL_MODE: ${MG_USERS_DB_SSL_MODE}
+      MG_USERS_DB_SSL_CERT: ${MG_USERS_DB_SSL_CERT}
+      MG_USERS_DB_SSL_KEY: ${MG_USERS_DB_SSL_KEY}
+      MG_USERS_DB_SSL_ROOT_CERT: ${MG_USERS_DB_SSL_ROOT_CERT}
+      MG_USERS_ALLOW_SELF_REGISTER: ${MG_USERS_ALLOW_SELF_REGISTER}
+      MG_EMAIL_HOST: ${MG_EMAIL_HOST}
+      MG_EMAIL_PORT: ${MG_EMAIL_PORT}
+      MG_EMAIL_USERNAME: ${MG_EMAIL_USERNAME}
+      MG_EMAIL_PASSWORD: ${MG_EMAIL_PASSWORD}
+      MG_EMAIL_FROM_ADDRESS: ${MG_EMAIL_FROM_ADDRESS}
+      MG_EMAIL_FROM_NAME: ${MG_EMAIL_FROM_NAME}
+      MG_EMAIL_TEMPLATE: ${MG_EMAIL_TEMPLATE}
+      MG_ES_URL: ${MG_ES_URL}
+      MG_JAEGER_URL: ${MG_JAEGER_URL}
+      MG_JAEGER_TRACE_RATIO: ${MG_JAEGER_TRACE_RATIO}
+      MG_SEND_TELEMETRY: ${MG_SEND_TELEMETRY}
+      MG_AUTH_GRPC_URL: ${MG_AUTH_GRPC_URL}
+      MG_AUTH_GRPC_TIMEOUT: ${MG_AUTH_GRPC_TIMEOUT}
+      MG_AUTH_GRPC_CLIENT_CERT: ${MG_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
+      MG_AUTH_GRPC_CLIENT_KEY: ${MG_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
+      MG_AUTH_GRPC_SERVER_CA_CERTS: ${MG_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      MG_GOOGLE_CLIENT_ID: ${MG_GOOGLE_CLIENT_ID}
+      MG_GOOGLE_CLIENT_SECRET: ${MG_GOOGLE_CLIENT_SECRET}
+      MG_GOOGLE_REDIRECT_URL: ${MG_GOOGLE_REDIRECT_URL}
+      MG_GOOGLE_STATE: ${MG_GOOGLE_STATE}
+      MG_OAUTH_UI_REDIRECT_URL: ${MG_OAUTH_UI_REDIRECT_URL}
+      MG_OAUTH_UI_ERROR_URL: ${MG_OAUTH_UI_ERROR_URL}
+      MG_USERS_DELETE_INTERVAL: ${MG_USERS_DELETE_INTERVAL}
+      MG_USERS_DELETE_AFTER: ${MG_USERS_DELETE_AFTER}
+    ports:
+      - ${MG_USERS_HTTP_PORT}:${MG_USERS_HTTP_PORT}
+    volumes:
+      - ./templates/${MG_USERS_RESET_PWD_TEMPLATE}:/email.tmpl
+      # Auth gRPC client certificates
+      - type: bind
+        source: ${MG_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /auth-grpc-server-ca${MG_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+    networks:
+      - vault-network
+
+  invitations-db:
+    image: postgres:16.2-alpine
+    container_name: magistrala-invitations-db
+    restart: on-failure
+    command: postgres -c "max_connections=${MG_POSTGRES_MAX_CONNECTIONS}"
+    environment:
+      POSTGRES_USER: ${MG_INVITATIONS_DB_USER}
+      POSTGRES_PASSWORD: ${MG_INVITATIONS_DB_PASS}
+      POSTGRES_DB: ${MG_INVITATIONS_DB_NAME}
+      MG_POSTGRES_MAX_CONNECTIONS: ${MG_POSTGRES_MAX_CONNECTIONS}
+    ports:
+      - 6021:5432
+    volumes:
+      - magistrala-invitations-db-volume:/var/lib/postgresql/data
+    networks:
+      - vault-network
+
+  invitations:
+    image: magistrala/invitations:${MG_RELEASE_TAG}
+    container_name: magistrala-invitations
+    restart: on-failure
+    depends_on:
+      - auth
+      - invitations-db
+    environment:
+      MG_INVITATIONS_LOG_LEVEL: ${MG_INVITATIONS_LOG_LEVEL}
+      MG_USERS_URL: ${MG_USERS_URL}
+      MG_DOMAINS_URL: ${MG_DOMAINS_URL}
+      MG_INVITATIONS_HTTP_HOST: ${MG_INVITATIONS_HTTP_HOST}
+      MG_INVITATIONS_HTTP_PORT: ${MG_INVITATIONS_HTTP_PORT}
+      MG_INVITATIONS_HTTP_SERVER_CERT: ${MG_INVITATIONS_HTTP_SERVER_CERT}
+      MG_INVITATIONS_HTTP_SERVER_KEY: ${MG_INVITATIONS_HTTP_SERVER_KEY}
+      MG_INVITATIONS_DB_HOST: ${MG_INVITATIONS_DB_HOST}
+      MG_INVITATIONS_DB_USER: ${MG_INVITATIONS_DB_USER}
+      MG_INVITATIONS_DB_PASS: ${MG_INVITATIONS_DB_PASS}
+      MG_INVITATIONS_DB_PORT: ${MG_INVITATIONS_DB_PORT}
+      MG_INVITATIONS_DB_NAME: ${MG_INVITATIONS_DB_NAME}
+      MG_INVITATIONS_DB_SSL_MODE: ${MG_INVITATIONS_DB_SSL_MODE}
+      MG_INVITATIONS_DB_SSL_CERT: ${MG_INVITATIONS_DB_SSL_CERT}
+      MG_INVITATIONS_DB_SSL_KEY: ${MG_INVITATIONS_DB_SSL_KEY}
+      MG_INVITATIONS_DB_SSL_ROOT_CERT: ${MG_INVITATIONS_DB_SSL_ROOT_CERT}
+      MG_AUTH_GRPC_URL: ${MG_AUTH_GRPC_URL}
+      MG_AUTH_GRPC_TIMEOUT: ${MG_AUTH_GRPC_TIMEOUT}
+      MG_AUTH_GRPC_CLIENT_CERT: ${MG_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
+      MG_AUTH_GRPC_CLIENT_KEY: ${MG_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
+      MG_AUTH_GRPC_SERVER_CA_CERTS: ${MG_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      MG_JAEGER_URL: ${MG_JAEGER_URL}
+      MG_JAEGER_TRACE_RATIO: ${MG_JAEGER_TRACE_RATIO}
+      MG_SEND_TELEMETRY: ${MG_SEND_TELEMETRY}
+      MG_INVITATIONS_INSTANCE_ID: ${MG_INVITATIONS_INSTANCE_ID}
+    ports:
+      - ${MG_INVITATIONS_HTTP_PORT}:${MG_INVITATIONS_HTTP_PORT}
+    volumes:
+      # Auth gRPC client certificates
+      - type: bind
+        source: ${MG_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /auth-grpc-server-ca${MG_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+    networks:
+      - vault-network

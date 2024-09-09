@@ -1,59 +1,11 @@
-name: ollama
+name: "vault"
 
-volumes:
-  open-webui:
-    driver: local
-  ollama:
-    driver: local
+networks:
+  vault-network:
+    driver: bridge
 
-services:
-  ollama:
-    container_name: ollama
-    image: ollama/ollama:0.3.8
-    restart: unless-stopped
-    ports:
-      - 11434:11434/tcp
-    volumes:
-      - ollama:/root/.ollama
-    tty: true
-
-  open-webui:
-    container_name: open-webui
-    image: ghcr.io/open-webui/open-webui:v0.3.16-ollama
-    restart: unless-stopped
-    volumes:
-      - open-webui:/app/backend/data
-    ports:
-      - 3000:8080
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434/api
-
-  pull-llama3:
-    image: docker:27.2.0
-    container_name: pull-llama3
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull llama3:8b"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
-  pull-starcoder2:
-    image: docker:27.2.0
-    container_name: pull-starcoder2
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull starcoder2:3b"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-
-  pull-nomic-embed-text:
-    image: docker:27.2.0
-    container_name: pull-nomic-embed-text
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull nomic-embed-text"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+include:
+  - path: ./ollama-compose.yaml
+    env_file: .env
+  - path: ./magistrala-compose.yaml
+    env_file: .env
