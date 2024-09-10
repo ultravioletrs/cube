@@ -128,6 +128,8 @@ services:
       MG_SEND_TELEMETRY: ${MG_SEND_TELEMETRY}
       MG_AUTH_ADAPTER_INSTANCE_ID: ${MG_AUTH_ADAPTER_INSTANCE_ID}
       MG_ES_URL: ${MG_ES_URL}
+    ports:
+      - ${MG_AUTH_GRPC_PORT}:${MG_AUTH_GRPC_PORT}
     volumes:
       - ./spicedb/schema.zed:${MG_SPICEDB_SCHEMA_FILE}
       # Auth gRPC mTLS server certificates
