@@ -56,15 +56,10 @@ http:
           interval: 10s
           timeout: 10s
 
-    ollama:
+    vault-proxy:
       loadBalancer:
         servers:
-          - url: http://ollama:11434
-        healthCheck:
-          scheme: http
-          path: /
-          interval: 10s
-          timeout: 10s
+          - url: http://vault-proxy:8900
 
   routers:
     users-health:
@@ -104,7 +99,7 @@ http:
       rule: "PathPrefix(`/ollama`)"
       entryPoints:
         - websecure
-      service: ollama
+      service: vault-proxy
       middlewares:
         - strip-ollama-prefix-middleware
         - retry-middleware
