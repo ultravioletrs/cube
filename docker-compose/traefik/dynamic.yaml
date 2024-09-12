@@ -24,6 +24,9 @@ http:
       stripPrefix:
         prefixes:
           - "/ollama"
+    forward-auth-middleware:
+      forwardAuth:
+        address: http://vault-proxy:8900
 
   services:
     users:
@@ -56,10 +59,15 @@ http:
           interval: 10s
           timeout: 10s
 
-    vault-proxy:
+    ollama:
       loadBalancer:
         servers:
-          - url: http://vault-proxy:8900
+          - url: http://ollama:11434
+        healthCheck:
+          scheme: http
+          path: /
+          interval: 10s
+          timeout: 10s
 
   routers:
     users-health:
@@ -99,9 +107,10 @@ http:
       rule: "PathPrefix(`/ollama`)"
       entryPoints:
         - websecure
-      service: vault-proxy
+      service: ollama
       middlewares:
         - strip-ollama-prefix-middleware
+        - forward-auth-middleware
         - retry-middleware
         - headers-middleware
       priority: 10
