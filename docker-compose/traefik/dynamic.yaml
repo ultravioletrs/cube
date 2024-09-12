@@ -20,6 +20,10 @@ http:
       stripPrefix:
         prefixes:
           - "/users"
+    strip-ollama-prefix-middleware:
+      stripPrefix:
+        prefixes:
+          - "/ollama"
 
   services:
     users:
@@ -108,7 +112,11 @@ http:
       priority: 10
 
     users-entities:
-      # /groups/{group_id}/users or /channels/{channel_id}/users or /domains/{domain_id}/users or /channels/{member_id}/groups or /users/{member_id}/groups
+      # /groups/{group_id}/users
+      # /channels/{channel_id}/users
+      # /domains/{domain_id}/users
+      # /channels/{member_id}/groups
+      # /users/{member_id}/groups
       rule: "PathRegexp(`^/(groups|channels|domains)/(.+)/users`) || PathRegexp(`^/(channels|users)/(.+)/groups`)"
       entryPoints:
         - websecure
