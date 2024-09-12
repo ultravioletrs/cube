@@ -5,3 +5,6 @@ cloud-init/meta-data
 # QEMU files
 *.qcow2
 *.img
+
+# Traefik files
+acme.json

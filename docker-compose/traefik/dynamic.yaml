@@ -1,0 +1,168 @@
+http:
+  middlewares:
+    retry-middleware:
+      retry:
+        attempts: 4
+        initialInterval: 100ms
+    headers-middleware:
+      headers:
+        frameDeny: true
+        browserXssFilter: true
+    strip-auth-health-prefix-middleware:
+      stripPrefix:
+        prefixes:
+          - "/auth"
+    strip-invitations-health-prefix-middleware:
+      stripPrefix:
+        prefixes:
+          - "/invitations"
+    strip-users-health-prefix-middleware:
+      stripPrefix:
+        prefixes:
+          - "/users"
+    strip-ollama-prefix-middleware:
+      stripPrefix:
+        prefixes:
+          - "/ollama"
+
+  services:
+    users:
+      loadBalancer:
+        servers:
+          - url: http://users:9002
+        healthCheck:
+          scheme: http
+          path: /health
+          interval: 10s
+          timeout: 10s
+
+    auth:
+      loadBalancer:
+        servers:
+          - url: http://auth:8189
+        healthCheck:
+          scheme: http
+          path: /health
+          interval: 10s
+          timeout: 10s
+
+    invitations:
+      loadBalancer:
+        servers:
+          - url: http://invitations:9020
+        healthCheck:
+          scheme: http
+          path: /health
+          interval: 10s
+          timeout: 10s
+
+    ollama:
+      loadBalancer:
+        servers:
+          - url: http://ollama:11434
+        healthCheck:
+          scheme: http
+          path: /
+          interval: 10s
+          timeout: 10s
+
+  routers:
+    users-health:
+      rule: "Path(`/users/health`)"
+      entryPoints:
+        - websecure
+      service: users
+      middlewares:
+        - strip-users-health-prefix-middleware
+        - retry-middleware
+        - headers-middleware
+      priority: 10
+
+    auth-health:
+      rule: "Path(`/auth/health`)"
+      entryPoints:
+        - websecure
+      service: auth
+      middlewares:
+        - strip-auth-health-prefix-middleware
+        - retry-middleware
+        - headers-middleware
+      priority: 10
+
+    invitations-health:
+      rule: "Path(`/invitations/health`)"
+      entryPoints:
+        - websecure
+      service: invitations
+      middlewares:
+        - strip-invitations-health-prefix-middleware
+        - retry-middleware
+        - headers-middleware
+      priority: 10
+
+    ollama:
+      rule: "PathPrefix(`/ollama`)"
+      entryPoints:
+        - websecure
+      service: ollama
+      middlewares:
+        - strip-ollama-prefix-middleware
+        - retry-middleware
+        - headers-middleware
+      priority: 10
+
+    users-entities:
+      # /groups/{group_id}/users
+      # /channels/{channel_id}/users
+      # /domains/{domain_id}/users
+      # /channels/{member_id}/groups
+      # /users/{member_id}/groups
+      rule: "PathRegexp(`^/(groups|channels|domains)/(.+)/users`) || PathRegexp(`^/(channels|users)/(.+)/groups`)"
+      entryPoints:
+        - websecure
+      service: users
+      middlewares:
+        - retry-middleware
+        - headers-middleware
+      priority: 9
+
+    users:
+      rule: "PathPrefix(`/users`) || PathPrefix(`/password`) || Path(`/health`) || PathPrefix(`/groups`)"
+      entryPoints:
+        - websecure
+      service: users
+      middlewares:
+        - retry-middleware
+        - headers-middleware
+      priority: 8
+
+    auth-entities:
+      # /users/{member_id}/domains
+      rule: "PathRegexp(`^/users/(.+)/domains`)"
+      entryPoints:
+        - websecure
+      service: auth
+      middlewares:
+        - retry-middleware
+        - headers-middleware
+      priority: 9
+
+    auth:
+      rule: "PathPrefix(`/policies`) || PathPrefix(`/keys`) || PathPrefix(`/domains`)"
+      entryPoints:
+        - websecure
+      service: auth
+      middlewares:
+        - retry-middleware
+        - headers-middleware
+      priority: 8
+
+    invitations:
+      rule: "PathPrefix(`/invitations`)"
+      entryPoints:
+        - websecure
+      service: invitations
+      middlewares:
+        - retry-middleware
+        - headers-middleware
+      priority: 8

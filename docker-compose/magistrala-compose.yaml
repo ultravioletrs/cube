@@ -15,9 +15,6 @@ services:
       - MG_NATS_PORT=${MG_NATS_PORT}
       - MG_NATS_HTTP_PORT=${MG_NATS_HTTP_PORT}
       - MG_NATS_JETSTREAM_KEY=${MG_NATS_JETSTREAM_KEY}
-    ports:
-      - ${MG_NATS_PORT}:${MG_NATS_PORT}
-      - ${MG_NATS_HTTP_PORT}:${MG_NATS_HTTP_PORT}
     volumes:
       - magistrala-broker-volume:/data
       - ./nats:/etc/nats
@@ -30,9 +27,6 @@ services:
     environment:
       COLLECTOR_OTLP_ENABLED: ${MG_JAEGER_COLLECTOR_OTLP_ENABLED}
     command: --memory.max-traces ${MG_JAEGER_MEMORY_MAX_TRACES}
-    ports:
-      - ${MG_JAEGER_FRONTEND}:${MG_JAEGER_FRONTEND}
-      - ${MG_JAEGER_OLTP_HTTP}:${MG_JAEGER_OLTP_HTTP}
     networks:
       - vault-network
 
@@ -41,10 +35,6 @@ services:
     container_name: magistrala-spicedb
     command: "serve"
     restart: "always"
-    ports:
-      - "8080:8080"
-      - "9091:9090"
-      - "50051:50051"
     environment:
       SPICEDB_GRPC_PRESHARED_KEY: ${MG_SPICEDB_PRE_SHARED_KEY}
       SPICEDB_DATASTORE_ENGINE: ${MG_SPICEDB_DATASTORE_ENGINE}
@@ -70,8 +60,6 @@ services:
   spicedb-db:
     image: "postgres:16.2-alpine"
     container_name: magistrala-spicedb-db
-    ports:
-      - "6010:5432"
     environment:
       POSTGRES_USER: ${MG_SPICEDB_DB_USER}
       POSTGRES_PASSWORD: ${MG_SPICEDB_DB_PASS}
@@ -85,8 +73,6 @@ services:
     image: postgres:16.2-alpine
     container_name: magistrala-auth-db
     restart: on-failure
-    ports:
-      - 6004:5432
     environment:
       POSTGRES_USER: ${MG_AUTH_DB_USER}
       POSTGRES_PASSWORD: ${MG_AUTH_DB_PASS}
@@ -143,7 +129,6 @@ services:
       MG_AUTH_ADAPTER_INSTANCE_ID: ${MG_AUTH_ADAPTER_INSTANCE_ID}
       MG_ES_URL: ${MG_ES_URL}
     ports:
-      - ${MG_AUTH_HTTP_PORT}:${MG_AUTH_HTTP_PORT}
       - ${MG_AUTH_GRPC_PORT}:${MG_AUTH_GRPC_PORT}
     volumes:
       - ./spicedb/schema.zed:${MG_SPICEDB_SCHEMA_FILE}
@@ -181,8 +166,6 @@ services:
       POSTGRES_PASSWORD: ${MG_USERS_DB_PASS}
       POSTGRES_DB: ${MG_USERS_DB_NAME}
       MG_POSTGRES_MAX_CONNECTIONS: ${MG_POSTGRES_MAX_CONNECTIONS}
-    ports:
-      - 6000:5432
     volumes:
       - magistrala-users-db-volume:/var/lib/postgresql/data
     networks:
@@ -243,8 +226,6 @@ services:
       MG_OAUTH_UI_ERROR_URL: ${MG_OAUTH_UI_ERROR_URL}
       MG_USERS_DELETE_INTERVAL: ${MG_USERS_DELETE_INTERVAL}
       MG_USERS_DELETE_AFTER: ${MG_USERS_DELETE_AFTER}
-    ports:
-      - ${MG_USERS_HTTP_PORT}:${MG_USERS_HTTP_PORT}
     volumes:
       - ./templates/${MG_USERS_RESET_PWD_TEMPLATE}:/email.tmpl
       # Auth gRPC client certificates
@@ -276,8 +257,6 @@ services:
       POSTGRES_PASSWORD: ${MG_INVITATIONS_DB_PASS}
       POSTGRES_DB: ${MG_INVITATIONS_DB_NAME}
       MG_POSTGRES_MAX_CONNECTIONS: ${MG_POSTGRES_MAX_CONNECTIONS}
-    ports:
-      - 6021:5432
     volumes:
       - magistrala-invitations-db-volume:/var/lib/postgresql/data
     networks:
@@ -316,8 +295,6 @@ services:
       MG_JAEGER_TRACE_RATIO: ${MG_JAEGER_TRACE_RATIO}
       MG_SEND_TELEMETRY: ${MG_SEND_TELEMETRY}
       MG_INVITATIONS_INSTANCE_ID: ${MG_INVITATIONS_INSTANCE_ID}
-    ports:
-      - ${MG_INVITATIONS_HTTP_PORT}:${MG_INVITATIONS_HTTP_PORT}
     volumes:
       # Auth gRPC client certificates
       - type: bind

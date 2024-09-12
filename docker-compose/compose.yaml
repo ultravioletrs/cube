@@ -9,3 +9,20 @@ include:
     env_file: .env
   - path: ./magistrala-compose.yaml
     env_file: .env
+
+services:
+  traefik:
+    container_name: traefik
+    image: traefik:v3.1.2
+    restart: unless-stopped
+    command: --api.insecure=true --providers.docker
+    ports:
+      - 80:80
+      - 443:443
+      # - 8089:8080 # Enable for development
+    volumes:
+      - ./traefik/traefik.yaml:/etc/traefik/traefik.yaml
+      - ./traefik/dynamic.yaml:/etc/traefik/dynamic.yaml
+      - ./traefik/ssl:/etc/traefik/ssl
+    networks:
+      - vault-network
