@@ -8,10 +8,6 @@ http:
       headers:
         frameDeny: true
         browserXssFilter: true
-    strip-ollama-prefix-middleware:
-      stripPrefix:
-        prefixes:
-          - "/ollama"
     strip-auth-health-prefix-middleware:
       stripPrefix:
         prefixes:
@@ -66,19 +62,7 @@ http:
           interval: 10s
           timeout: 10s
 
-  # Listed in ascending order of priority
-
   routers:
-    health:
-      rule: "Path(`/health`)"
-      entryPoints:
-        - websecure
-      service: users
-      middlewares:
-        - retry-middleware
-        - headers-middleware
-      priority: 10
-
     users-health:
       rule: "Path(`/users/health`)"
       entryPoints:
@@ -121,40 +105,21 @@ http:
         - strip-ollama-prefix-middleware
         - retry-middleware
         - headers-middleware
+      priority: 10
+
+    users-entities:
+      # /groups/{group_id}/users or /channels/{channel_id}/users or /domains/{domain_id}/users or /channels/{member_id}/groups or /users/{member_id}/groups
+      rule: "PathRegexp(`^/(groups|channels|domains)/(.+)/users`) || PathRegexp(`^/(channels|users)/(.+)/groups`)"
+      entryPoints:
+        - websecure
+      service: users
+      middlewares:
+        - retry-middleware
+        - headers-middleware
       priority: 9
 
-    users-groups:
-      rule: "Path(`/groups/{group_id}/users`)"
-      entryPoints:
-        - websecure
-      service: users
-      middlewares:
-        - retry-middleware
-        - headers-middleware
-      priority: 8
-
-    users-channels:
-      rule: "Path(`/channels/{channel_id}/users`)"
-      entryPoints:
-        - websecure
-      service: users
-      middlewares:
-        - retry-middleware
-        - headers-middleware
-      priority: 8
-
     users:
-      rule: "PathPrefix(`/users`) || PathPrefix(`/password`)"
-      entryPoints:
-        - websecure
-      service: users
-      middlewares:
-        - retry-middleware
-        - headers-middleware
-      priority: 7
-
-    groups-channels:
-      rule: "Path(`/channels/{member_id}/groups`)"
+      rule: "PathPrefix(`/users`) || PathPrefix(`/password`) || Path(`/health`) || PathPrefix(`/groups`)"
       entryPoints:
         - websecure
       service: users
@@ -163,45 +128,16 @@ http:
         - headers-middleware
       priority: 8
 
-    groups-users:
-      rule: "Path(`/users/{member_id}/groups`)"
-      entryPoints:
-        - websecure
-      service: users
-      middlewares:
-        - retry-middleware
-        - headers-middleware
-      priority: 8
-
-    groups:
-      rule: "PathPrefix(`/groups`)"
-      entryPoints:
-        - websecure
-      service: users
-      middlewares:
-        - retry-middleware
-        - headers-middleware
-      priority: 7
-
-    domains:
-      rule: "Path(`/domains/{domain_id}/users`)"
-      entryPoints:
-        - websecure
-      service: users
-      middlewares:
-        - retry-middleware
-        - headers-middleware
-      priority: 8
-
-    auth-domains:
-      rule: "Path(`/users/{member_id}/domains`)"
+    auth-entities:
+      # /users/{member_id}/domains
+      rule: "PathRegexp(`^/users/(.+)/domains`)"
       entryPoints:
         - websecure
       service: auth
       middlewares:
         - retry-middleware
         - headers-middleware
-      priority: 8
+      priority: 9
 
     auth:
       rule: "PathPrefix(`/policies`) || PathPrefix(`/keys`) || PathPrefix(`/domains`)"
@@ -211,7 +147,7 @@ http:
       middlewares:
         - retry-middleware
         - headers-middleware
-      priority: 7
+      priority: 8
 
     invitations:
       rule: "PathPrefix(`/invitations`)"
@@ -221,4 +157,4 @@ http:
       middlewares:
         - retry-middleware
         - headers-middleware
-      priority: 7
+      priority: 8
