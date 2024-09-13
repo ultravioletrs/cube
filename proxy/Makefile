@@ -21,6 +21,8 @@ define make_docker
 		--no-cache \
 		--build-arg GOOS=$(GOOS) \
 		--build-arg GOARCH=$(GOARCH) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg COMMIT=$(COMMIT) \
 		--tag=$(VAULT_DOCKER_IMAGE_NAME):$(VERSION) \
 		--tag=$(VAULT_DOCKER_IMAGE_NAME):latest \
 		-f docker/Dockerfile .

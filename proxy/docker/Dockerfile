@@ -1,7 +1,9 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.23.1-alpine AS builder
 ARG SVC
 ARG GOOS
 ARG GOARCH
+ARG VERSION
+ARG COMMIT
 
 WORKDIR /go/src/github.com/ultraviolet/vault-proxy
 COPY . .

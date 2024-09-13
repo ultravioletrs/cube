@@ -35,7 +35,7 @@ func MakeHandler(svc proxy.Service, logger *slog.Logger, instanceID string) http
 		opts...,
 	), "identify").ServeHTTP)
 
-	mux.Get("/health", magistrala.Health("invitations", instanceID))
+	mux.Get("/health", magistrala.Health("vault-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	return mux
