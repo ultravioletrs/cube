@@ -24,6 +24,9 @@ http:
       stripPrefix:
         prefixes:
           - "/ollama"
+    forward-auth-middleware:
+      forwardAuth:
+        address: http://vault-proxy:8900
 
   services:
     users:
@@ -107,6 +110,7 @@ http:
       service: ollama
       middlewares:
         - strip-ollama-prefix-middleware
+        - forward-auth-middleware
         - retry-middleware
         - headers-middleware
       priority: 10

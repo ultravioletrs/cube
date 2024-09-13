@@ -8,3 +8,6 @@ cloud-init/meta-data
 
 # Traefik files
 acme.json
+
+# Proxy Build
+proxy/build
