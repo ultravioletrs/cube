@@ -1,4 +1,4 @@
-name: Create and publish Cube Proxy Docker image
+name: Create and publish Cube UI Docker image
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     tags:
       - "v*"
     paths:
-      - ".github/workflows/cd.yaml"
-      - "**.go"
+      - ".github/workflows/ui-cd.yaml"
+      - "ui/**"
 
   workflow_dispatch:
 
@@ -17,7 +17,7 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push-image:
+  build-and-push-image-ui:
     runs-on: ubuntu-latest
 
     permissions:
@@ -44,4 +44,5 @@ jobs:
 
       - name: Build and push Docker image
         run: |
+          cd ui
           make latest

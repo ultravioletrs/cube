@@ -11,6 +11,8 @@ include:
     env_file: .env
   - path: ./proxy-compose.yaml
     env_file: .env
+  - path: ./ui-compose.yaml
+    env_file: .env
 
 services:
   traefik:

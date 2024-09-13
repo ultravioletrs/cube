@@ -1,0 +1,7 @@
+.git
+.github
+build
+docker
+.next
+node_modules
+next-env.d.ts

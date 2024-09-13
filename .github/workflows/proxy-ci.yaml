@@ -1,4 +1,4 @@
-name: Continuous Integration
+name: Proxy Continuous Integration
 
 on:
   pull_request:
@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint-and-build: # Linting and building are combined to save time for setting up Go
+  proxy-ci:
     name: Lint and Build
     runs-on: ubuntu-latest
 
