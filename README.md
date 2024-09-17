@@ -1,3 +1,3 @@
-# Vault AI
+# Cube AI
 
 Protects LLMs

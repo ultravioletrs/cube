@@ -1,6 +1,6 @@
 # Cloud Init
 
-This directory contains the cloud-init configuration files for Vault AI.
+This directory contains the cloud-init configuration files for Cube AI.
 
 ## After the first boot
 
@@ -16,7 +16,7 @@ Your username is your github username and your password is the access token you 
 3. Clone the repository
 
 ```bash
-git clone https://github.com/ultravioletrs/vault.git
+git clone https://github.com/ultravioletrs/cube.git
 ```
 
 Your username is your github username and your password is the access token you generated in step 1.
@@ -24,7 +24,7 @@ Your username is your github username and your password is the access token you 
 4. Pull the docker images
 
 ```bash
-cd vault
+cd cube/docker-compose/
 docker compose pull
 ```
 

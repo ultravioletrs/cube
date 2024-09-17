@@ -6,7 +6,7 @@ import (
 	"github.com/absmach/magistrala/pkg/apiutil"
 	"github.com/absmach/magistrala/pkg/errors"
 	"github.com/go-kit/kit/endpoint"
-	proxy "github.com/ultraviolet/vault-proxy"
+	proxy "github.com/ultraviolet/cube-proxy"
 )
 
 func identifyEndpoint(svc proxy.Service) endpoint.Endpoint {

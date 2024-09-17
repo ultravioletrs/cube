@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 
-	proxy "github.com/ultraviolet/vault-proxy"
+	proxy "github.com/ultraviolet/cube-proxy"
 	"go.opentelemetry.io/otel/trace"
 )
 

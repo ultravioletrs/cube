@@ -19,7 +19,7 @@ services:
       - magistrala-broker-volume:/data
       - ./nats:/etc/nats
     networks:
-      - vault-network
+      - cube-network
 
   jaeger:
     image: jaegertracing/all-in-one:1.53.0
@@ -28,7 +28,7 @@ services:
       COLLECTOR_OTLP_ENABLED: ${MG_JAEGER_COLLECTOR_OTLP_ENABLED}
     command: --memory.max-traces ${MG_JAEGER_MEMORY_MAX_TRACES}
     networks:
-      - vault-network
+      - cube-network
 
   spicedb:
     image: "authzed/spicedb:v1.30.0"
@@ -42,7 +42,7 @@ services:
     depends_on:
       - spicedb-migrate
     networks:
-      - vault-network
+      - cube-network
 
   spicedb-migrate:
     image: "authzed/spicedb:v1.30.0"
@@ -55,7 +55,7 @@ services:
     depends_on:
       - spicedb-db
     networks:
-      - vault-network
+      - cube-network
 
   spicedb-db:
     image: "postgres:16.2-alpine"
@@ -67,7 +67,7 @@ services:
     volumes:
       - magistrala-spicedb-db-volume:/var/lib/postgresql/data
     networks:
-      - vault-network
+      - cube-network
 
   auth-db:
     image: postgres:16.2-alpine
@@ -80,7 +80,7 @@ services:
     volumes:
       - magistrala-auth-db-volume:/var/lib/postgresql/data
     networks:
-      - vault-network
+      - cube-network
 
   auth:
     image: magistrala/auth:${MG_RELEASE_TAG}
@@ -154,7 +154,7 @@ services:
         bind:
           create_host_path: true
     networks:
-      - vault-network
+      - cube-network
 
   users-db:
     image: postgres:16.2-alpine
@@ -169,7 +169,7 @@ services:
     volumes:
       - magistrala-users-db-volume:/var/lib/postgresql/data
     networks:
-      - vault-network
+      - cube-network
 
   users:
     image: magistrala/users:${MG_RELEASE_TAG}
@@ -245,7 +245,7 @@ services:
         bind:
           create_host_path: true
     networks:
-      - vault-network
+      - cube-network
 
   invitations-db:
     image: postgres:16.2-alpine
@@ -260,7 +260,7 @@ services:
     volumes:
       - magistrala-invitations-db-volume:/var/lib/postgresql/data
     networks:
-      - vault-network
+      - cube-network
 
   invitations:
     image: magistrala/invitations:${MG_RELEASE_TAG}
@@ -313,11 +313,11 @@ services:
         bind:
           create_host_path: true
     networks:
-      - vault-network
+      - cube-network
 
   ui:
-    image: ghcr.io/ultravioletrs/vault/ui:latest
-    container_name: vault-ui
+    image: ghcr.io/ultravioletrs/cube/ui:latest
+    container_name: cube-ui
     restart: on-failure
     depends_on:
       - auth
@@ -326,14 +326,14 @@ services:
     ports:
       - 3001:3000
     networks:
-      - vault-network
+      - cube-network
     environment:
-      NEXTAUTH_SECRET: ${UV_VAULT_UI_NEXTAUTH_SECRET}
+      NEXTAUTH_SECRET: ${UV_CUBE_UI_NEXTAUTH_SECRET}
       MG_DOMAINS_URL: ${MG_DOMAINS_URL}
       MG_USERS_URL: ${MG_USERS_URL}
       MG_INVITATIONS_URL: ${MG_INVITATIONS_URL}
-      MG_UI_NAME: ${UV_VAULT_UI_NAME}
-      MG_BASE_URL: ${UV_VAULT_UI_BASE_URL}
-      NEXTAUTH_URL: ${UV_VAULT_NEXTAUTH_URL}
-      NEXT_PUBLIC_BASE_URL: ${UV_VAULT_PUBLIC_BASE_URL}
-      NEXT_PUBLIC_UI_TYPE: ${UV_VAULT_PUBLIC_UI_TYPE}
+      MG_UI_NAME: ${UV_CUBE_UI_NAME}
+      MG_BASE_URL: ${UV_CUBE_UI_BASE_URL}
+      NEXTAUTH_URL: ${UV_CUBE_NEXTAUTH_URL}
+      NEXT_PUBLIC_BASE_URL: ${UV_CUBE_PUBLIC_BASE_URL}
+      NEXT_PUBLIC_UI_TYPE: ${UV_CUBE_PUBLIC_UI_TYPE}

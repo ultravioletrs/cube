@@ -1,7 +1,7 @@
-name: "vault"
+name: "cube"
 
 networks:
-  vault-network:
+  cube-network:
     driver: bridge
 
 include:
@@ -27,4 +27,4 @@ services:
       - ./traefik/dynamic.yaml:/etc/traefik/dynamic.yaml
       - ./traefik/ssl:/etc/traefik/ssl
     networks:
-      - vault-network
+      - cube-network

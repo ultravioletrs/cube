@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	proxy "github.com/ultraviolet/vault-proxy"
+	proxy "github.com/ultraviolet/cube-proxy"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
@@ -35,7 +35,7 @@ func MakeHandler(svc proxy.Service, logger *slog.Logger, instanceID string) http
 		opts...,
 	), "identify").ServeHTTP)
 
-	mux.Get("/health", magistrala.Health("vault-proxy", instanceID))
+	mux.Get("/health", magistrala.Health("cube-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	return mux

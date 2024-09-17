@@ -19,25 +19,25 @@ import (
 	"github.com/absmach/magistrala/pkg/server/http"
 	"github.com/absmach/magistrala/pkg/uuid"
 	"github.com/caarlos0/env/v11"
-	proxy "github.com/ultraviolet/vault-proxy"
-	"github.com/ultraviolet/vault-proxy/api"
-	"github.com/ultraviolet/vault-proxy/middleware"
+	proxy "github.com/ultraviolet/cube-proxy"
+	"github.com/ultraviolet/cube-proxy/api"
+	"github.com/ultraviolet/cube-proxy/middleware"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
-	svcName        = "vault_proxy"
-	envPrefixHTTP  = "UV_VAULT_PROXY_"
+	svcName        = "cube_proxy"
+	envPrefixHTTP  = "UV_CUBE_PROXY_"
 	envPrefixAuth  = "MG_AUTH_GRPC_"
 	defSvcHTTPPort = "8900"
 )
 
 type config struct {
-	LogLevel      string  `env:"UV_VAULT_PROXY_LOG_LEVEL"   envDefault:"info"`
-	TargetURL     string  `env:"UV_VAULT_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
+	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
+	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
 	SendTelemetry bool    `env:"MG_SEND_TELEMETRY"          envDefault:"true"`
-	InstanceID    string  `env:"UV_VAULT_PROXY_INSTANCE_ID" envDefault:""`
+	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
 	JaegerURL     url.URL `env:"MG_JAEGER_URL"              envDefault:"http://localhost:4318/v1/traces"`
 	TraceRatio    float64 `env:"MG_JAEGER_TRACE_RATIO"      envDefault:"1.0"`
 }

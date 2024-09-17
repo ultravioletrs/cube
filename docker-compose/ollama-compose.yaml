@@ -13,7 +13,7 @@ services:
       - ollama:/root/.ollama
     tty: true
     networks:
-      - vault-network
+      - cube-network
 
   open-webui:
     container_name: open-webui
@@ -26,7 +26,7 @@ services:
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
     networks:
-      - vault-network
+      - cube-network
 
   pull-llama3:
     image: docker:27.2.0
@@ -38,7 +38,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - vault-network
+      - cube-network
 
   pull-starcoder2:
     image: docker:27.2.0
@@ -50,7 +50,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - vault-network
+      - cube-network
 
   pull-nomic-embed-text:
     image: docker:27.2.0
@@ -62,4 +62,4 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
-      - vault-network
+      - cube-network
