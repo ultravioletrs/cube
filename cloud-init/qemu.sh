@@ -93,7 +93,7 @@ qemu-system-x86_64 \
   -machine q35 \
   -enable-kvm \
   -boot d \
-  -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:11434,hostfwd=tcp::6192-:3000 \
+  -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:3001 \
   -device e1000,netdev=vmnic,romfile= \
   -vnc :9 \
   -nographic \
