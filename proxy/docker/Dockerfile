@@ -5,13 +5,13 @@ ARG GOARCH
 ARG VERSION
 ARG COMMIT
 
-WORKDIR /go/src/github.com/ultraviolet/vault-proxy
+WORKDIR /go/src/github.com/ultraviolet/cube-proxy
 COPY . .
 RUN apk update \
     && apk add make upx\
     && make build \
-    && upx build/vault-proxy \
-    && mv build/vault-proxy /exe
+    && upx build/cube-proxy \
+    && mv build/cube-proxy /exe
 
 FROM scratch
 COPY --from=builder /exe /

@@ -1,26 +1,26 @@
 services:
-  vault-proxy:
-    container_name: vault-proxy
-    image: ghcr.io/ultravioletrs/vault/proxy:latest
+  cube-proxy:
+    container_name: cube-proxy
+    image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
     networks:
-      - vault-network
+      - cube-network
     depends_on:
       - auth
     environment:
-      UV_VAULT_PROXY_LOG_LEVEL: ${UV_VAULT_PROXY_LOG_LEVEL}
-      UV_VAULT_PROXY_TARGET_URL: ${UV_VAULT_PROXY_TARGET_URL}
-      UV_VAULT_PROXY_HOST: ${UV_VAULT_PROXY_HOST}
-      UV_VAULT_PROXY_PORT: ${UV_VAULT_PROXY_PORT}
-      UV_VAULT_PROXY_SERVER_CERT: ${UV_VAULT_PROXY_SERVER_CERT}
-      UV_VAULT_PROXY_SERVER_KEY: ${UV_VAULT_PROXY_SERVER_KEY}
+      UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
+      UV_CUBE_PROXY_TARGET_URL: ${UV_CUBE_PROXY_TARGET_URL}
+      UV_CUBE_PROXY_HOST: ${UV_CUBE_PROXY_HOST}
+      UV_CUBE_PROXY_PORT: ${UV_CUBE_PROXY_PORT}
+      UV_CUBE_PROXY_SERVER_CERT: ${UV_CUBE_PROXY_SERVER_CERT}
+      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY}
       MG_AUTH_GRPC_URL: ${MG_AUTH_GRPC_URL}
       MG_AUTH_GRPC_TIMEOUT: ${MG_AUTH_GRPC_TIMEOUT}
       MG_AUTH_GRPC_CLIENT_CERT: ${MG_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
       MG_AUTH_GRPC_CLIENT_KEY: ${MG_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
       MG_AUTH_GRPC_SERVER_CA_CERTS: ${MG_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
       MG_SEND_TELEMETRY: ${MG_SEND_TELEMETRY}
-      UV_VAULT_PROXY_INSTANCE_ID: ${UV_VAULT_PROXY_INSTANCE_ID}
+      UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
       MG_JAEGER_URL: ${MG_JAEGER_URL}
       MG_JAEGER_TRACE_RATIO: ${MG_JAEGER_TRACE_RATIO}
     volumes:

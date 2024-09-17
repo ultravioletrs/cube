@@ -1,4 +1,4 @@
-module github.com/ultraviolet/vault-proxy
+module github.com/ultraviolet/cube-proxy
 
 go 1.23.1
 
@@ -8,7 +8,7 @@ require (
 	github.com/caarlos0/env/v11 v11.2.2
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-kit/kit v0.13.0
-	github.com/prometheus/client_golang v1.20.3
+	github.com/prometheus/client_golang v1.20.4
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.55.0
 	go.opentelemetry.io/otel/trace v1.30.0
 	golang.org/x/sync v0.8.0

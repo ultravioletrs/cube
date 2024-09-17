@@ -1,4 +1,4 @@
-name: Create and publish Vault Proxy Docker image
+name: Create and publish Cube Proxy Docker image
 
 on:
   push:

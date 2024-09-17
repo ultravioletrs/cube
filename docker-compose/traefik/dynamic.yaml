@@ -26,7 +26,7 @@ http:
           - "/ollama"
     forward-auth-middleware:
       forwardAuth:
-        address: http://vault-proxy:8900
+        address: http://cube-proxy:8900
 
   services:
     users:

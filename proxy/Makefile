@@ -1,4 +1,4 @@
-VAULT_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/vault/proxy
+CUBE_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/proxy
 CGO_ENABLED ?= 0
 GOOS ?= linux
 GOARCH ?= amd64
@@ -13,7 +13,7 @@ define compile_service
 	-X 'github.com/absmach/magistrala.BuildTime=$(TIME)' \
 	-X 'github.com/absmach/magistrala.Version=$(VERSION)' \
 	-X 'github.com/absmach/magistrala.Commit=$(COMMIT)'" \
-	-o ${BUILD_DIR}/vault-proxy cmd/main.go	
+	-o ${BUILD_DIR}/cube-proxy cmd/main.go	
 endef
 
 define make_docker
@@ -23,22 +23,22 @@ define make_docker
 		--build-arg GOARCH=$(GOARCH) \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg COMMIT=$(COMMIT) \
-		--tag=$(VAULT_DOCKER_IMAGE_NAME):$(VERSION) \
-		--tag=$(VAULT_DOCKER_IMAGE_NAME):latest \
+		--tag=$(CUBE_DOCKER_IMAGE_NAME):$(VERSION) \
+		--tag=$(CUBE_DOCKER_IMAGE_NAME):latest \
 		-f docker/Dockerfile .
 endef
 
 define make_docker_dev
 	docker build \
 		--no-cache \
-		--tag=$(VAULT_DOCKER_IMAGE_NAME):$(VERSION) \
-		--tag=$(VAULT_DOCKER_IMAGE_NAME):latest \
+		--tag=$(CUBE_DOCKER_IMAGE_NAME):$(VERSION) \
+		--tag=$(CUBE_DOCKER_IMAGE_NAME):latest \
 		-f docker/Dockerfile.dev ./build
 endef
 
 define docker_push
-	docker push $(VAULT_DOCKER_IMAGE_NAME):$(VERSION)
-	docker push $(VAULT_DOCKER_IMAGE_NAME):latest
+	docker push $(CUBE_DOCKER_IMAGE_NAME):$(VERSION)
+	docker push $(CUBE_DOCKER_IMAGE_NAME):latest
 endef
 
 .PHONY: build
