@@ -314,3 +314,26 @@ services:
           create_host_path: true
     networks:
       - vault-network
+
+  ui:
+    image: ghcr.io/ultravioletrs/vault/ui:latest
+    container_name: vault-ui
+    restart: on-failure
+    depends_on:
+      - auth
+      - users
+      - invitations
+    ports:
+      - 3001:3000
+    networks:
+      - vault-network
+    environment:
+      NEXTAUTH_SECRET: ${UV_VAULT_UI_NEXTAUTH_SECRET}
+      MG_DOMAINS_URL: ${MG_DOMAINS_URL}
+      MG_USERS_URL: ${MG_USERS_URL}
+      MG_INVITATIONS_URL: ${MG_INVITATIONS_URL}
+      MG_UI_NAME: ${UV_VAULT_UI_NAME}
+      MG_BASE_URL: ${UV_VAULT_UI_BASE_URL}
+      NEXTAUTH_URL: ${UV_VAULT_NEXTAUTH_URL}
+      NEXT_PUBLIC_BASE_URL: ${UV_VAULT_PUBLIC_BASE_URL}
+      NEXT_PUBLIC_UI_TYPE: ${UV_VAULT_PUBLIC_UI_TYPE}

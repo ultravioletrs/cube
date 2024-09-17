@@ -8,8 +8,8 @@ SEED_IMAGE="seed.img"
 USER_DATA="user-data"
 META_DATA="meta-data"
 VM_NAME="vault-ai-vm"
-RAM="24576M"
-CPU="6"
+RAM="16384M"
+CPU="8"
 USER="ultraviolet"
 PASSWORD="password"
 
@@ -93,7 +93,7 @@ qemu-system-x86_64 \
   -machine q35 \
   -enable-kvm \
   -boot d \
-  -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:11434,hostfwd=tcp::6192-:3000 \
+  -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:3001 \
   -device e1000,netdev=vmnic,romfile= \
   -vnc :9 \
   -nographic \
