@@ -79,3 +79,15 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - cube-network
+
+  pull-yi-coder:
+    image: docker:27.2.0
+    container_name: pull-yi-coder
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command: -c "sleep 10 && docker exec ollama ollama pull yi-coder"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cube-network
