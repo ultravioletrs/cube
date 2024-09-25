@@ -7,13 +7,29 @@ volumes:
 services:
   ollama:
     container_name: ollama
-    image: ollama/ollama:0.3.8
+    image: ollama/ollama:0.3.8 # For AMD GPU, use ollama/ollama:0.3.8-rocm
     restart: unless-stopped
     volumes:
       - ollama:/root/.ollama
     tty: true
     networks:
       - cube-network
+    # # Uncomment the following lines to enable AMD GPU support
+    # devices:
+    #   - /dev/dri:/dev/dri
+    #   - /dev/kfd:/dev/kfd
+    # environment:
+    #   - "HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION-11.0.0}"
+
+    # # Uncomment the following lines to enable Nvidia GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: ${OLLAMA_GPU_DRIVER-nvidia}
+    #           count: ${OLLAMA_GPU_COUNT-1}
+    #           capabilities:
+    #             - gpu
 
   open-webui:
     container_name: open-webui
@@ -59,6 +75,18 @@ services:
       - ollama
     entrypoint: /bin/sh
     command: -c "sleep 10 && docker exec ollama ollama pull nomic-embed-text"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cube-network
+
+  pull-yi-coder:
+    image: docker:27.2.0
+    container_name: pull-yi-coder
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command: -c "sleep 10 && docker exec ollama ollama pull yi-coder"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
