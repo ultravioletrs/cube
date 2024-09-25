@@ -12,6 +12,9 @@ RAM="16384M"
 CPU="8"
 USER="ultraviolet"
 PASSWORD="password"
+QEMU_BINARY="/home/cocosai/danko/AMDSEV/usr/local/bin/qemu-system-x86_64"
+OVMF_CODE="/home/cocosai/danko/AMDSEV/OVMF_CODE.fd"
+OVMF_VARS="/home/cocosai/danko/AMDSEV/OVMF_VARS.fd"
 
 if ! command -v wget &> /dev/null; then
   echo "wget is not installed. Please install it and try again."
@@ -41,10 +44,11 @@ fi
 echo "Creating custom QEMU image..."
 qemu-img create -f qcow2 -b $BASE_IMAGE -F qcow2 $CUSTOM_IMAGE $DISK_SIZE
 
+# We don't upgrade the system since this changes initramfs
 cat <<EOF > $USER_DATA
 #cloud-config
 package_update: true
-package_upgrade: true
+package_upgrade: false
 
 users:
   - default
@@ -85,11 +89,11 @@ echo "Creating cloud-init seed image..."
 cloud-localds $SEED_IMAGE $USER_DATA $META_DATA
 
 echo "Starting QEMU VM..."
-qemu-system-x86_64 \
+$QEMU_BINARY \
   -name $VM_NAME \
   -m $RAM \
   -smp $CPU \
-  -cpu EPYC \
+  -cpu EPYC-v4 \
   -machine q35 \
   -enable-kvm \
   -boot d \
@@ -103,6 +107,8 @@ qemu-system-x86_64 \
   -device virtio-scsi-pci,id=scsi,disable-legacy=on,iommu_platform=true \
   -device scsi-hd,drive=disk0 \
   -machine memory-encryption=sev0,confidential-guest-support=sev0 \
-  -object sev-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
-  -drive if=pflash,format=raw,unit=0,file=/usr/share/OVMF/OVMF_CODE.fd,readonly=on \
-  -drive if=pflash,format=raw,unit=1,file=/usr/share/OVMF/OVMF_VARS.fd
+  -object memory-backend-memfd-private,id=ram1,size=$RAM,share=true \
+  -machine memory-backend=ram1,kvm-type=protected \
+  -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
+  -drive if=pflash,format=raw,unit=0,file=$OVMF_CODE,readonly=on \
+  -drive if=pflash,format=raw,unit=1,file=$OVMF_VARS
