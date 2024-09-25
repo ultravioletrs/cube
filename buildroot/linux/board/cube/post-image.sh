@@ -1,11 +1,11 @@
 #!/bin/bash
 
-VAULT_BOARD_DIR="$(dirname "$0")"
+CUBE_BOARD_DIR="$(dirname "$0")"
 DEFCONFIG_NAME="$(basename "$2")"
-README_FILES="${VAULT_BOARD_DIR}/readme.txt"
+README_FILES="${CUBE_BOARD_DIR}/readme.txt"
 START_QEMU_SCRIPT="${BINARIES_DIR}/start-qemu.sh"
 
-if [[ "${DEFCONFIG_NAME}" =~ ^"vault_*" ]]; then
+if [[ "${DEFCONFIG_NAME}" =~ ^"cube_*" ]]; then
     # Not a Qemu defconfig, can't test.
     exit 0
 fi
@@ -46,6 +46,6 @@ sed -e "s|@SERIAL_ARGS@|${SERIAL_ARGS}|g" \
     -e "s|@DEFAULT_ARGS@|${DEFAULT_ARGS}|g" \
     -e "s|@QEMU_CMD_LINE@|${QEMU_CMD_LINE}|g" \
     -e "s|@HOST_DIR@|${HOST_DIR}|g" \
-    <"${VAULT_BOARD_DIR}/start-qemu.sh.in" \
+    <"${CUBE_BOARD_DIR}/start-qemu.sh.in" \
     >"${START_QEMU_SCRIPT}"
 chmod +x "${START_QEMU_SCRIPT}"
