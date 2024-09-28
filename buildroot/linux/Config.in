@@ -1,1 +1,1 @@
-
+source "$BR2_EXTERNAL_CUBE_PATH/package/snpguest/Config.in"
