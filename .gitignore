@@ -11,3 +11,6 @@ acme.json
 
 # Proxy Build
 proxy/build
+
+# Filesystem
+*.ext4

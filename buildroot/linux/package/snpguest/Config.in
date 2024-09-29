@@ -5,5 +5,4 @@ config BR2_PACKAGE_SNPGUEST
 	select BR2_PACKAGE_HOST_RUSTC
 	help
 	  snpguest is a CLI tool for interacting with SEV-SNP guest environment
-
 	  https://github.com/virtee/snpguest
