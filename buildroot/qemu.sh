@@ -3,68 +3,140 @@
 VM_NAME="cube-ai-vm"
 RAM="10240M"
 CPU="4"
+CPU_TYPE="EPYC-v4"
+QEMU_AMDSEV_BINARY="/home/cocosai/danko/AMDSEV/usr/local/bin/qemu-system-x86_64"
+QEMU_OVMF_CODE="/home/cocosai/danko/AMDSEV/ovmf/Build/AmdSev/DEBUG_GCC5/FV/OVMF.fd"
+KERNEL_PATH="../buildroot/output/images/bzImage"
+INITRD_PATH="../buildroot/output/images/rootfs.cpio.gz"
+QEMU_APPEND_ARG="root=/dev/vda console=ttyS0"
 
-if ! command -v qemu-system-x86_64 &> /dev/null; then
-  echo "qemu-system-x86_64 is not installed. Please install it and try again."
-  exit 1
+function check(){
+    if [ ! -f "./rootfs.ext4" ]; then
+        echo "rootfs.ext4 file not found. Please create it and try again."
+        exit 1
+    fi
+
+    if [ ! -f "../buildroot/output/images/bzImage" ]; then
+        echo "bzImage file not found. Please build it and try again."
+        exit 1
+    fi
+
+    if [ ! -f "../buildroot/output/images/rootfs.cpio.gz" ]; then
+        echo "rootfs.cpio.gz file not found. Please build it and try again."
+        exit 1
+    fi
+}
+
+function start_qemu(){
+    if ! command -v qemu-system-x86_64 &> /dev/null; then
+        echo "qemu-system-x86_64 is not installed. Please install it and try again."
+        exit 1
+    fi
+
+    check
+
+    echo "Starting QEMU VM..."
+
+    qemu-system-x86_64 \
+    -name $VM_NAME \
+    -m $RAM \
+    -smp $CPU \
+    -cpu $CPU_TYPE \
+    -machine q35 \
+    -enable-kvm \
+    -boot d \
+    -netdev user,id=vmnic,hostfwd=tcp::6190-:80,hostfwd=tcp::6191-:443,hostfwd=tcp::6192-:3001,dns=8.8.8.8 \
+    -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
+    -nographic \
+    -no-reboot \
+    -kernel $KERNEL_PATH \
+    -initrd $INITRD_PATH \
+    -drive file=./rootfs.ext4,format=raw,if=virtio \
+    -append "$QEMU_APPEND_ARG"
+}
+
+function start_cvm(){
+    if ! command -v $QEMU_AMDSEV_BINARY &> /dev/null; then
+        echo "qemu-system-x86_64 is not installed. Please install it and try again."
+        exit 1
+    fi
+
+    check
+
+    echo "Starting QEMU VM..."
+
+    $QEMU_AMDSEV_BINARY \
+    -name $VM_NAME \
+    -m $RAM \
+    -smp $CPU \
+    -cpu $CPU_TYPE \
+    -machine q35 \
+    -enable-kvm \
+    -boot d \
+    -netdev user,id=vmnic,hostfwd=tcp::6190-:80,hostfwd=tcp::6191-:443,hostfwd=tcp::6192-:3001,dns=8.8.8.8 \
+    -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
+    -nographic \
+    -no-reboot \
+    -kernel $KERNEL_PATH \
+    -initrd $INITRD_PATH \
+    -drive file=./rootfs.ext4,format=raw,if=virtio \
+    -drive if=pflash,format=raw,unit=0,file=$QEMU_OVMF_CODE,readonly=on \
+    -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198 \
+    -object memory-backend-memfd-private,id=ram1,size=$RAM,share=true \
+    -machine memory-encryption=sev0-cb42cb55-17d4-4da3-9321-d04b4961b0e4 \
+    -machine memory-backend=ram1,kvm-type=protected \
+    -object sev-snp-guest,id=sev0-cb42cb55-17d4-4da3-9321-d04b4961b0e4,cbitpos=51,reduced-phys-bits=1,discard=none,kernel-hashes=on \
+    -append "$QEMU_APPEND_ARG"
+}
+
+function generate_snp_expected_measurement(){
+    if ! command -v sev-snp-measure &> /dev/null; then
+        echo "sev-snp-measure is not installed. Please install it and try again."
+        exit 1
+    fi
+
+    echo "Generating expected measurement..."
+    sev-snp-measure \
+    --mode snp \
+    --vcpus=$CPU \
+    --vcpu-type=$CPU_TYPE \
+    --ovmf=$QEMU_OVMF_CODE \
+    --kernel=$KERNEL_PATH \
+    --initrd=$INITRD_PATH \
+    --append="$QEMU_APPEND_ARG"
+}
+
+function print_help(){
+    echo "Usage: $0 [command]"
+    echo "Commands:"
+    echo "  start: Start the QEMU VM"
+    echo "  start_cvm: Start the QEMU VM with AMD SEV-SNP enabled"
+    echo "  measure: Use sev-snp-measure utility to calculate the expected measurement"
+    echo "  check: Check if the required files are present"
+}
+
+if [ $# -eq 0 ]; then
+    print_help
+    exit 0
 fi
 
-echo "Starting QEMU VM..."
-qemu-system-x86_64 \
-  -name $VM_NAME \
-  -m $RAM \
-  -smp $CPU \
-  -cpu EPYC \
-  -machine q35 \
-  -enable-kvm \
-  -boot d \
-  -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:3001 \
-  -device e1000,netdev=vmnic,romfile= \
-  -nographic \
-  -no-reboot \
-  -kernel ../buildroot/output/images/bzImage \
-  -initrd ../buildroot/output/images/rootfs.cpio.gz \
-  -drive file=./rootfs.ext4,format=raw,if=virtio \
-  -append "root=/dev/vda console=ttyS0"
-
-
-# /home/cocosai/danko/AMDSEV/usr/local/bin/qemu-system-x86_64 \
-#   -enable-kvm \
-#   -machine q35 \
-#   -cpu EPYC-v4 \
-#   -smp 4,maxcpus=16 \
-#   -m 25G,slots=5,maxmem=30G \
-#   -drive if=pflash,format=raw,unit=0,file=/home/cocosai/danko/AMDSEV/ovmf/Build/AmdSev/DEBUG_GCC5/FV/OVMF.fd,readonly=on \
-#   -netdev user,id=vmnic-ed3cd402-d78e-4136-8070-96c03affc0aa,hostfwd=tcp::6100-:7002 \
-#   -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic-ed3cd402-d78e-4136-8070-96c03affc0aa,addr=0x2,romfile= \
-#   -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=3 \
-#   -object memory-backend-memfd-private,id=ram1,size=25G,share=true \
-#   -machine memory-backend=ram1,kvm-type=protected \
-#   -kernel /home/sammy/bzImage \
-#   -append "quiet console=null rootfstype=ramfs" \
-#   -initrd /home/sammy/rootfs.cpio.gz \
-#   -object sev-snp-guest,id=sev0-ed3cd402-d78e-4136-8070-96c03affc0aa,cbitpos=51,reduced-phys-bits=1,discard=none,kernel-hashes=on,host-data=FTZtWfgKU2WimWFajBIdIUtKTcxy5xCMBNxex6sFf/4= \
-#   -machine memory-encryption=sev0-ed3cd402-d78e-4136-8070-96c03affc0aa \
-#   -nographic \
-#   -monitor pty
-
-# /home/cocosai/danko/AMDSEV/usr/local/bin/qemu-system-x86_64 \
-#     -enable-kvm \
-#     -cpu EPYC-v4 \
-#     -machine q35 \
-#     -smp 4 \
-#     -m 2048M,slots=5,maxmem=10240M \
-#     -no-reboot \
-#     -netdev user,id=vmnic \
-#     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
-#     -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=8 \
-#     -kernel /home/rodney/buildroot/output/images/bzImage \
-#     -append "earlyprintk=serial console=ttyS0" \
-#     -initrd /home/rodney/buildroot/output/images/rootfs.cpio.gz \
-#     -machine memory-encryption=sev0,vmport=off \
-#     -object memory-backend-memfd-private,id=ram1,size=2048M,share=true \
-#     -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
-#     -machine memory-backend=ram1,kvm-type=protected \
-#     -drive if=pflash,format=raw,unit=0,file=/home/cocosai/danko/AMDSEV/OVMF_CODE.fd,readonly=on \
-#     -drive if=pflash,format=raw,unit=1,file=/home/cocosai/danko/AMDSEV/OVMF_VARS.fd \
-#     -nographic
+if [ $# -gt 0 ]; then
+    case "$1" in
+        "start")
+            start_qemu
+            ;;
+        "check")
+            check
+            ;;
+        "start_cvm")
+            start_cvm
+            ;;
+        "measure")
+            generate_snp_expected_measurement
+            ;;
+        *)
+            echo "Unknown command: $1"
+            exit 1
+            ;;
+    esac
+fi
