@@ -4,5 +4,5 @@ config BR2_PACKAGE_SNPGUEST
 	depends on BR2_PACKAGE_HOST_RUSTC_TARGET_ARCH_SUPPORTS
 	select BR2_PACKAGE_HOST_RUSTC
 	help
-	  snpguest is a CLI tool for interacting with SEV-SNP guest environment
-	  https://github.com/virtee/snpguest
+        snpguest is a CLI tool for interacting with SEV-SNP guest environment
+        https://github.com/virtee/snpguest
