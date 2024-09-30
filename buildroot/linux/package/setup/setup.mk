@@ -5,6 +5,7 @@ endef
 define SETUP_INSTALL_INIT_SYSTEMD
 	cp ../cube/buildroot/linux/systemd/cube.service $(TARGET_DIR)/usr/lib/systemd/system/cube.service
 	cp ../cube/buildroot/linux/systemd/setup-cube.sh $(TARGET_DIR)/cube/setup-cube.sh
+	cp ../cube/buildroot/linux/systemd/attest.sh $(TARGET_DIR)/cube/attest.sh
 endef
 
 $(eval $(generic-package))
