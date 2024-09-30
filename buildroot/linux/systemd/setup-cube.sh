@@ -20,24 +20,14 @@ done
 mkdir -p /mnt/docker-volume
 mount /dev/vda /mnt/docker-volume
 
-# Change the docker.service file to allow the Docker to run in RAM
-mkdir -p /etc/systemd/system/docker.service.d
+systemctl stop docker
 
-# Create or overwrite the override.conf file with the new Environment variable
-tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
-[Service]
-Environment=DOCKER_RAMDISK=true
+mkdir -p /etc/docker
+
+tee /etc/docker/daemon.json > /dev/null <<EOF
+{
+  "data-root": "/mnt/docker-volume"
+}
 EOF
 
-systemctl daemon-reload
-
-NUM_OF_PERMITED_IFACE=1
-
-NUM_OF_IFACE=$(ip route | grep -Eo 'dev [a-z0-9]+' | awk '{ print $2 }' | sort | uniq | wc -l)
-
-if [ $NUM_OF_IFACE -gt $NUM_OF_PERMITED_IFACE ]; then
-    echo "More then one network interface in the VM"
-    exit 1
-fi
-
-DEFAULT_IFACE=$(route | grep '^default' | grep -o '[^ ]*$')
+systemctl start docker
