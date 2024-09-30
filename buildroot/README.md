@@ -16,7 +16,7 @@ mkfs.ext4 ./rootfs.ext4
 Now we can run the QEMU VM with the filesystem image.
 
 ```bash
-bash hal/qemu.sh
+bash buildroot/qemu.sh
 ```
 
 Login to the VM using the following credentials:
