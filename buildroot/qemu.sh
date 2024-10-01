@@ -45,7 +45,6 @@ function start_qemu(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -boot d \
     -netdev user,id=vmnic,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:3001,dns=8.8.8.8 \
     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
     -nographic \
@@ -73,7 +72,6 @@ function start_cvm(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -boot d \
     -netdev user,id=vmnic,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:3001,dns=8.8.8.8 \
     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
     -nographic \
@@ -84,9 +82,9 @@ function start_cvm(){
     -drive if=pflash,format=raw,unit=0,file=$QEMU_OVMF_CODE,readonly=on \
     -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198 \
     -object memory-backend-memfd-private,id=ram1,size=$RAM,share=true \
-    -machine memory-encryption=sev0-cb42cb55-17d4-4da3-9321-d04b4961b0e4 \
+    -machine memory-encryption=sev0 \
     -machine memory-backend=ram1,kvm-type=protected \
-    -object sev-snp-guest,id=sev0-cb42cb55-17d4-4da3-9321-d04b4961b0e4,cbitpos=51,reduced-phys-bits=1,discard=none,kernel-hashes=on \
+    -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1,discard=none,kernel-hashes=on \
     -append "$QEMU_APPEND_ARG"
 }
 
