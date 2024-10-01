@@ -10,7 +10,7 @@ HAL uses [Buildroot](https://buildroot.org/)'s [_External Tree_ mechanism](https
 git clone https://gitlab.com/buildroot.org/buildroot.git
 git clone https://github.com/ultravioletrs/cube.git
 cd buildroot
-make BR2_EXTERNAL=../cube/hal/linux cube_defconfig
+make BR2_EXTERNAL=../cube/buildroot/linux cube_defconfig
 # Execute 'make menuconfig' only if you want to make additional configuration changes to Buildroot.
 make menuconfig
 make
