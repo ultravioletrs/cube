@@ -16,9 +16,20 @@ for IFACE in $IFACES; do
     fi
 done
 
+# Change the docker.service file to allow the Docker to run in RAM
+mkdir -p /etc/systemd/system/docker.service.d
+
+# Create or overwrite the override.conf file with the new Environment variable
+tee /etc/systemd/system/docker.service.d/override.conf > /dev/null <<EOF
+[Service]
+Environment=DOCKER_RAMDISK=true
+EOF
+
+systemctl daemon-reload
+
 # Mount filesystem
-mkdir -p /mnt/docker-volume
-mount /dev/vda /mnt/docker-volume
+mkdir -p /mnt/docker
+mount /dev/vda /mnt/docker
 
 systemctl stop docker
 
@@ -26,7 +37,7 @@ mkdir -p /etc/docker
 
 tee /etc/docker/daemon.json > /dev/null <<EOF
 {
-  "data-root": "/mnt/docker-volume"
+  "data-root": "/mnt/docker"
 }
 EOF
 

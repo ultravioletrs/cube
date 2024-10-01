@@ -9,8 +9,8 @@ After following the steps in [README.md](./linux/README.md), you will have bzIma
 Next we need to create a filesystem image. We will use `mkfs.ext4` to create the filesystem image.
 
 ```bash
-dd if=/dev/zero of=rootfs.ext4 bs=1M count=10240
-mkfs.ext4 ./rootfs.ext4
+dd if=/dev/zero of=rootfs.img bs=1M count=10240
+mkfs.ext4 ./rootfs.img
 ```
 
 Now we can run the QEMU VM with the filesystem image.

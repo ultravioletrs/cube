@@ -8,11 +8,12 @@ QEMU_AMDSEV_BINARY="/home/cocosai/danko/AMDSEV/usr/local/bin/qemu-system-x86_64"
 QEMU_OVMF_CODE="/home/cocosai/danko/AMDSEV/ovmf/Build/AmdSev/DEBUG_GCC5/FV/OVMF.fd"
 KERNEL_PATH="../buildroot/output/images/bzImage"
 INITRD_PATH="../buildroot/output/images/rootfs.cpio.gz"
-QEMU_APPEND_ARG="root=/dev/vda console=ttyS0"
+FS_PATH="./rootfs.img"
+QEMU_APPEND_ARG="root=/dev/vda rw console=ttyS0"
 
 function check(){
-    if [ ! -f "./rootfs.ext4" ]; then
-        echo "rootfs.ext4 file not found. Please create it and try again."
+    if [ ! -f "./rootfs.img" ]; then
+    echo "rootfs.ext2 file not found. Please create it and try again."
         exit 1
     fi
 
@@ -51,7 +52,7 @@ function start_qemu(){
     -no-reboot \
     -kernel $KERNEL_PATH \
     -initrd $INITRD_PATH \
-    -drive file=./rootfs.ext4,format=raw,if=virtio \
+    -drive file=$FS_PATH,format=raw,if=virtio,index=0  \
     -append "$QEMU_APPEND_ARG"
 }
 
@@ -79,7 +80,7 @@ function start_cvm(){
     -no-reboot \
     -kernel $KERNEL_PATH \
     -initrd $INITRD_PATH \
-    -drive file=./rootfs.ext4,format=raw,if=virtio \
+    -drive file=$FS_PATH,format=raw,if=virtio \
     -drive if=pflash,format=raw,unit=0,file=$QEMU_OVMF_CODE,readonly=on \
     -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198 \
     -object memory-backend-memfd-private,id=ram1,size=$RAM,share=true \
