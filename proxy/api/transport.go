@@ -17,9 +17,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
-const (
-	ContentType = "application/json"
-)
+const ContentType = "application/json"
 
 func MakeHandler(svc proxy.Service, logger *slog.Logger, instanceID string) http.Handler {
 	opts := []kithttp.ServerOption{
