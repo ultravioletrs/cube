@@ -12,9 +12,9 @@ RAM="16384M"
 CPU="8"
 USER="ultraviolet"
 PASSWORD="password"
-QEMU_BINARY="/home/cocosai/danko/AMDSEV/usr/local/bin/qemu-system-x86_64"
-OVMF_CODE="/home/cocosai/danko/AMDSEV/OVMF_CODE.fd"
-OVMF_VARS="/home/cocosai/danko/AMDSEV/OVMF_VARS.fd"
+QEMU_BINARY="/var/cube-ai/bin/qemu-system-x86_64"
+OVMF_CODE="/var/cube-ai/OVMF_CODE.fd"
+OVMF_VARS="/var/cube-ai/OVMF_VARS.fd"
 
 if ! command -v wget &> /dev/null; then
   echo "wget is not installed. Please install it and try again."
