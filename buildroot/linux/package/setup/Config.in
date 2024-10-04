@@ -1,0 +1,9 @@
+config BR2_PACKAGE_SETUP
+    bool "setup"
+    default y
+	help
+        This Setup package it used to setup the Docker environment used in the HAL
+        It does the following:
+            - Start networking
+            - Mounts the rootfs.ext4 file system
+            - Configure the docker daemon to use the rootfs.ext4 file system
