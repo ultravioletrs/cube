@@ -69,7 +69,7 @@ Your username is your github username and your password is the access token you 
 Pull the docker images
 
 ```bash
-cd cube/docker-compose/
+cd cube/docker/
 docker compose pull
 ```
 

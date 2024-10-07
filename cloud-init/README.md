@@ -24,11 +24,11 @@ Your username is your github username and your password is the access token you 
 4. Pull the docker images
 
 ```bash
-cd cube/docker-compose/
+cd cube/docker/
 docker compose pull
 ```
 
-5. For local development, replace the following IP address entries in `docker-compose/.env` with your local IP address as follows:
+5. For local development, replace the following IP address entries in `docker/.env` with your local IP address as follows:
 
 ```bash
  UV_CUBE_UI_BASE_URL=http://localhost:3001
