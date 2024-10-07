@@ -5,7 +5,7 @@ ARG GOARCH
 ARG VERSION
 ARG COMMIT
 
-WORKDIR /go/src/github.com/ultraviolet/cube-proxy
+WORKDIR /go/src/github.com/ultraviolet/cube
 COPY . .
 RUN apk update \
     && apk add make upx\

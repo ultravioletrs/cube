@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	proxy "github.com/ultraviolet/cube-proxy"
+	"github.com/ultraviolet/cube/proxy"
 )
 
 var _ proxy.Service = (*loggingMiddleware)(nil)
