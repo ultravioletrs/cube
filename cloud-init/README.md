@@ -28,7 +28,15 @@ cd cube/docker-compose/
 docker compose pull
 ```
 
-5. Start the docker containers
+5. For local development, replace the following IP address entries in `docker-compose/.env` with your local IP address as follows:
+
+```bash
+ UV_CUBE_UI_BASE_URL=http://localhost:3001
+ UV_CUBE_NEXTAUTH_URL=http://localhost:3001/api/auth
+ UV_CUBE_PUBLIC_BASE_URL=http://localhost:3001
+```
+
+6. Start the docker containers
 
 ```bash
 docker compose up -d
