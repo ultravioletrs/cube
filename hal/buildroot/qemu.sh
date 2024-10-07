@@ -6,8 +6,8 @@ CPU="4"
 CPU_TYPE="EPYC-v4"
 QEMU_AMDSEV_BINARY="/var/cube-ai/bin/qemu-system-x86_64"
 QEMU_OVMF_CODE="/var/cube-ai/OVMF.fd"
-KERNEL_PATH="../buildroot/output/images/bzImage"
-INITRD_PATH="../buildroot/output/images/rootfs.cpio.gz"
+KERNEL_PATH="../../buildroot/output/images/bzImage"
+INITRD_PATH="../../buildroot/output/images/rootfs.cpio.gz"
 FS_PATH="./rootfs.img"
 QEMU_APPEND_ARG="root=/dev/vda rw console=ttyS0"
 
@@ -17,12 +17,12 @@ function check(){
         exit 1
     fi
 
-    if [ ! -f "../buildroot/output/images/bzImage" ]; then
+    if [ ! -f "../../buildroot/output/images/bzImage" ]; then
         echo "bzImage file not found. Please build it and try again."
         exit 1
     fi
 
-    if [ ! -f "../buildroot/output/images/rootfs.cpio.gz" ]; then
+    if [ ! -f "../../buildroot/output/images/rootfs.cpio.gz" ]; then
         echo "rootfs.cpio.gz file not found. Please build it and try again."
         exit 1
     fi

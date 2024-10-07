@@ -85,7 +85,7 @@ instance-id: iid-${VM_NAME}
 local-hostname: $VM_NAME
 EOF
 
-echo "Creating cloud-init seed image..."
+echo "Creating ubuntu seed image..."
 cloud-localds $SEED_IMAGE $USER_DATA $META_DATA
 
 echo "Starting QEMU VM..."
