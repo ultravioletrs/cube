@@ -1,4 +1,4 @@
-module github.com/ultraviolet/cube-proxy
+module github.com/ultraviolet/cube
 
 go 1.23.1
 

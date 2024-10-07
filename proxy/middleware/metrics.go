@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/go-kit/kit/metrics"
-	proxy "github.com/ultraviolet/cube-proxy"
+	"github.com/ultraviolet/cube/proxy"
 )
 
 var _ proxy.Service = (*metricsMiddleware)(nil)

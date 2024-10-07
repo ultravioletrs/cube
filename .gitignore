@@ -10,7 +10,7 @@ hal/ubuntu/meta-data
 acme.json
 
 # Proxy Build
-proxy/build
+build
 
 # Filesystem
 *.ext4

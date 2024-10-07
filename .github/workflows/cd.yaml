@@ -8,7 +8,7 @@ on:
       - "v*"
     paths:
       - ".github/workflows/cd.yaml"
-      - "proxy/**"
+      - "**.go"
 
   workflow_dispatch:
 
@@ -44,5 +44,4 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          cd proxy
           make latest

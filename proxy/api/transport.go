@@ -13,7 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	proxy "github.com/ultraviolet/cube-proxy"
+	"github.com/ultraviolet/cube/proxy"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
