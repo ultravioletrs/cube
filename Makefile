@@ -13,7 +13,7 @@ define compile_service
 	-X 'github.com/absmach/magistrala.BuildTime=$(TIME)' \
 	-X 'github.com/absmach/magistrala.Version=$(VERSION)' \
 	-X 'github.com/absmach/magistrala.Commit=$(COMMIT)'" \
-	-o ${BUILD_DIR}/cube-proxy cmd/main.go	
+	-o ${BUILD_DIR}/cube-proxy cmd/main.go
 endef
 
 define make_docker
@@ -57,6 +57,9 @@ all: build docker-dev
 
 clean:
 	rm -rf build
+
+lint:
+	golangci-lint run  --config .golangci.yaml
 
 latest: docker
 	$(call docker_push)

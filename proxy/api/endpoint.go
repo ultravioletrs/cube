@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 package api
 
 import (
@@ -11,7 +13,11 @@ import (
 
 func identifyEndpoint(svc proxy.Service) endpoint.Endpoint {
 	return func(ctx context.Context, request interface{}) (response interface{}, err error) {
-		req := request.(identifyRequest)
+		req, ok := request.(identifyRequest)
+		if !ok {
+			return identifyResponse{identified: false}, errors.New("invalid request type")
+		}
+
 		if err := req.Validate(); err != nil {
 			return identifyResponse{identified: false}, errors.Wrap(apiutil.ErrValidation, err)
 		}

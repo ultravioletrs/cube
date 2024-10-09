@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 package main
 
 import (
@@ -36,10 +38,10 @@ const (
 type config struct {
 	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
 	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"MG_SEND_TELEMETRY"          envDefault:"true"`
+	SendTelemetry bool    `env:"MG_SEND_TELEMETRY"         envDefault:"true"`
 	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
-	JaegerURL     url.URL `env:"MG_JAEGER_URL"              envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"MG_JAEGER_TRACE_RATIO"      envDefault:"1.0"`
+	JaegerURL     url.URL `env:"MG_JAEGER_URL"             envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio    float64 `env:"MG_JAEGER_TRACE_RATIO"     envDefault:"1.0"`
 }
 
 func main() {
@@ -63,6 +65,7 @@ func main() {
 		if cfg.InstanceID, err = uuid.New().ID(); err != nil {
 			logger.Error(fmt.Sprintf("failed to generate instanceID: %s", err))
 			exitCode = 1
+
 			return
 		}
 	}
@@ -71,6 +74,7 @@ func main() {
 	if err := env.ParseWithOptions(&authCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s auth configuration : %s", svcName, err))
 		exitCode = 1
+
 		return
 	}
 
@@ -78,6 +82,7 @@ func main() {
 	if err != nil {
 		logger.Error(err.Error())
 		exitCode = 1
+
 		return
 	}
 	defer authHandler.Close()
@@ -88,6 +93,7 @@ func main() {
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
 		exitCode = 1
+
 		return
 	}
 	defer func() {
@@ -103,6 +109,7 @@ func main() {
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 		exitCode = 1
+
 		return
 	}
 

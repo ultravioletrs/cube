@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 package api
 
 import "github.com/absmach/magistrala/pkg/apiutil"

@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 package middleware
 
 import (
@@ -30,8 +32,8 @@ func (lm *loggingMiddleware) Identify(ctx context.Context, token string) (err er
 		if err != nil {
 			args = append(args, slog.String("error", err.Error()))
 			lm.logger.Warn("Identify user failed", args...)
-			return
 
+			return
 		}
 		lm.logger.Info("Identify user completed successfully", args...)
 	}(time.Now())
