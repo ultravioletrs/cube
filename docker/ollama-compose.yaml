@@ -50,10 +50,11 @@ services:
   pull-tinyllama:
     image: docker:27.3.1
     container_name: pull-tinyllama
+    restart: on-failure
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama run tinyllama:1.1b"
+    command: -c "docker exec ollama ollama run tinyllama:1.1b"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -62,10 +63,11 @@ services:
   pull-starcoder2:
     image: docker:27.3.1
     container_name: pull-starcoder2
+    restart: on-failure
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull starcoder2:3b"
+    command: -c "docker exec ollama ollama pull starcoder2:3b"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
@@ -74,10 +76,11 @@ services:
   pull-nomic-embed-text:
     image: docker:27.3.1
     container_name: pull-nomic-embed-text
+    restart: on-failure
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull nomic-embed-text:v1.5"
+    command: -c "docker exec ollama ollama pull nomic-embed-text:v1.5"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
