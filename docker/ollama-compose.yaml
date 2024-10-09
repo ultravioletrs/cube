@@ -10,7 +10,7 @@ volumes:
 services:
   ollama:
     container_name: ollama
-    image: ollama/ollama:0.3.8 # For AMD GPU, use ollama/ollama:0.3.8-rocm
+    image: ollama/ollama:0.3.12 # For AMD GPU, use ollama/ollama:0.3.8-rocm
     restart: unless-stopped
     volumes:
       - ollama:/root/.ollama
@@ -36,7 +36,7 @@ services:
 
   open-webui:
     container_name: open-webui
-    image: ghcr.io/open-webui/open-webui:v0.3.16-ollama
+    image: ghcr.io/open-webui/open-webui:0.3.32-ollama
     restart: unless-stopped
     volumes:
       - open-webui:/app/backend/data
@@ -47,49 +47,40 @@ services:
     networks:
       - cube-network
 
-  pull-llama3:
-    image: docker:27.2.0
-    container_name: pull-llama3
+  pull-tinyllama:
+    image: docker:27.3.1
+    container_name: pull-tinyllama
+    restart: on-failure
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull llama3:8b"
+    command: -c "docker exec ollama ollama run tinyllama:1.1b"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - cube-network
 
   pull-starcoder2:
-    image: docker:27.2.0
+    image: docker:27.3.1
     container_name: pull-starcoder2
+    restart: on-failure
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull starcoder2:3b"
+    command: -c "docker exec ollama ollama pull starcoder2:3b"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - cube-network
 
   pull-nomic-embed-text:
-    image: docker:27.2.0
+    image: docker:27.3.1
     container_name: pull-nomic-embed-text
+    restart: on-failure
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull nomic-embed-text"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - cube-network
-
-  pull-yi-coder:
-    image: docker:27.2.0
-    container_name: pull-yi-coder
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull yi-coder"
+    command: -c "docker exec ollama ollama pull nomic-embed-text:v1.5"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
