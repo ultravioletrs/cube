@@ -1,3 +1,6 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
 define SETUP_INSTALL_TARGET_CMDS
 	mkdir -p $(TARGET_DIR)/cube/
 endef

@@ -1,3 +1,6 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
 CUBE_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/proxy
 CGO_ENABLED ?= 0
 GOOS ?= linux

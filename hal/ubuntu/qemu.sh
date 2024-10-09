@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
 
 BASE_IMAGE_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 BASE_IMAGE="ubuntu-base.qcow2"
