@@ -77,7 +77,7 @@ services:
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "sleep 10 && docker exec ollama ollama pull nomic-embed-text"
+    command: -c "sleep 10 && docker exec ollama ollama pull nomic-embed-text:v1.5"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
