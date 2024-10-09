@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
 
 function attest() {
     snpguest report attestation-report.bin request-data.txt --random

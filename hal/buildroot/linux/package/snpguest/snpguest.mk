@@ -1,3 +1,6 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
 SNPGUEST_VERSION = main
 SNPGUEST_SITE = $(call github,virtee,snpguest,$(SNPGUEST_VERSION))
 SNPGUEST_LICENSE = Apache-2.0

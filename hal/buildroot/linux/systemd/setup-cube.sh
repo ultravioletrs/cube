@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
 
 # IFACES are all network interfaces excluding lo (LOOPBACK) and sit interfaces
 IFACES=$(ip link show | grep -vE 'LOOPBACK|sit*' | awk -F': ' '{print $2}')

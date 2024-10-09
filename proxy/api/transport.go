@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 package api
 
 import (
@@ -77,6 +79,7 @@ func unwrap(err error) error {
 	if wrapper != nil {
 		return wrapper
 	}
+
 	return err
 }
 

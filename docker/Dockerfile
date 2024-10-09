@@ -1,3 +1,6 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
 FROM golang:1.23.1-alpine AS builder
 ARG SVC
 ARG GOOS

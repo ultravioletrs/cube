@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
 
 VM_NAME="cube-ai-vm"
 RAM="10240M"

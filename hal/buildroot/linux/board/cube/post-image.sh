@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
 
 CUBE_BOARD_DIR="$(dirname "$0")"
 DEFCONFIG_NAME="$(basename "$2")"

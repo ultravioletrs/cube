@@ -1,0 +1,39 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+run:
+  timeout: 3m
+
+issues:
+  max-issues-per-linter: 100
+  max-same-issues: 100
+
+linters-settings:
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - performance
+      - style
+      - experimental
+      - opinionated
+  goheader:
+    template: |-
+      Copyright (c) Ultraviolet
+      SPDX-License-Identifier: Apache-2.0
+
+linters:
+  enable-all: true
+  disable:
+    - execinquery # deprecated
+    - gomnd # deprecated
+    - exportloopref # deprecated
+    - depguard
+    - exhaustruct
+    - ireturn
+    - funlen
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - nonamedreturns
+    - cyclop
+    - errorlint

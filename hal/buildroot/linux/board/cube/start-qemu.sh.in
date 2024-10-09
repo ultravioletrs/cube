@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
 
 BINARIES_DIR="${0%/*}/"
 # shellcheck disable=SC2164
