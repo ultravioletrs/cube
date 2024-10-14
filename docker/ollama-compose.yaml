@@ -47,14 +47,14 @@ services:
     networks:
       - cube-network
 
-  pull-tinyllama:
+  pull-qwen:
     image: docker:27.3.1
-    container_name: pull-tinyllama
+    container_name: pull-qwen
     restart: on-failure
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama run tinyllama:1.1b"
+    command: -c "docker exec ollama ollama run qwen2.5-coder:1.5b"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
