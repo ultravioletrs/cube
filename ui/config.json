@@ -3,8 +3,8 @@
         "font": "roboto",
         "logo": {
             "src": {
-                "defaultLogo": "cube-ai-logo.svg",
-                "altLogo": "cube-ai-logo.svg"
+                "defaultLogo": "/cube-ai-logo.svg",
+                "altLogo": "/cube-ai-logo.svg"
             },
             "alt": "Cube AI Logo",
             "height": 64,
