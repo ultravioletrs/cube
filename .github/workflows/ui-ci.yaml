@@ -1,6 +1,3 @@
-# Copyright (c) Ultraviolet
-# SPDX-License-Identifier: Apache-2.0
-
 name: Create and publish UI Docker image
 
 on:
@@ -9,7 +6,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{github.repository}}
+  IMAGE_NAME: ultravioletrs/cube/ui
 
 jobs:
   build-and-push-image:
