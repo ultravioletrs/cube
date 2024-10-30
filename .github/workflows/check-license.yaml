@@ -21,7 +21,7 @@ jobs:
       - name: Check License Header
         run: |
           CHECK=$(grep -rcL --exclude-dir={.git,build} \
-            --exclude=\*.{crt,key,pem,zed,md,mod,sum,tmpl,txt,in,desc,service} \
+            --exclude=\*.{crt,key,pem,zed,md,mod,sum,tmpl,txt,in,desc,service,json,svg} \
             --exclude=LICENSE \
             --regexp "Copyright (c) Ultraviolet\|Copyright (c) Abstract Machines" .)
           if [ "$CHECK" ]; then
