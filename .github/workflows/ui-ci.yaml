@@ -1,7 +1,7 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
-name: Create and publish UI Docker image
+name: Build and Publish Cube AI UI Docker Image
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ultravioletrs/cube/ui
+  MG_DOCKER_IMAGE_NAME_PREFIX: ghcr.io/ultravioletrs/cube/ui
 
 jobs:
   build-and-push-image:
@@ -27,28 +27,34 @@ jobs:
 
       - name: Clone UI repository
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUBPAT: ${{ secrets.GITHUBPAT }}
         run: |
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-          git clone https://github.com/absmach/magistrala-ui-new.git
+          git config --global url."https://${{ secrets.GITHUBPAT }}@github.com/".insteadOf "https://github.com/"
+          git clone ${{ env.REPO_URL }}
 
-      - name: Log in to ghrc
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GITHUBPAT }}
 
-      - name: Extract metadata
+      - name: Extract Image Metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}/ui-cube-ai
 
-      - name: Build Cube AI UI image
+      - name: Build Cube AI UI Docker Image
+        env:
+          MG_DOCKER_IMAGE_NAME_PREFIX: ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}
+          GITHUB_TOKEN: ${{ secrets.GITHUBPAT }}
         run: |
-          GITHUB_TOKEN="token" make dockers_cube_ai
+          cd magistrala-ui-new
+          make dockers_cube_ai
+        continue-on-error: false
 
-      - name: Push Cube AI UI image
+      - name: Push Cube AI UI Docker Image
         run: |
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}/ui-cube-ai
+        continue-on-error: false
