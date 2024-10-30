@@ -46,12 +46,10 @@ jobs:
           images: ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}/ui-cube-ai
 
       - name: Build Cube AI UI Docker Image
-        env:
-          MG_DOCKER_IMAGE_NAME_PREFIX: ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}
-          GITHUB_TOKEN: ${{ secrets.GITHUBPAT }}
         run: |
           cd magistrala-ui-new
-          make dockers_cube_ai
+          GITHUB_TOKEN="${{ secrets.GITHUBPAT }}" make dockers_cube_ai
+        
         continue-on-error: false
 
       - name: Push Cube AI UI Docker Image
