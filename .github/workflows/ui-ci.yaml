@@ -6,6 +6,8 @@ name: Create and publish UI Docker image
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '0 8 * * 6'
 
 env:
   REGISTRY: ghcr.io
@@ -45,9 +47,7 @@ jobs:
 
       - name: Build Cube AI UI image
         run: |
-          cd magistrala-ui-new
-          make
-          make dockers_cube_ai
+          GITHUB_TOKEN="token" make dockers_cube_ai
 
       - name: Push Cube AI UI image
         run: |
