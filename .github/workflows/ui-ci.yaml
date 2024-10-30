@@ -49,6 +49,6 @@ jobs:
           make
           make dockers_cube_ai
 
-      - name: Push Docker image to GitHub Container Registry
+      - name: Push Cube AI UI Docker image to GitHub Container Registry
         run: |
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
