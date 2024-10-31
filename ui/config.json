@@ -3,12 +3,12 @@
         "font": "roboto",
         "logo": {
             "src": {
-                "defaultLogo": "/logo.svg",
-                "altLogo": "/logo.svg"
+                "defaultLogo": "/logo-white.svg",
+                "altLogo": "/logo-black.svg"
             },
             "alt": "Cube AI Logo",
             "height": 64,
-            "width": 250,
+            "width": 400,
             "mobileWidth": 50,
             "mobileHeight": 64,
             "homeTopbarWidth": 40,
