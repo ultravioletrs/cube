@@ -16,6 +16,17 @@
             "navbarWidth": 60,
             "navbarHeight": 64,
             "link": "https://github.com/ultravioletrs/cube"
-        }
+        },
+        "allowMultipleThemes": true,
+        "themes": {
+          "availableTheme": "green",
+          "defaultTheme": "green"
+        },
+        "favicon": {
+          "defaultFavicon": "/logo-white.svg",
+          "altFavicon": "/logo-black.svg"
+        },
+        "uiKeywords": "Artificial Intelligence, Confidential Computing, Large Language Models",
+        "uiDescription": "Cube AI ."
     }
 }
