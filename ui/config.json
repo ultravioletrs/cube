@@ -3,8 +3,8 @@
         "font": "inter",
         "logo": {
             "src": {
-                "defaultLogo": "/logo-white.svg",
-                "altLogo": "/logo-black.svg"
+                "defaultLogo": "/defaultLogo.svg",
+                "altLogo": "/altLogo.svg"
             },
             "alt": "Cube AI Logo",
             "height": 64,
@@ -23,8 +23,8 @@
           "defaultTheme": "green"
         },
         "favicon": {
-          "defaultFavicon": "/logo-white.svg",
-          "altFavicon": "/logo-black.svg"
+          "defaultFavicon": "/defaultFavicon.svg",
+          "altFavicon": "/altFavicon.svg"
         },
         "uiKeywords": "Artificial Intelligence, Confidential Computing, Large Language Models",
         "uiDescription": "Cube AI ."
