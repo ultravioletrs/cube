@@ -1,6 +1,6 @@
 {
     "Configuration": {
-        "font": "inter",
+        "font": "Roboto",
         "logo": {
             "src": {
                 "defaultLogo": "/defaultLogo.svg",
