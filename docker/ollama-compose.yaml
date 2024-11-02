@@ -1,87 +1,87 @@
-# Copyright (c) Ultraviolet
-# SPDX-License-Identifier: Apache-2.0
+# # Copyright (c) Ultraviolet
+# # SPDX-License-Identifier: Apache-2.0
 
-volumes:
-  open-webui:
-    driver: local
-  ollama:
-    driver: local
+# volumes:
+#   open-webui:
+#     driver: local
+#   ollama:
+#     driver: local
 
-services:
-  ollama:
-    container_name: ollama
-    image: ollama/ollama:0.3.12 # For AMD GPU, use ollama/ollama:0.3.8-rocm
-    restart: unless-stopped
-    volumes:
-      - ollama:/root/.ollama
-    tty: true
-    networks:
-      - cube-network
-    # # Uncomment the following lines to enable AMD GPU support
-    # devices:
-    #   - /dev/dri:/dev/dri
-    #   - /dev/kfd:/dev/kfd
-    # environment:
-    #   - "HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION-11.0.0}"
+# services:
+#   ollama:
+#     container_name: ollama
+#     image: ollama/ollama:0.3.12 # For AMD GPU, use ollama/ollama:0.3.8-rocm
+#     restart: unless-stopped
+#     volumes:
+#       - ollama:/root/.ollama
+#     tty: true
+#     networks:
+#       - cube-network
+#     # # Uncomment the following lines to enable AMD GPU support
+#     # devices:
+#     #   - /dev/dri:/dev/dri
+#     #   - /dev/kfd:/dev/kfd
+#     # environment:
+#     #   - "HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION-11.0.0}"
 
-    # # Uncomment the following lines to enable Nvidia GPU support
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: ${OLLAMA_GPU_DRIVER-nvidia}
-    #           count: ${OLLAMA_GPU_COUNT-1}
-    #           capabilities:
-    #             - gpu
+#     # # Uncomment the following lines to enable Nvidia GPU support
+#     # deploy:
+#     #   resources:
+#     #     reservations:
+#     #       devices:
+#     #         - driver: ${OLLAMA_GPU_DRIVER-nvidia}
+#     #           count: ${OLLAMA_GPU_COUNT-1}
+#     #           capabilities:
+#     #             - gpu
 
-  open-webui:
-    container_name: open-webui
-    image: ghcr.io/open-webui/open-webui:0.3.32-ollama
-    restart: unless-stopped
-    volumes:
-      - open-webui:/app/backend/data
-    ports:
-      - 3000:8080
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-    networks:
-      - cube-network
+#   open-webui:
+#     container_name: open-webui
+#     image: ghcr.io/open-webui/open-webui:0.3.32-ollama
+#     restart: unless-stopped
+#     volumes:
+#       - open-webui:/app/backend/data
+#     ports:
+#       - 3000:8080
+#     environment:
+#       - OLLAMA_BASE_URL=http://ollama:11434
+#     networks:
+#       - cube-network
 
-  pull-tinyllama:
-    image: docker:27.3.1
-    container_name: pull-tinyllama
-    restart: on-failure
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama run tinyllama:1.1b"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - cube-network
+#   pull-tinyllama:
+#     image: docker:27.3.1
+#     container_name: pull-tinyllama
+#     restart: on-failure
+#     depends_on:
+#       - ollama
+#     entrypoint: /bin/sh
+#     command: -c "docker exec ollama ollama run tinyllama:1.1b"
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock
+#     networks:
+#       - cube-network
 
-  pull-starcoder2:
-    image: docker:27.3.1
-    container_name: pull-starcoder2
-    restart: on-failure
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama pull starcoder2:3b"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - cube-network
+#   pull-starcoder2:
+#     image: docker:27.3.1
+#     container_name: pull-starcoder2
+#     restart: on-failure
+#     depends_on:
+#       - ollama
+#     entrypoint: /bin/sh
+#     command: -c "docker exec ollama ollama pull starcoder2:3b"
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock
+#     networks:
+#       - cube-network
 
-  pull-nomic-embed-text:
-    image: docker:27.3.1
-    container_name: pull-nomic-embed-text
-    restart: on-failure
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama pull nomic-embed-text:v1.5"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - cube-network
+#   pull-nomic-embed-text:
+#     image: docker:27.3.1
+#     container_name: pull-nomic-embed-text
+#     restart: on-failure
+#     depends_on:
+#       - ollama
+#     entrypoint: /bin/sh
+#     command: -c "docker exec ollama ollama pull nomic-embed-text:v1.5"
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock
+#     networks:
+#       - cube-network
