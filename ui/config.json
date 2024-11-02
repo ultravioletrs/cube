@@ -19,8 +19,8 @@
         },
         "allowMultipleThemes": true,
         "themes": {
-          "availableTheme": "green",
-          "defaultTheme": "green"
+          "availableTheme": ["default", "midnightsky", "tealtide", "graywave"],
+          "defaultTheme": "default"
         },
         "favicon": {
           "defaultFavicon": "/defaultFavicon.svg",
