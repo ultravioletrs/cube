@@ -6,17 +6,17 @@ To build the HAL for Linux, you need to install [Buildroot](https://buildroot.or
 
 After following the steps in [README.md](./linux/README.md), you will have bzImage and rootfs.cpio.gz files.
 
-Next we need to create a filesystem image. We will use `mkfs.ext4` to create the filesystem image.
+Next we need to create a filesystem image. We will use `mkfs.ext4` to create the filesystem image. To do so, run the following command from `~/cube/hal/buildroot` directory:
 
 ```bash
 dd if=/dev/zero of=rootfs.img bs=1M count=30720
 mkfs.ext4 ./rootfs.img
 ```
 
-Now we can run the QEMU VM with the filesystem image.
+Now we can run the QEMU VM with the filesystem image from the same directory.
 
 ```bash
-sudo bash buildroot/qemu.sh start_cvm
+sudo bash qemu.sh start_cvm
 ```
 
 If you want to start a normal VM, you can run:
