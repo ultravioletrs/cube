@@ -13,10 +13,10 @@ dd if=/dev/zero of=rootfs.img bs=1M count=30720
 mkfs.ext4 ./rootfs.img
 ```
 
-Now we can run the QEMU VM with the filesystem image from the same directory.
+Now we can run the QEMU VM with the filesystem image from `~/cube/hal` directory.
 
 ```bash
-sudo bash qemu.sh start_cvm
+sudo bash buildroot/qemu.sh start_cvm
 ```
 
 If you want to start a normal VM, you can run:
