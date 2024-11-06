@@ -1,0 +1,21 @@
+{
+    "Configuration": {
+        "font": "roboto",
+        "logo": {
+            "src": {
+                "defaultLogo": "/logo.svg",
+                "altLogo": "/logo.svg"
+            },
+            "alt": "Cube AI Logo",
+            "height": 64,
+            "width": 250,
+            "mobileWidth": 50,
+            "mobileHeight": 64,
+            "homeTopbarWidth": 40,
+            "homeTopbarHeight": 64,
+            "navbarWidth": 60,
+            "navbarHeight": 64,
+            "link": "https://github.com/ultravioletrs/cube"
+        }
+    }
+}
