@@ -36,7 +36,6 @@ Run the following command to configure Buildroot with settings from the Cube pro
 make BR2_EXTERNAL=../cube/hal/buildroot/linux cube_defconfig
 ```
 
-- `make`: Runs the `make` command to start configuring Buildroot.
 - `BR2_EXTERNAL=../cube/hal/buildroot/linux`: Tells Buildroot to use the external configuration files from the Cube project located at `../cube/hal/buildroot/linux`.
 - `cube_defconfig`: Loads the default configuration for Cube. This sets up Buildroot with settings that are specific to the Cube project.
 
