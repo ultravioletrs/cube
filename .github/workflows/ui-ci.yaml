@@ -12,6 +12,7 @@ on:
 env:
   REGISTRY: ghcr.io
   MG_DOCKER_IMAGE_NAME_PREFIX: ghcr.io/ultravioletrs/cube/ui
+  MG_SOURCE_IMAGE_NAME: ghcr.io/absmach/magistrala-ui-new/ui-cube-ai
 
 jobs:
   build-and-push-image:
@@ -30,8 +31,8 @@ jobs:
           GITHUBPAT: ${{ secrets.GITHUBPAT }}
         run: |
           git config --global url."https://${{ secrets.GITHUBPAT }}@github.com/".insteadOf "https://github.com/"
-          git clone ${{ env.REPO_URL }}
-
+          git clone https://github.com/absmach/magistrala-ui-new.git
+          
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -48,11 +49,14 @@ jobs:
       - name: Build Cube AI UI Docker Image
         run: |
           cd magistrala-ui-new
-          GITHUB_TOKEN="${{ secrets.GITHUBPAT }}" make dockers_cube_ai
+          GITHUB_TOKEN="${{ secrets.GITHUBPAT }}" make CONFIG_DIR_SOURCE=../ui dockers_cube_ai
         
-        continue-on-error: false
+      - name: Save and Reload Docker Image
+        run: |
+          docker save -o magistrala-ui-cube-ai.tar ${{ env.MG_SOURCE_IMAGE_NAME }}
+          docker load -i magistrala-ui-cube-ai.tar
+          docker tag ${{ env.MG_SOURCE_IMAGE_NAME }}:latest ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
 
       - name: Push Cube AI UI Docker Image
         run: |
-          docker push ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}/ui-cube-ai
-        continue-on-error: false
+          docker push ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
