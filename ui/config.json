@@ -19,7 +19,7 @@
         },
         "allowMultipleThemes": true,
         "themes": {
-          "availableTheme": ["default", "midnightsky", "tealtide", "graywave"],
+          "availableTheme": "default",
           "defaultTheme": "default"
         },
         "favicon": {
