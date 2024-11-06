@@ -16,7 +16,7 @@ git clone https://gitlab.com/buildroot.org/buildroot.git
 
 ### Step 2: Clone the Cube Project Repository
 
-Next, download the Cube project, which will be used as an external layer in Buildroot.
+Next, download the Cube project.
 
 ```bash
 git clone https://github.com/ultravioletrs/cube.git
