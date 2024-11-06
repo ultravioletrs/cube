@@ -327,10 +327,11 @@ services:
       - users
       - invitations
     ports:
-      - 3001:3000
+      - ${UI_PORT}:${UI_PORT}
     networks:
       - cube-network
     environment:
+      PORT: ${UI_PORT}
       NEXTAUTH_SECRET: ${UV_CUBE_UI_NEXTAUTH_SECRET}
       MG_DOMAINS_URL: ${MG_DOMAINS_URL}
       MG_USERS_URL: ${MG_USERS_URL}
