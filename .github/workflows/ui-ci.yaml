@@ -11,8 +11,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  MG_DOCKER_IMAGE_NAME_PREFIX: ghcr.io/ultravioletrs/cube/ui
-  MG_SOURCE_IMAGE_NAME: ghcr.io/absmach/magistrala-ui-new/ui-cube-ai
 
 jobs:
   build-and-push-image:
@@ -26,13 +24,13 @@ jobs:
       - name: Checkout Cube repository
         uses: actions/checkout@v4
         with:
-          path: cube-repo
+          path: cube
 
       - name: Checkout UI repository
         uses: actions/checkout@v4
         with:
           repository: absmach/magistrala-ui-new
-          path: ui-repo
+          path: ui
           token: ${{ secrets.GITHUBPAT }}
 
       - name: Log in to GitHub Container Registry
@@ -42,15 +40,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUBPAT }}
 
-      - name: Extract Image Metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}/ui-cube-ai
-
       - name: Build and Push Cube AI UI Docker Image
         run: |
-          cd ui-repo
-          GITHUB_TOKEN="${{ secrets.GITHUBPAT }}" NEXT_PUBLIC_UI_TYPE=cube-ai CONFIG_DIR_SOURCE=../cube-repo/ui make dockers_cube_ai  
-          docker tag ${{ env.MG_SOURCE_IMAGE_NAME }}:latest ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
-          docker push ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
+          cd ui
+          NEXT_PUBLIC_UI_TYPE=cube-ai CONFIG_DIR_SOURCE=../cube/ui make dockers_cube_ai
+          docker tag ${{ env.REGISTRY }}/absmach/magistrala-ui-new/ui-cube-ai:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
+          docker push ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
