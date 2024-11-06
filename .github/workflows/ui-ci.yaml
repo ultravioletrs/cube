@@ -40,9 +40,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUBPAT }}
 
+      - name: Set UI Type in .env File
+        run: |
+          echo "NEXT_PUBLIC_UI_TYPE=cube-ai" >> ui/.env
+
       - name: Build and Push Cube AI UI Docker Image
         run: |
           cd ui
-          NEXT_PUBLIC_UI_TYPE=cube-ai CONFIG_DIR_SOURCE=../cube/ui make dockers_cube_ai
+          CONFIG_DIR_SOURCE=../cube/ui make dockers_cube_ai
           docker tag ${{ env.REGISTRY }}/absmach/magistrala-ui-new/ui-cube-ai:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
           docker push ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
