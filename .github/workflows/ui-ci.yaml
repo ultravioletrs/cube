@@ -46,17 +46,9 @@ jobs:
         with:
           images: ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}/ui-cube-ai
 
-      - name: Build Cube AI UI Docker Image
+      - name: Build and Push Cube AI UI Docker Image
         run: |
           cd magistrala-ui-new
           GITHUB_TOKEN="${{ secrets.GITHUBPAT }}" make CONFIG_DIR_SOURCE=../ui dockers_cube_ai
-        
-      - name: Save and Reload Docker Image
-        run: |
-          docker save -o magistrala-ui-cube-ai.tar ${{ env.MG_SOURCE_IMAGE_NAME }}
-          docker load -i magistrala-ui-cube-ai.tar
           docker tag ${{ env.MG_SOURCE_IMAGE_NAME }}:latest ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
-
-      - name: Push Cube AI UI Docker Image
-        run: |
           docker push ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
