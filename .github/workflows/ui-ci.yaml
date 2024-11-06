@@ -42,8 +42,7 @@ jobs:
 
       - name: Set UI Type in .env File
         run: |
-          sed -i 's/^NEXT_PUBLIC_UI_TYPE=.*/NEXT_PUBLIC_UI_TYPE=cube-ai/' docker/.env
-  
+          sed -i 's/^NEXT_PUBLIC_UI_TYPE=.*/NEXT_PUBLIC_UI_TYPE=cube-ai/' ui/docker/.env
 
       - name: Build and Push Cube AI UI Docker Image
         run: |
