@@ -23,16 +23,18 @@ jobs:
       packages: write
 
     steps:
-      - name: Checkout main repository
+      - name: Checkout Cube repository
         uses: actions/checkout@v4
+        with:
+          path: cube-repo
 
-      - name: Clone UI repository
-        env:
-          GITHUBPAT: ${{ secrets.GITHUBPAT }}
-        run: |
-          git config --global url."https://${{ secrets.GITHUBPAT }}@github.com/".insteadOf "https://github.com/"
-          git clone https://github.com/absmach/magistrala-ui-new.git
-          
+      - name: Checkout UI repository
+        uses: actions/checkout@v4
+        with:
+          repository: absmach/magistrala-ui-new
+          path: ui-repo
+          token: ${{ secrets.GITHUBPAT }}
+
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -48,7 +50,7 @@ jobs:
 
       - name: Build and Push Cube AI UI Docker Image
         run: |
-          cd magistrala-ui-new
-          GITHUB_TOKEN="${{ secrets.GITHUBPAT }}" CONFIG_DIR_SOURCE=../ui make dockers_cube_ai  
+          cd ui-repo
+          GITHUB_TOKEN="${{ secrets.GITHUBPAT }}" CONFIG_DIR_SOURCE=../cube-repo/ui make dockers_cube_ai  
           docker tag ${{ env.MG_SOURCE_IMAGE_NAME }}:latest ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
           docker push ${{ env.MG_DOCKER_IMAGE_NAME_PREFIX }}:latest
