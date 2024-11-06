@@ -1,6 +1,6 @@
 {
     "Configuration": {
-        "font": "Roboto",
+        "font": "roboto",
         "logo": {
             "src": {
                 "defaultLogo": "/defaultLogo.svg",
@@ -17,7 +17,7 @@
             "navbarHeight": 64,
             "link": "https://github.com/ultravioletrs/cube"
         },
-        "allowMultipleThemes": true,
+        "allowMultipleThemes":false,
         "themes": {
           "availableTheme": "default",
           "defaultTheme": "default"
