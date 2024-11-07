@@ -86,7 +86,7 @@ services:
       - cube-network
 
   auth:
-    image: ghcr.io/ultravioletrs/cube/auth:${MG_RELEASE_TAG}
+    image: magistrala/auth:${MG_RELEASE_TAG}
     container_name: magistrala-auth
     depends_on:
       - auth-db
@@ -175,7 +175,7 @@ services:
       - cube-network
 
   users:
-    image: ghcr.io/ultravioletrs/cube/users:${MG_RELEASE_TAG}
+    image: magistrala/users:${MG_RELEASE_TAG}
     container_name: magistrala-users
     depends_on:
       - users-db
@@ -266,7 +266,7 @@ services:
       - cube-network
 
   invitations:
-    image: ghcr.io/ultravioletrs/cube/invitations:${MG_RELEASE_TAG}
+    image: magistrala/invitations:${MG_RELEASE_TAG}
     container_name: magistrala-invitations
     restart: on-failure
     depends_on:
