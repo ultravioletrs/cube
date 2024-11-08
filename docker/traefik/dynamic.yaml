@@ -76,6 +76,7 @@ http:
     users-health:
       rule: "Path(`/users/health`)"
       entryPoints:
+        - web
         - websecure
       service: users
       middlewares:
@@ -87,6 +88,7 @@ http:
     auth-health:
       rule: "Path(`/auth/health`)"
       entryPoints:
+        - web
         - websecure
       service: auth
       middlewares:
@@ -98,6 +100,7 @@ http:
     invitations-health:
       rule: "Path(`/invitations/health`)"
       entryPoints:
+        - web
         - websecure
       service: invitations
       middlewares:
@@ -109,6 +112,7 @@ http:
     ollama:
       rule: "PathPrefix(`/ollama`)"
       entryPoints:
+        - web
         - websecure
       service: ollama
       middlewares:
@@ -126,6 +130,7 @@ http:
       # /users/{member_id}/groups
       rule: "PathRegexp(`^/(groups|channels|domains)/(.+)/users`) || PathRegexp(`^/(channels|users)/(.+)/groups`)"
       entryPoints:
+        - web
         - websecure
       service: users
       middlewares:
@@ -136,6 +141,7 @@ http:
     users:
       rule: "PathPrefix(`/users`) || PathPrefix(`/password`) || Path(`/health`) || PathPrefix(`/groups`)"
       entryPoints:
+        - web
         - websecure
       service: users
       middlewares:
@@ -147,6 +153,7 @@ http:
       # /users/{member_id}/domains
       rule: "PathRegexp(`^/users/(.+)/domains`)"
       entryPoints:
+        - web
         - websecure
       service: auth
       middlewares:
@@ -157,6 +164,7 @@ http:
     auth:
       rule: "PathPrefix(`/policies`) || PathPrefix(`/keys`) || PathPrefix(`/domains`)"
       entryPoints:
+        - web
         - websecure
       service: auth
       middlewares:
@@ -167,6 +175,7 @@ http:
     invitations:
       rule: "PathPrefix(`/invitations`)"
       entryPoints:
+        - web
         - websecure
       service: invitations
       middlewares:
