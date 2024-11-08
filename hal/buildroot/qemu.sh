@@ -6,8 +6,8 @@ VM_NAME="cube-ai-vm"
 RAM="10240M"
 CPU="4"
 CPU_TYPE="EPYC-v4"
-QEMU_AMDSEV_BINARY="/var/cube-ai/bin/qemu-system-x86_64"
-QEMU_OVMF_CODE="/var/cube-ai/OVMF.fd"
+QEMU_AMDSEV_BINARY="/home/cocosai/danko/test/qemu/build/qemu-system-x86_64"
+QEMU_OVMF_CODE="/home/cocosai/danko/test/ovmf/OVMF.fd"
 KERNEL_PATH="../../buildroot/output/images/bzImage"
 INITRD_PATH="../../buildroot/output/images/rootfs.cpio.gz"
 FS_PATH="./rootfs.img"
@@ -47,7 +47,7 @@ function start_qemu(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:3001,dns=8.8.8.8 \
+    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:6193,dns=8.8.8.8 \
     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
     -nographic \
     -no-reboot \
@@ -74,19 +74,19 @@ function start_cvm(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:3001,dns=8.8.8.8 \
+    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:6193,dns=8.8.8.8 \
     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
     -nographic \
     -no-reboot \
     -kernel $KERNEL_PATH \
     -initrd $INITRD_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio \
-    -drive if=pflash,format=raw,unit=0,file=$QEMU_OVMF_CODE,readonly=on \
+    -bios $QEMU_OVMF_CODE \
     -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198 \
-    -object memory-backend-memfd-private,id=ram1,size=$RAM,share=true \
+    -object memory-backend-memfd,id=ram1,size=$RAM,share=true,prealloc=false \
     -machine memory-encryption=sev0 \
-    -machine memory-backend=ram1,kvm-type=protected \
-    -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1,discard=none,kernel-hashes=on \
+    -machine confidential-guest-support=sev0,memory-backend=ram1 \
+    -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1,kernel-hashes=on \
     -append "$QEMU_APPEND_ARG"
 }
 
