@@ -1,0 +1,52 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+name: Build and Publish Cube AI UI Docker Image
+
+on:
+  schedule:
+    - cron: '0 8 * * 6'
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Cube repository
+        uses: actions/checkout@v4
+        with:
+          path: cube
+
+      - name: Checkout UI repository
+        uses: actions/checkout@v4
+        with:
+          repository: absmach/magistrala-ui-new
+          path: ui
+          token: ${{ secrets.GITHUBPAT }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUBPAT }}
+
+      - name: Set UI Type in .env File
+        run: |
+          sed -i 's/^NEXT_PUBLIC_UI_TYPE=.*/NEXT_PUBLIC_UI_TYPE=cube-ai/' ui/.env
+
+      - name: Build and Push Cube AI UI Docker Image
+        run: |
+          cd ui
+          CONFIG_DIR_SOURCE=../cube/ui make dockers_cube_ai
+          docker tag ${{ env.REGISTRY }}/absmach/magistrala-ui-new/ui-cube-ai:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
+          docker push ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
