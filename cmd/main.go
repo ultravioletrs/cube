@@ -12,8 +12,9 @@ import (
 
 	"github.com/absmach/callhome/pkg/client"
 	"github.com/absmach/magistrala"
-	authclient "github.com/absmach/magistrala/auth/api/grpc"
 	mglog "github.com/absmach/magistrala/logger"
+	"github.com/absmach/magistrala/pkg/authn"
+	"github.com/absmach/magistrala/pkg/authn/authsvc"
 	"github.com/absmach/magistrala/pkg/grpcclient"
 	"github.com/absmach/magistrala/pkg/jaeger"
 	"github.com/absmach/magistrala/pkg/prometheus"
@@ -70,24 +71,22 @@ func main() {
 		}
 	}
 
-	authCfg := grpcclient.Config{}
-	if err := env.ParseWithOptions(&authCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load %s auth configuration : %s", svcName, err))
+	grpcCfg := grpcclient.Config{}
+	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
+		logger.Error(fmt.Sprintf("failed to load auth gRPC client configuration : %s", err))
 		exitCode = 1
 
 		return
 	}
-
-	authClient, authHandler, err := grpcclient.SetupAuthClient(ctx, authCfg)
+	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
 	if err != nil {
 		logger.Error(err.Error())
 		exitCode = 1
 
 		return
 	}
-	defer authHandler.Close()
-
-	logger.Info("Auth service gRPC client successfully connected to auth gRPC server " + authHandler.Secure())
+	defer authnClient.Close()
+	logger.Info("AuthN  successfully connected to auth gRPC server " + authnClient.Secure())
 
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
@@ -103,7 +102,7 @@ func main() {
 	}()
 	tracer := tp.Tracer(svcName)
 
-	svc := newService(authClient, logger, tracer)
+	svc := newService(auth, logger, tracer)
 
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
@@ -133,8 +132,8 @@ func main() {
 	}
 }
 
-func newService(authClient authclient.AuthServiceClient, logger *slog.Logger, tracer trace.Tracer) proxy.Service {
-	svc := proxy.NewService(authClient)
+func newService(auth authn.Authentication, logger *slog.Logger, tracer trace.Tracer) proxy.Service {
+	svc := proxy.NewService(auth)
 	svc = middleware.NewLoggingMiddleware(logger, svc)
 	svc = middleware.NewTracingMiddleware(tracer, svc)
 	counter, latency := prometheus.MakeMetrics(svcName, "api")

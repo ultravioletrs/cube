@@ -5,8 +5,7 @@ package proxy
 import (
 	"context"
 
-	"github.com/absmach/magistrala"
-	"github.com/absmach/magistrala/auth/api/grpc"
+	"github.com/absmach/magistrala/pkg/authn"
 )
 
 type Service interface {
@@ -14,17 +13,17 @@ type Service interface {
 }
 
 type service struct {
-	auth grpc.AuthServiceClient
+	auth authn.Authentication
 }
 
-func NewService(authClient grpc.AuthServiceClient) Service {
+func NewService(auth authn.Authentication) Service {
 	return &service{
-		auth: authClient,
+		auth: auth,
 	}
 }
 
 func (s *service) Identify(ctx context.Context, token string) error {
-	_, err := s.auth.Identify(ctx, &magistrala.IdentityReq{Token: token})
+	_, err := s.auth.Authenticate(ctx, token)
 
 	return err
 }
