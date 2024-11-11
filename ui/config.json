@@ -1,32 +1,32 @@
 {
-    "Configuration": {
-        "font": "roboto",
-        "logo": {
-            "src": {
-                "defaultLogo": "/defaultLogo.svg",
-                "altLogo": "/altLogo.svg"
-            },
-            "alt": "Cube AI Logo",
-            "height": 64,
-            "width": 400,
-            "mobileWidth": 50,
-            "mobileHeight": 64,
-            "homeTopbarWidth": 40,
-            "homeTopbarHeight": 64,
-            "navbarWidth": 60,
-            "navbarHeight": 64,
-            "link": "https://github.com/ultravioletrs/cube"
-        },
-        "allowMultipleThemes":false,
-        "themes": {
-          "availableTheme": "default",
-          "defaultTheme": "default"
-        },
-        "favicon": {
-          "defaultFavicon": "/defaultFavicon.svg",
-          "altFavicon": "/altFavicon.svg"
-        },
-        "uiKeywords": "Artificial Intelligence, Confidential Computing, Large Language Models",
-        "uiDescription": "Cube AI ."
-    }
+  "Configuration": {
+    "font": "roboto",
+    "logo": {
+      "src": {
+        "defaultLogo": "/defaultLogo.svg",
+        "altLogo": "/altLogo.svg"
+      },
+      "alt": "Cube AI Logo",
+      "height": 64,
+      "width": 400,
+      "mobileWidth": 120,
+      "mobileHeight": 64,
+      "homeTopbarWidth": 140,
+      "homeTopbarHeight": 64,
+      "navbarWidth": 140,
+      "navbarHeight": 64,
+      "link": "https://github.com/ultravioletrs/cube"
+    },
+    "allowMultipleThemes": false,
+    "themes": {
+      "availableTheme": "default",
+      "defaultTheme": "default"
+    },
+    "favicon": {
+      "defaultFavicon": "/defaultFavicon.svg",
+      "altFavicon": "/altFavicon.svg"
+    },
+    "uiKeywords": "Artificial Intelligence, Confidential Computing, Large Language Models",
+    "uiDescription": "Cube AI ."
+  }
 }
