@@ -4,7 +4,8 @@
     "logo": {
       "src": {
         "defaultLogo": "/defaultLogo.svg",
-        "altLogo": "/altLogo.svg"
+        "altLogo": "/altLogo.svg",
+        "sidebarLogo": "/sidebarLogo.svg"
       },
       "alt": "Cube AI Logo",
       "height": 64,
