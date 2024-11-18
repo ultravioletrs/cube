@@ -2,6 +2,10 @@
 
 Cube AI is a framework for building GPT-based AI applications using confidential computing. It protects user data and the AI model by using a trusted execution environment (TEE). TEE is a secure area of a processor that ensures that code and data loaded inside it are protected with respect to confidentiality and integrity. Data confidentiality prevents unauthorized access of data from outside the TEE, while code integrity ensures that code inside the TEE remains unchanged and unaltered from unauthorized access.
 
+<p align="center">
+  <img src="https://github.com/ultravioletrs/cube-docs/blob/main/docs/img/cube-ai.png">
+</p>
+
 ## Key Features
 
 - **Secure Computing**: Cube AI uses secure enclaves to protect user data and AI models from unauthorized access.
