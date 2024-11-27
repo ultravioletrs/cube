@@ -31,9 +31,7 @@ docker compose pull
 5. For local development, replace the following IP address entries in `docker/.env` with your local IP address as follows:
 
 ```bash
- UV_CUBE_UI_BASE_URL=http://localhost:3001
- UV_CUBE_NEXTAUTH_URL=http://localhost:3001/api/auth
- UV_CUBE_PUBLIC_BASE_URL=http://localhost:3001
+ UV_CUBE_NEXTAUTH_URL=http://localhost:${UI_PORT}
 ```
 
 6. Start the docker containers
