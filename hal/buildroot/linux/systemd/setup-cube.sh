@@ -44,3 +44,10 @@ tee /etc/docker/daemon.json > /dev/null <<EOF
 EOF
 
 systemctl start docker
+
+# Setup Cube AI
+cd /mnt/docker
+git clone https://github.com/ultravioletrs/cube.git
+cd cube/docker
+docker compose pull
+docker compose up -d

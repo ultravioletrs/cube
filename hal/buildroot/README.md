@@ -50,31 +50,14 @@ VEK signed the Attestation Report!
 Measurement from SNP Attestation Report: daa2e216eafd8c6404b72157a130500ab0c0944064c8e1009ebf5e910371caf57a6711654108a01a69baaa1a05759cf0
 ```
 
-Clone the repository. Since this is a private repository, you need to create a classic personal access token with `repo` and `read:packages` permissions.
+By default the docker images have been pulled from docker registry and the the docker composition has been started. The folder which contains the docker compose file is at `/mnt/docker/cube/docker`. To see the running containers, run the following command:
 
 ```bash
-git clone https://github.com/ultravioletrs/cube.git
+docker ps -a
 ```
 
-Your username is your github username and your password is the access token you generated in step above.
-
-Login to the docker registry
+For local development, replace the following IP address entries in `docker/.env` with the IP address of the qemu virtual machine as follows:
 
 ```bash
-docker login ghcr.io
-```
-
-Your username is your github username and your password is the access token you generated in step above.
-
-Pull the docker images
-
-```bash
-cd cube/docker/
-docker compose pull
-```
-
-Start the docker composition
-
-```bash
-docker compose up -d
+ UV_CUBE_NEXTAUTH_URL=http://<ip-address>:${UI_PORT}
 ```
