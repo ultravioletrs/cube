@@ -78,6 +78,10 @@ runcmd:
   - groupadd docker
   - usermod -aG docker $USER
   - newgrp docker
+  - git clone https://github.com/ultravioletrs/cube.git
+  - cd cube/docker
+  - docker compose pull
+  - docker compose up -d
 
 final_message: "Docker installation complete."
 EOF
