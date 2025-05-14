@@ -5,10 +5,10 @@ package api
 import (
 	"net/http"
 
-	"github.com/absmach/magistrala"
+	"github.com/absmach/supermq"
 )
 
-var _ magistrala.Response = (*identifyResponse)(nil)
+var _ supermq.Response = (*identifyResponse)(nil)
 
 type identifyResponse struct {
 	identified bool

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 package api
 
-import "github.com/absmach/magistrala/pkg/apiutil"
+import "github.com/absmach/supermq/api/http/util"
 
 type identifyRequest struct {
 	Token string `json:"token"`
@@ -10,7 +10,7 @@ type identifyRequest struct {
 
 func (i *identifyRequest) Validate() error {
 	if i.Token == "" {
-		return apiutil.ErrBearerToken
+		return util.ErrBearerToken
 	}
 
 	return nil

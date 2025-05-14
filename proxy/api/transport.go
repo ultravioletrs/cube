@@ -8,10 +8,10 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/absmach/magistrala"
-	"github.com/absmach/magistrala/pkg/apiutil"
-	"github.com/absmach/magistrala/pkg/errors"
-	svcerr "github.com/absmach/magistrala/pkg/errors/service"
+	"github.com/absmach/supermq"
+	"github.com/absmach/supermq/api/http/util"
+	"github.com/absmach/supermq/pkg/errors"
+	svcerr "github.com/absmach/supermq/pkg/errors/service"
 	"github.com/go-chi/chi/v5"
 	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -23,7 +23,7 @@ const ContentType = "application/json"
 
 func MakeHandler(svc proxy.Service, logger *slog.Logger, instanceID string) http.Handler {
 	opts := []kithttp.ServerOption{
-		kithttp.ServerErrorEncoder(apiutil.LoggingErrorEncoder(logger, encodeError)),
+		kithttp.ServerErrorEncoder(util.LoggingErrorEncoder(logger, encodeError)),
 	}
 
 	mux := chi.NewRouter()
@@ -35,7 +35,7 @@ func MakeHandler(svc proxy.Service, logger *slog.Logger, instanceID string) http
 		opts...,
 	), "identify").ServeHTTP)
 
-	mux.Get("/health", magistrala.Health("cube-proxy", instanceID))
+	mux.Get("/health", supermq.Health("cube-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	return mux
@@ -43,19 +43,19 @@ func MakeHandler(svc proxy.Service, logger *slog.Logger, instanceID string) http
 
 func decodeIdentifyReq(_ context.Context, r *http.Request) (interface{}, error) {
 	return identifyRequest{
-		Token: apiutil.ExtractBearerToken(r),
+		Token: util.ExtractBearerToken(r),
 	}, nil
 }
 
 func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 	var wrapper error
-	if errors.Contains(err, apiutil.ErrValidation) {
+	if errors.Contains(err, util.ErrValidation) {
 		wrapper, err = errors.Unwrap(err)
 	}
 
 	w.Header().Set("Content-Type", ContentType)
 	switch {
-	case errors.Contains(err, apiutil.ErrBearerToken),
+	case errors.Contains(err, util.ErrBearerToken),
 		errors.Contains(err, svcerr.ErrAuthentication):
 		err = unwrap(err)
 		w.WriteHeader(http.StatusUnauthorized)
@@ -84,7 +84,7 @@ func unwrap(err error) error {
 }
 
 func encodeResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
-	if ar, ok := response.(magistrala.Response); ok {
+	if ar, ok := response.(supermq.Response); ok {
 		for k, v := range ar.Headers() {
 			w.Header().Set(k, v)
 		}
