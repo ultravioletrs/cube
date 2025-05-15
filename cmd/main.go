@@ -66,7 +66,6 @@ func main() {
 		if cfg.InstanceID, err = uuid.New().ID(); err != nil {
 			logger.Error(fmt.Sprintf("failed to generate instanceID: %s", err))
 			exitCode = 1
-
 			return
 		}
 	}
@@ -75,14 +74,12 @@ func main() {
 	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load auth gRPC client configuration : %s", err))
 		exitCode = 1
-
 		return
 	}
 	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Error(fmt.Sprintf("failed to init auth gRPC client: %s", err))
 		exitCode = 1
-
 		return
 	}
 	defer authnClient.Close()
@@ -92,7 +89,6 @@ func main() {
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
 		exitCode = 1
-
 		return
 	}
 	defer func() {
@@ -108,7 +104,6 @@ func main() {
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 		exitCode = 1
-
 		return
 	}
 
