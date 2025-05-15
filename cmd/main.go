@@ -39,10 +39,10 @@ const (
 type config struct {
 	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
 	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"         envDefault:"true"`
+	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"        envDefault:"true"`
 	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
-	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"             envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"     envDefault:"1.0"`
+	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"            envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"    envDefault:"1.0"`
 }
 
 func main() {

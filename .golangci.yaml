@@ -1,39 +1,53 @@
-# Copyright (c) Ultraviolet
-# SPDX-License-Identifier: Apache-2.0
-
-run:
-  timeout: 3m
-
-issues:
-  max-issues-per-linter: 100
-  max-same-issues: 100
-
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - performance
-      - style
-      - experimental
-      - opinionated
-  goheader:
-    template: |-
-      Copyright (c) Ultraviolet
-      SPDX-License-Identifier: Apache-2.0
-
+version: "2"
 linters:
-  enable-all: true
+  default: all
   disable:
-    - execinquery # deprecated
-    - gomnd # deprecated
-    - exportloopref # deprecated
+    - cyclop
     - depguard
+    - errorlint
     - exhaustruct
-    - ireturn
     - funlen
+    - ireturn
+    - mnd
+    - nonamedreturns
     - varnamelen
     - wrapcheck
     - wsl
-    - nonamedreturns
-    - cyclop
-    - errorlint
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+        - experimental
+        - opinionated
+    goheader:
+      template: |-
+        Copyright (c) Ultraviolet
+        SPDX-License-Identifier: Apache-2.0
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 100
+  max-same-issues: 100
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

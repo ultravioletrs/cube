@@ -26,6 +26,6 @@ func (i *identifyResponse) Headers() map[string]string {
 	return map[string]string{}
 }
 
-func (i identifyResponse) Empty() bool {
+func (i *identifyResponse) Empty() bool {
 	return true
 }
