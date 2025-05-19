@@ -13,9 +13,9 @@ COMMIT ?= $(shell git rev-parse HEAD)
 define compile_service
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
 	go build -ldflags "-s -w \
-	-X 'github.com/absmach/magistrala.BuildTime=$(TIME)' \
-	-X 'github.com/absmach/magistrala.Version=$(VERSION)' \
-	-X 'github.com/absmach/magistrala.Commit=$(COMMIT)'" \
+	-X 'github.com/absmach/supermq.BuildTime=$(TIME)' \
+	-X 'github.com/absmach/supermq.Version=$(VERSION)' \
+	-X 'github.com/absmach/supermq.Commit=$(COMMIT)'" \
 	-o ${BUILD_DIR}/cube-proxy cmd/main.go
 endef
 

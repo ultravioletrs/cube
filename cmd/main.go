@@ -11,16 +11,16 @@ import (
 	"os"
 
 	"github.com/absmach/callhome/pkg/client"
-	"github.com/absmach/magistrala"
-	mglog "github.com/absmach/magistrala/logger"
-	"github.com/absmach/magistrala/pkg/authn"
-	"github.com/absmach/magistrala/pkg/authn/authsvc"
-	"github.com/absmach/magistrala/pkg/grpcclient"
-	"github.com/absmach/magistrala/pkg/jaeger"
-	"github.com/absmach/magistrala/pkg/prometheus"
-	"github.com/absmach/magistrala/pkg/server"
-	"github.com/absmach/magistrala/pkg/server/http"
-	"github.com/absmach/magistrala/pkg/uuid"
+	"github.com/absmach/supermq"
+	mglog "github.com/absmach/supermq/logger"
+	"github.com/absmach/supermq/pkg/authn"
+	"github.com/absmach/supermq/pkg/authn/authsvc"
+	"github.com/absmach/supermq/pkg/grpcclient"
+	"github.com/absmach/supermq/pkg/jaeger"
+	"github.com/absmach/supermq/pkg/prometheus"
+	"github.com/absmach/supermq/pkg/server"
+	"github.com/absmach/supermq/pkg/server/http"
+	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/proxy"
 	"github.com/ultraviolet/cube/proxy/api"
@@ -32,17 +32,17 @@ import (
 const (
 	svcName        = "cube_proxy"
 	envPrefixHTTP  = "UV_CUBE_PROXY_"
-	envPrefixAuth  = "MG_AUTH_GRPC_"
+	envPrefixAuth  = "SMQ_AUTH_GRPC_"
 	defSvcHTTPPort = "8900"
 )
 
 type config struct {
 	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
 	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"MG_SEND_TELEMETRY"         envDefault:"true"`
+	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"        envDefault:"true"`
 	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
-	JaegerURL     url.URL `env:"MG_JAEGER_URL"             envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"MG_JAEGER_TRACE_RATIO"     envDefault:"1.0"`
+	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"            envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"    envDefault:"1.0"`
 }
 
 func main() {
@@ -80,7 +80,7 @@ func main() {
 	}
 	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
 	if err != nil {
-		logger.Error(err.Error())
+		logger.Error(fmt.Sprintf("failed to init auth gRPC client: %s", err))
 		exitCode = 1
 
 		return
@@ -115,7 +115,7 @@ func main() {
 	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, logger, cfg.InstanceID), logger)
 
 	if cfg.SendTelemetry {
-		chc := client.New(svcName, magistrala.Version, logger, cancel)
+		chc := client.New(svcName, supermq.Version, logger, cancel)
 		go chc.CallHome(ctx)
 	}
 

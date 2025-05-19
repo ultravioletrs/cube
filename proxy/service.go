@@ -5,7 +5,7 @@ package proxy
 import (
 	"context"
 
-	"github.com/absmach/magistrala/pkg/authn"
+	"github.com/absmach/supermq/pkg/authn"
 )
 
 type Service interface {

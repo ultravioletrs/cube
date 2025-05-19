@@ -5,10 +5,10 @@ package api
 import (
 	"net/http"
 
-	"github.com/absmach/magistrala"
+	"github.com/absmach/supermq"
 )
 
-var _ magistrala.Response = (*identifyResponse)(nil)
+var _ supermq.Response = (*identifyResponse)(nil)
 
 type identifyResponse struct {
 	identified bool
@@ -26,6 +26,6 @@ func (i *identifyResponse) Headers() map[string]string {
 	return map[string]string{}
 }
 
-func (i identifyResponse) Empty() bool {
+func (i *identifyResponse) Empty() bool {
 	return true
 }

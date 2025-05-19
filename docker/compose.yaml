@@ -10,7 +10,7 @@ networks:
 include:
   - path: ./ollama-compose.yaml
     env_file: .env
-  - path: ./magistrala-compose.yaml
+  - path: ./supermq-compose.yaml
     env_file: .env
   - path: ./proxy-compose.yaml
     env_file: .env
