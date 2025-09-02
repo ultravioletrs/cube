@@ -128,7 +128,7 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
-		logger.Error(fmt.Sprintf("HTTP adapter service terminated: %s", err))
+		logger.Error(fmt.Sprintf("Proxy service terminated: %s", err))
 	}
 }
 
