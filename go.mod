@@ -10,7 +10,6 @@ require (
 	github.com/go-kit/kit v0.13.0
 	github.com/prometheus/client_golang v1.23.0
 	github.com/ultravioletrs/cocos v0.7.0
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.62.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	golang.org/x/sync v0.16.0
 )
@@ -19,7 +18,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
 	github.com/go-kit/log v0.2.1 // indirect
 	github.com/go-logfmt/logfmt v0.6.0 // indirect

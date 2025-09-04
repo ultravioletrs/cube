@@ -13,9 +13,6 @@ import (
 	"github.com/absmach/callhome/pkg/client"
 	"github.com/absmach/supermq"
 	mglog "github.com/absmach/supermq/logger"
-	"github.com/absmach/supermq/pkg/authn"
-	"github.com/absmach/supermq/pkg/authn/authsvc"
-	"github.com/absmach/supermq/pkg/grpcclient"
 	"github.com/absmach/supermq/pkg/jaeger"
 	"github.com/absmach/supermq/pkg/prometheus"
 	"github.com/absmach/supermq/pkg/server"
@@ -32,7 +29,6 @@ import (
 const (
 	svcName        = "cube_proxy"
 	envPrefixHTTP  = "UV_CUBE_PROXY_"
-	envPrefixAuth  = "SMQ_AUTH_GRPC_"
 	defSvcHTTPPort = "8900"
 )
 
@@ -71,23 +67,6 @@ func main() {
 		}
 	}
 
-	grpcCfg := grpcclient.Config{}
-	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load auth gRPC client configuration : %s", err))
-		exitCode = 1
-
-		return
-	}
-	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to init auth gRPC client: %s", err))
-		exitCode = 1
-
-		return
-	}
-	defer authnClient.Close()
-	logger.Info("AuthN  successfully connected to auth gRPC server " + authnClient.Secure())
-
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
@@ -102,7 +81,13 @@ func main() {
 	}()
 	tracer := tp.Tracer(svcName)
 
-	svc := newService(auth, logger, tracer)
+	svc, err := newService(logger, tracer, cfg.TargetURL)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to create service: %s", err))
+		exitCode = 1
+
+		return
+	}
 
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
@@ -132,12 +117,15 @@ func main() {
 	}
 }
 
-func newService(auth authn.Authentication, logger *slog.Logger, tracer trace.Tracer) proxy.Service {
-	svc := proxy.NewService(auth)
+func newService(logger *slog.Logger, tracer trace.Tracer, targetURL string) (proxy.Service, error) {
+	svc, err := proxy.New(proxy.Config{AgentURL: targetURL, TLS: proxy.InsecureTLSConfig()})
+	if err != nil {
+		return nil, err
+	}
 	svc = middleware.NewLoggingMiddleware(logger, svc)
 	svc = middleware.NewTracingMiddleware(tracer, svc)
 	counter, latency := prometheus.MakeMetrics(svcName, "api")
 	svc = middleware.NewMetricsMiddleware(counter, latency, svc)
 
-	return svc
+	return svc, nil
 }

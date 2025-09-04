@@ -3,8 +3,7 @@
 package middleware
 
 import (
-	"context"
-	"time"
+	"net/http/httputil"
 
 	"github.com/go-kit/kit/metrics"
 	"github.com/ultraviolet/cube/proxy"
@@ -26,11 +25,17 @@ func NewMetricsMiddleware(counter metrics.Counter, latency metrics.Histogram, sv
 	}
 }
 
-func (m *metricsMiddleware) Identify(ctx context.Context, token string) (err error) {
-	defer func(begin time.Time) {
-		m.counter.With("method", "Identify").Add(1)
-		m.latency.With("method", "Identify").Observe(time.Since(begin).Seconds())
-	}(time.Now())
+// Proxy implements proxy.Service.
+func (m *metricsMiddleware) Proxy() *httputil.ReverseProxy {
+	proxy := m.svc.Proxy()
+	//todo : add metrics to the proxy transport
+	/*proxy.Transport = &metricsTransport{
+		counter: m.counter,
+		latency: m.latency,
+		next:    proxy.Transport,
+	}*/
+	m.counter.With("method", "proxy").Add(1)
+	m.latency.With("method", "proxy").Observe(0) // Placeholder for actual latency measurement
 
-	return m.svc.Identify(ctx, token)
+	return proxy
 }
