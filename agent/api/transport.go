@@ -19,7 +19,7 @@ func MakeHandler(svc agent.Service, instanceID string) http.Handler {
 
 	mux.Handle("/", svc.AuthMiddleware(svc.Proxy()))
 
-	mux.Get("/health", supermq.Health("cube-proxy", instanceID))
+	mux.Get("/health", supermq.Health("cube-agent", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	return mux

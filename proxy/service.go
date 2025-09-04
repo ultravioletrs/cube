@@ -65,7 +65,12 @@ func New(config *Config) (Service, error) {
 }
 
 func (a *service) Proxy() *httputil.ReverseProxy {
-	target, _ := url.Parse(a.config.AgentURL)
+	target, err := url.Parse(a.config.AgentURL)
+	if err != nil {
+		log.Printf("Invalid Agent URL: %v", err)
+
+		return nil
+	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 

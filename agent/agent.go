@@ -106,7 +106,12 @@ func (a *agentService) Authenticate(req *http.Request) error {
 }
 
 func (a *agentService) Proxy() *httputil.ReverseProxy {
-	target, _ := url.Parse(a.config.OllamaURL)
+	target, err := url.Parse(a.config.OllamaURL)
+	if err != nil {
+		log.Printf("Invalid Ollama URL: %v", err)
+
+		return nil
+	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
