@@ -23,13 +23,10 @@ http:
       stripPrefix:
         prefixes:
           - "/users"
-    strip-ollama-prefix-middleware:
+    strip-proxy-prefix-middleware:
       stripPrefix:
         prefixes:
-          - "/ollama"
-    forward-auth-middleware:
-      forwardAuth:
-        address: http://cube-proxy:8900
+          - "/proxy"
 
   services:
     users:
@@ -62,10 +59,10 @@ http:
           interval: 10s
           timeout: 10s
 
-    ollama:
+    proxy:
       loadBalancer:
         servers:
-          - url: http://ollama:11434
+          - url: http://cube-proxy:8900
         healthCheck:
           scheme: http
           path: /
@@ -106,14 +103,13 @@ http:
         - headers-middleware
       priority: 10
 
-    ollama:
-      rule: "PathPrefix(`/ollama`)"
+    proxy:
+      rule: "PathPrefix(`/proxy`)"
       entryPoints:
         - websecure
-      service: ollama
+      service: proxy
       middlewares:
-        - strip-ollama-prefix-middleware
-        - forward-auth-middleware
+        - strip-proxy-prefix-middleware
         - retry-middleware
         - headers-middleware
       priority: 10
