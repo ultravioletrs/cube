@@ -1,7 +1,9 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
+
 package api
 
 import (
-	"log/slog"
 	"net/http"
 
 	"github.com/absmach/supermq"
@@ -12,12 +14,10 @@ import (
 
 const ContentType = "application/json"
 
-func MakeHandler(svc proxy.Service, logger *slog.Logger, instanceID string) http.Handler {
-	proxy := svc.Proxy()
-
+func MakeHandler(svc proxy.Service, instanceID string) http.Handler {
 	mux := chi.NewRouter()
 
-	mux.Handle("/", proxy)
+	mux.Handle("/", svc.Proxy())
 
 	mux.Get("/health", supermq.Health("cube-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())

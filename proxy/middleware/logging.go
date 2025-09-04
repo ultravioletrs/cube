@@ -25,14 +25,8 @@ func NewLoggingMiddleware(logger *slog.Logger, svc proxy.Service) proxy.Service 
 
 // Proxy implements proxy.Service.
 func (l *loggingMiddleware) Proxy() *httputil.ReverseProxy {
-	proxy := l.svc.Proxy()
 	// todo: add logging to the proxy transport
-	/*proxy.Transport = &loggingTransport{
-		logger: l.logger,
-		next:   proxy.Transport,
-	}*/
-
 	l.logger.Info("Proxy initialized", "service", "loggingMiddleware")
 
-	return proxy
+	return l.svc.Proxy()
 }

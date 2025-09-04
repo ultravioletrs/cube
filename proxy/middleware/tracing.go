@@ -25,12 +25,6 @@ func NewTracingMiddleware(tracer trace.Tracer, svc proxy.Service) proxy.Service 
 
 // Proxy implements proxy.Service.
 func (t *tracingMiddleware) Proxy() *httputil.ReverseProxy {
-	proxy := t.svc.Proxy()
 	// todo : add tracing to the proxy transport
-	/*proxy.Transport = &tracingTransport{
-		tracer: t.tracer,
-		next:   proxy.Transport,
-	}*/
-
-	return proxy
+	return t.svc.Proxy()
 }

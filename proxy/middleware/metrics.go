@@ -27,15 +27,9 @@ func NewMetricsMiddleware(counter metrics.Counter, latency metrics.Histogram, sv
 
 // Proxy implements proxy.Service.
 func (m *metricsMiddleware) Proxy() *httputil.ReverseProxy {
-	proxy := m.svc.Proxy()
-	//todo : add metrics to the proxy transport
-	/*proxy.Transport = &metricsTransport{
-		counter: m.counter,
-		latency: m.latency,
-		next:    proxy.Transport,
-	}*/
+	// todo : add metrics to the proxy transport
 	m.counter.With("method", "proxy").Add(1)
-	m.latency.With("method", "proxy").Observe(0) // Placeholder for actual latency measurement
+	m.latency.With("method", "proxy").Observe(0)
 
-	return proxy
+	return m.svc.Proxy()
 }

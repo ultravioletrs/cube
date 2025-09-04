@@ -61,6 +61,7 @@ func main() {
 	if cfg.InstanceID == "" {
 		if cfg.InstanceID, err = uuid.New().ID(); err != nil {
 			logger.Error(fmt.Sprintf("failed to generate instanceID: %s", err))
+
 			exitCode = 1
 
 			return
@@ -70,20 +71,25 @@ func main() {
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
+
 		exitCode = 1
 
 		return
 	}
+
 	defer func() {
-		if err := tp.Shutdown(ctx); err != nil {
+		err := tp.Shutdown(ctx)
+		if err != nil {
 			logger.Error(fmt.Sprintf("error shutting down tracer provider: %v", err))
 		}
 	}()
+
 	tracer := tp.Tracer(svcName)
 
 	svc, err := newService(logger, tracer, cfg.TargetURL)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
+
 		exitCode = 1
 
 		return
@@ -92,12 +98,13 @@ func main() {
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
+
 		exitCode = 1
 
 		return
 	}
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, logger, cfg.InstanceID), logger)
+	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger)
 
 	if cfg.SendTelemetry {
 		chc := client.New(svcName, supermq.Version, logger, cancel)
@@ -118,10 +125,11 @@ func main() {
 }
 
 func newService(logger *slog.Logger, tracer trace.Tracer, targetURL string) (proxy.Service, error) {
-	svc, err := proxy.New(proxy.Config{AgentURL: targetURL, TLS: proxy.InsecureTLSConfig()})
+	svc, err := proxy.New(&proxy.Config{AgentURL: targetURL, TLS: proxy.InsecureTLSConfig()})
 	if err != nil {
 		return nil, err
 	}
+
 	svc = middleware.NewLoggingMiddleware(logger, svc)
 	svc = middleware.NewTracingMiddleware(tracer, svc)
 	counter, latency := prometheus.MakeMetrics(svcName, "api")

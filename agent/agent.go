@@ -1,7 +1,9 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
+
 package agent
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"log"
@@ -29,7 +31,6 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 )
 
-// TLSConfig holds TLS configuration for connecting to Ollama
 type TLSConfig struct {
 	Enabled            bool
 	InsecureSkipVerify bool
@@ -40,14 +41,13 @@ type TLSConfig struct {
 	MaxVersion         uint16
 }
 
-// Config holds the agent service configuration
 type Config struct {
 	OllamaURL string
 	TLS       TLSConfig
 }
 
 type agentService struct {
-	config    Config
+	config    *Config
 	provider  attestation.Provider
 	transport *http.Transport
 	auth      authn.Authentication
@@ -55,13 +55,14 @@ type agentService struct {
 
 type Service interface {
 	Proxy() *httputil.ReverseProxy
-	Attestation(ctx context.Context, reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType) ([]byte, error)
+	Attestation(
+		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
+	) ([]byte, error)
 	Authenticate(req *http.Request) error
 	AuthMiddleware(next http.Handler) http.Handler
 }
 
-// NewAgentService creates a new agent service with the given configuration
-func NewAgentService(config Config, auth authn.Authentication) (Service, error) {
+func New(config *Config, auth authn.Authentication, provider attestation.Provider) (Service, error) {
 	if config.OllamaURL == "" {
 		return nil, errors.New("ollama URL is required")
 	}
@@ -73,23 +74,9 @@ func NewAgentService(config Config, auth authn.Authentication) (Service, error) 
 	}
 
 	if config.TLS.Enabled {
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: config.TLS.InsecureSkipVerify,
-		}
-
-		if config.TLS.MinVersion != 0 {
-			tlsConfig.MinVersion = config.TLS.MinVersion
-		}
-		if config.TLS.MaxVersion != 0 {
-			tlsConfig.MaxVersion = config.TLS.MaxVersion
-		}
-
-		if config.TLS.CertFile != "" && config.TLS.KeyFile != "" {
-			cert, err := tls.LoadX509KeyPair(config.TLS.CertFile, config.TLS.KeyFile)
-			if err != nil {
-				return nil, fmt.Errorf("failed to load client certificate: %w", err)
-			}
-			tlsConfig.Certificates = []tls.Certificate{cert}
+		tlsConfig, err := setTLSConfig(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set TLS config: %w", err)
 		}
 
 		transport.TLSClientConfig = tlsConfig
@@ -98,10 +85,11 @@ func NewAgentService(config Config, auth authn.Authentication) (Service, error) 
 	return &agentService{
 		config:    config,
 		transport: transport,
+		provider:  provider,
+		auth:      auth,
 	}, nil
 }
 
-// Authenticate validates incoming requests using Bearer token authentication
 func (a *agentService) Authenticate(req *http.Request) error {
 	token := util.ExtractBearerToken(req)
 
@@ -115,12 +103,6 @@ func (a *agentService) Authenticate(req *http.Request) error {
 	}
 
 	return nil
-}
-
-func (a *agentService) modifyHeaders(req *http.Request) {
-	req.Header.Set("Content-Type", "application/json")
-
-	req.Header.Del("Authorization")
 }
 
 func (a *agentService) Proxy() *httputil.ReverseProxy {
@@ -137,7 +119,7 @@ func (a *agentService) Proxy() *httputil.ReverseProxy {
 		log.Printf("Agent forwarding to Ollama: %s %s", req.Method, req.URL.Path)
 	}
 
-	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
+	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
 		log.Printf("Proxy error: %v", err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 	}
@@ -145,39 +127,48 @@ func (a *agentService) Proxy() *httputil.ReverseProxy {
 	return proxy
 }
 
-func (a *agentService) Attestation(ctx context.Context, reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType) ([]byte, error) {
+func (a *agentService) Attestation(
+	reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
+) ([]byte, error) {
 	switch attType {
 	case attestation.SNP, attestation.TDX:
 		rawQuote, err := a.provider.TeeAttestation(reportData[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
 		}
+
 		return rawQuote, nil
 	case attestation.VTPM:
 		vTPMQuote, err := a.provider.VTpmAttestation(nonce[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
 		}
+
 		return vTPMQuote, nil
 	case attestation.SNPvTPM:
 		vTPMQuote, err := a.provider.Attestation(reportData[:], nonce[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
 		}
+
 		return vTPMQuote, nil
+	case attestation.Azure, attestation.NoCC, attestation.AzureToken:
+		return []byte{}, ErrAttestationType
 	default:
 		return []byte{}, ErrAttestationType
 	}
 }
 
-// AuthMiddleware returns an HTTP middleware that performs Bearer token authentication
 func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := a.Authenticate(r); err != nil {
+		err := a.Authenticate(r)
+		if err != nil {
 			log.Printf("Authentication failed: %v", err)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -198,4 +189,35 @@ func InsecureTLSConfig() TLSConfig {
 		MinVersion:         tls.VersionTLS12,
 		MaxVersion:         tls.VersionTLS13,
 	}
+}
+
+func (a *agentService) modifyHeaders(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+
+	req.Header.Del("Authorization")
+}
+
+func setTLSConfig(config *Config) (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: config.TLS.InsecureSkipVerify,
+	}
+
+	if config.TLS.MinVersion != 0 {
+		tlsConfig.MinVersion = config.TLS.MinVersion
+	}
+
+	if config.TLS.MaxVersion != 0 {
+		tlsConfig.MaxVersion = config.TLS.MaxVersion
+	}
+
+	if config.TLS.CertFile != "" && config.TLS.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(config.TLS.CertFile, config.TLS.KeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		}
+
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+
+	return tlsConfig, nil
 }
