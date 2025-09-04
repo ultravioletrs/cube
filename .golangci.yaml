@@ -16,7 +16,6 @@ linters:
     - godox
     - gosec
     - noinlineerr
-    - unused
   settings:
     gocritic:
       enabled-tags:
