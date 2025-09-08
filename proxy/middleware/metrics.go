@@ -3,7 +3,7 @@
 package middleware
 
 import (
-	"context"
+	"net/http/httputil"
 	"time"
 
 	"github.com/go-kit/kit/metrics"
@@ -26,11 +26,13 @@ func NewMetricsMiddleware(counter metrics.Counter, latency metrics.Histogram, sv
 	}
 }
 
-func (m *metricsMiddleware) Identify(ctx context.Context, token string) (err error) {
+// Proxy implements proxy.Service.
+func (m *metricsMiddleware) Proxy() *httputil.ReverseProxy {
+	// todo : add metrics to the proxy transport
 	defer func(begin time.Time) {
-		m.counter.With("method", "Identify").Add(1)
-		m.latency.With("method", "Identify").Observe(time.Since(begin).Seconds())
+		m.counter.With("method", "proxy").Add(1)
+		m.latency.With("method", "proxy").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
-	return m.svc.Identify(ctx, token)
+	return m.svc.Proxy()
 }

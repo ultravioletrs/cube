@@ -3,7 +3,7 @@
 package middleware
 
 import (
-	"context"
+	"net/http/httputil"
 
 	"github.com/ultraviolet/cube/proxy"
 	"go.opentelemetry.io/otel/trace"
@@ -23,9 +23,8 @@ func NewTracingMiddleware(tracer trace.Tracer, svc proxy.Service) proxy.Service 
 	}
 }
 
-func (tm *tracingMiddleware) Identify(ctx context.Context, token string) error {
-	ctx, span := tm.tracer.Start(ctx, "identify")
-	defer span.End()
-
-	return tm.svc.Identify(ctx, token)
+// Proxy implements proxy.Service.
+func (t *tracingMiddleware) Proxy() *httputil.ReverseProxy {
+	// todo : add tracing to the proxy transport
+	return t.svc.Proxy()
 }

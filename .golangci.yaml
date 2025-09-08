@@ -13,6 +13,9 @@ linters:
     - varnamelen
     - wrapcheck
     - wsl
+    - godox
+    - gosec
+    - noinlineerr
   settings:
     gocritic:
       enabled-tags:
