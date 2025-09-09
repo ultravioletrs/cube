@@ -24,7 +24,7 @@ services:
     ports:
       - 80:80
       - 443:443
-      # - 8089:8080 # Enable for development
+      #- 8089:8080 # Enable for development
     volumes:
       - ./traefik/traefik.yaml:/etc/traefik/traefik.yaml
       - ./traefik/dynamic.yaml:/etc/traefik/dynamic.yaml

@@ -80,6 +80,7 @@ func (a *service) Proxy() *httputil.ReverseProxy {
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		a.modifyHeaders(req)
+
 		log.Printf("Proxy forwarding to Agent: %s %s", req.Method, req.URL.Path)
 	}
 

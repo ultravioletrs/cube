@@ -65,7 +65,7 @@ http:
           - url: http://cube-proxy:8900
         healthCheck:
           scheme: http
-          path: /
+          path: /health
           interval: 10s
           timeout: 10s
 
