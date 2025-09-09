@@ -47,6 +47,6 @@ jobs:
       - name: Build and Push Cube AI UI Docker Image
         run: |
           cd ui
-          CONFIG_DIR_SOURCE=../cube/ui make dockers_cube_ai
+          make dockers_cube_ai
           docker tag ${{ env.REGISTRY }}/absmach/magistrala-ui-new/ui-cube-ai:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
           docker push ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
