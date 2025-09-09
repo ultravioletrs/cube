@@ -17,10 +17,10 @@ const ContentType = "application/json"
 func MakeHandler(svc proxy.Service, instanceID string) http.Handler {
 	mux := chi.NewRouter()
 
-	mux.Handle("/", svc.Proxy())
-
 	mux.Get("/health", supermq.Health("cube-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
+
+	mux.Handle("/*", svc.Proxy())
 
 	return mux
 }

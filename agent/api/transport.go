@@ -17,7 +17,7 @@ const ContentType = "application/json"
 func MakeHandler(svc agent.Service, instanceID string) http.Handler {
 	mux := chi.NewRouter()
 
-	mux.Handle("/", svc.AuthMiddleware(svc.Proxy()))
+	mux.Handle("/*", svc.AuthMiddleware(svc.Proxy()))
 
 	mux.Get("/health", supermq.Health("cube-agent", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())

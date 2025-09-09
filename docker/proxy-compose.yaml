@@ -21,6 +21,8 @@ services:
       UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
       SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
       SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
+    ports:
+      - ${UV_CUBE_PROXY_PORT}:${UV_CUBE_PROXY_PORT}
   
   cube-agent:
     container_name: cube-agent

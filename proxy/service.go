@@ -71,6 +71,7 @@ func (a *service) Proxy() *httputil.ReverseProxy {
 
 		return nil
 	}
+	fmt.Println("agent URL:", a.config.AgentURL)
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
@@ -80,6 +81,16 @@ func (a *service) Proxy() *httputil.ReverseProxy {
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		a.modifyHeaders(req)
+
+		// print the body
+
+		body, err := httputil.DumpRequest(req, true)
+		if err != nil {
+			log.Printf("Failed to dump request: %v", err)
+		} else {
+			log.Printf("Proxying request:\n%s", string(body))
+		}
+
 		log.Printf("Proxy forwarding to Agent: %s %s", req.Method, req.URL.Path)
 	}
 
