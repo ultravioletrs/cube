@@ -151,7 +151,7 @@ http:
       priority: 9
 
     auth:
-      rule: "PathPrefix(`/policies`) || PathPrefix(`/keys`) || PathPrefix(`/domains`)"
+      rule: "PathPrefix(`/policies`) || PathPrefix(`/keys`) || PathPrefix(`/pats`)"
       entryPoints:
         - websecure
       service: auth

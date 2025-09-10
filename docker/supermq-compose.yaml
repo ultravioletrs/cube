@@ -134,6 +134,7 @@ services:
       SMQ_ES_URL: ${SMQ_ES_URL}
     ports:
       - ${SMQ_AUTH_GRPC_PORT}:${SMQ_AUTH_GRPC_PORT}
+      - ${SMQ_AUTH_HTTP_PORT}:${SMQ_AUTH_HTTP_PORT}
     volumes:
       - ./spicedb/schema.zed:${SMQ_SPICEDB_SCHEMA_FILE}
       # Auth gRPC mTLS server certificates
@@ -281,6 +282,7 @@ services:
       MG_DOMAINS_URL: ${SMQ_DOMAINS_URL}
       MG_USERS_URL: ${SMQ_USERS_URL}
       MG_INVITATIONS_URL: ${SMQ_INVITATIONS_URL}
+      MG_AUTH_URL: ${SMQ_AUTH_URL}
       MG_UI_NAME: ${UV_CUBE_UI_NAME}
       MG_UI_BASE_PATH: ${UV_CUBE_UI_BASE_PATH}
       MG_UI_DOCKER_ACCEPT_EULA: ${UV_CUBE_UI_DOCKER_ACCEPT_EULA}
