@@ -48,5 +48,5 @@ jobs:
         run: |
           cd ui
           make dockers_cube_ai
-          docker tag ${{ env.REGISTRY }}/absmach/magistrala-ui-new/ui-cube-ai:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
+          docker tag ${{ env.REGISTRY }}/absmach/magistrala/ui-cube-ai:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
           docker push ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
