@@ -297,7 +297,7 @@ services:
     container_name: supermq-domains-db
     restart: on-failure
     ports:
-      - 6003:5432
+      - 6076:5432
     environment:
       POSTGRES_USER: ${SMQ_DOMAINS_DB_USER}
       POSTGRES_PASSWORD: ${SMQ_DOMAINS_DB_PASS}
