@@ -28,3 +28,8 @@ func (t *tracingMiddleware) Proxy() *httputil.ReverseProxy {
 	// todo : add tracing to the proxy transport
 	return t.svc.Proxy()
 }
+
+// Secure implements proxy.Service.
+func (t *tracingMiddleware) Secure() string {
+	return t.svc.Secure()
+}

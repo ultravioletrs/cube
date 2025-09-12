@@ -30,3 +30,8 @@ func (l *loggingMiddleware) Proxy() *httputil.ReverseProxy {
 
 	return l.svc.Proxy()
 }
+
+// Secure implements proxy.Service.
+func (l *loggingMiddleware) Secure() string {
+	return l.svc.Secure()
+}
