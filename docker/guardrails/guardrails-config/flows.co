@@ -1,0 +1,110 @@
+define user express greeting
+  "hello"
+  "hi"
+  "hey"
+  "good morning"
+  "good afternoon"
+  "good evening"
+
+define bot express greeting
+  "Hello! How can I help you today?"
+  "Hi there! What can I assist you with?"
+  "Greetings! How may I be of service?"
+
+define user ask about capabilities
+  "what can you do"
+  "what are your capabilities"
+  "how can you help"
+  "what can you help with"
+
+define bot respond about capabilities
+  "I can help with various tasks including answering questions, providing information, and assisting with analysis."
+  "I'm here to assist with information retrieval, analysis, and general inquiries."
+
+define flow check_jailbreak
+  priority 1
+  user ...
+  $result = execute check_jailbreak
+  if $result == "stop"
+    bot "I cannot process requests that attempt to bypass my guidelines."
+    stop
+
+define flow check_toxicity
+  priority 1
+  user ...
+  $result = execute check_toxicity
+  if $result == "stop"
+    bot "I cannot process requests containing harmful or toxic content."
+    stop
+
+define flow check_prompt_injection
+  priority 1
+  user ...
+  $result = execute check_prompt_injection
+  if $result == "stop"
+    bot "I cannot process requests with special formatting that might compromise my operation."
+    stop
+
+define flow check_facts
+  priority 1
+  bot ...
+  $result = execute check_facts
+  if $result == "stop"
+    bot "I apologize, but I need to verify the accuracy of my response."
+    stop
+
+define flow check_hallucination
+  priority 1
+  bot ...
+  $result = execute check_hallucination
+  if $result == "stop"
+    bot "I apologize, but I cannot provide that response as it may not be accurate."
+    stop
+
+define flow check_output_moderation
+  priority 1
+  bot ...
+  $result = execute check_output_moderation
+  if $result == "stop"
+    bot "I cannot provide information on that topic for safety reasons."
+    stop
+
+define flow check_bias
+  priority 1
+  user ...
+  $result = execute check_bias
+  if $result == "stop"
+    bot "I cannot process requests that contain biased or stereotypical statements."
+    stop
+
+define flow check_bias_output
+  priority 1
+  bot ...
+  $result = execute check_bias
+  if $result == "stop"
+    bot "I apologize, but I need to rephrase my response to avoid biased language."
+    stop
+
+define flow check_restricted_topics
+  priority 1
+  user ...
+  $result = execute check_restricted_topics
+  if $result == "stop"
+    bot "I cannot assist with that topic as it's on my restricted list."
+    stop
+
+define flow check_restricted_topics_output
+  priority 1
+  bot ...
+  $result = execute check_restricted_topics
+  if $result == "stop"
+    bot "I cannot provide information on restricted topics."
+    stop
+
+define flow check_factuality_advanced
+  priority 1
+  bot ...
+  $result = execute check_factuality_advanced
+  if $result == "stop"
+    bot "I need to provide more accurate information with proper citations."
+    stop
