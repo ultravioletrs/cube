@@ -12,12 +12,13 @@ import (
 	mglog "github.com/absmach/supermq/logger"
 	"github.com/absmach/supermq/pkg/authn/authsvc"
 	"github.com/absmach/supermq/pkg/grpcclient"
-	"github.com/absmach/supermq/pkg/server"
-	"github.com/absmach/supermq/pkg/server/http"
+	smqserver "github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/agent"
 	"github.com/ultraviolet/cube/agent/api"
+	"github.com/ultraviolet/cube/internal/server"
+	"github.com/ultraviolet/cube/internal/server/http"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
 	"github.com/ultravioletrs/cocos/pkg/attestation/tdx"
@@ -41,6 +42,7 @@ type Config struct {
 	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
 	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
 	Vmpl          int    `env:"AGENT_VMPL"                envDefault:"2"`
+	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
 }
 
 func main() {
@@ -147,14 +149,14 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger)
+	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger, cfg.CAUrl)
 
 	g.Go(func() error {
 		return httpSvr.Start()
 	})
 
 	g.Go(func() error {
-		return server.StopSignalHandler(ctx, cancel, logger, svcName, httpSvr)
+		return smqserver.StopSignalHandler(ctx, cancel, logger, svcName, httpSvr)
 	})
 
 	if err := g.Wait(); err != nil {
