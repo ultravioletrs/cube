@@ -5,7 +5,6 @@ package agent
 
 import (
 	"crypto/tls"
-	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -76,7 +75,7 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 	if config.TLS.Enabled {
 		tlsConfig, err := setTLSConfig(config)
 		if err != nil {
-			return nil, fmt.Errorf("failed to set TLS config: %w", err)
+			return nil, err
 		}
 
 		transport.TLSClientConfig = tlsConfig
@@ -218,7 +217,7 @@ func setTLSConfig(config *Config) (*tls.Config, error) {
 	if config.TLS.CertFile != "" && config.TLS.KeyFile != "" {
 		cert, err := tls.LoadX509KeyPair(config.TLS.CertFile, config.TLS.KeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+			return nil, err
 		}
 
 		tlsConfig.Certificates = []tls.Certificate{cert}

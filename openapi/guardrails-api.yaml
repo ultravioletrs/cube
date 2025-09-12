@@ -1,0 +1,1044 @@
+openapi: 3.0.3
+info:
+  title: Cube Guardrails API
+  description: |
+    API for managing AI safety guardrails, flows, and knowledge base files.
+    
+    This service provides:
+    - Chat completion endpoints with integrated guardrails
+    - Flow management for defining conversation rules
+    - Knowledge base file management for context and instructions
+    - NeMo Guardrails configuration management
+  version: 1.0.0
+  contact:
+    name: Ultraviolet Support
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the guardrails service
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "pass"
+                  service:
+                    type: string
+                    example: "cube-guardrails"
+                  instance_id:
+                    type: string
+                    example: "guardrails-instance-123"
+
+  /metrics:
+    get:
+      summary: Prometheus metrics endpoint
+      description: Returns Prometheus metrics for monitoring
+      operationId: getMetrics
+      tags:
+        - Monitoring
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /v1/chat/completions:
+    post:
+      summary: Create chat completion with guardrails
+      description: |
+        Process a chat completion request through the guardrails system.
+        The request will be validated, processed through safety checks,
+        and forwarded to the underlying LLM with appropriate guardrails applied.
+      operationId: createChatCompletion
+      tags:
+        - Chat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+            examples:
+              simple_chat:
+                summary: Simple chat request
+                value:
+                  model: "gpt-4"
+                  messages:
+                    - role: "user"
+                      content: "Hello, how are you?"
+                  temperature: 0.7
+                  max_tokens: 150
+      responses:
+        '200':
+          description: Chat completion response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatCompletionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /nemo/config:
+    get:
+      summary: Get NeMo Guardrails configuration
+      description: Retrieve the current NeMo Guardrails configuration as JSON
+      operationId: getNeMoConfig
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: NeMo configuration
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Complete NeMo Guardrails configuration
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /nemo/config/yaml:
+    get:
+      summary: Export NeMo Guardrails configuration as YAML
+      description: Download the current NeMo Guardrails configuration as a YAML file
+      operationId: getNeMoConfigYAML
+      tags:
+        - Configuration
+      responses:
+        '200':
+          description: YAML configuration file
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+                example: "attachment; filename=guardrails-config.yaml"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/flows:
+    post:
+      summary: Create a new flow
+      description: Create a new guardrails flow definition
+      operationId: createFlow
+      tags:
+        - Flows
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFlowRequest'
+            examples:
+              input_flow:
+                summary: Input validation flow
+                value:
+                  name: "Input Validation"
+                  description: "Validates user inputs for safety"
+                  content: "define flow input_validation\n  if input contains profanity\n    bot refuse"
+                  type: "input"
+                  active: true
+      responses:
+        '201':
+          description: Flow created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateFlowResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      summary: List all flows
+      description: Retrieve a list of all guardrails flows
+      operationId: getFlows
+      tags:
+        - Flows
+      responses:
+        '200':
+          description: List of flows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFlowsResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/flows/{id}:
+    get:
+      summary: Get flow by ID
+      description: Retrieve a specific flow by its ID
+      operationId: getFlow
+      tags:
+        - Flows
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Flow ID
+          example: "flow-123"
+      responses:
+        '200':
+          description: Flow details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetFlowResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update flow
+      description: Update an existing flow
+      operationId: updateFlow
+      tags:
+        - Flows
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Flow ID
+          example: "flow-123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateFlowRequest'
+      responses:
+        '200':
+          description: Flow updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateFlowResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete flow
+      description: Delete a flow by its ID
+      operationId: deleteFlow
+      tags:
+        - Flows
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Flow ID
+          example: "flow-123"
+      responses:
+        '200':
+          description: Flow deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteFlowResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/kb/files:
+    post:
+      summary: Create a new knowledge base file
+      description: Upload a new knowledge base file
+      operationId: createKBFile
+      tags:
+        - Knowledge Base
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateKBFileRequest'
+            examples:
+              markdown_file:
+                summary: Markdown knowledge file
+                value:
+                  name: "Product Guidelines"
+                  content: "# Product Guidelines\n\n## Safety\n- Always prioritize user safety"
+                  type: "markdown"
+                  category: "guidelines"
+                  tags: ["safety", "guidelines"]
+                  metadata:
+                    author: "Safety Team"
+                    version: "1.0"
+                  active: true
+      responses:
+        '201':
+          description: KB file created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateKBFileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      summary: List knowledge base files
+      description: Retrieve a list of all knowledge base files
+      operationId: getKBFiles
+      tags:
+        - Knowledge Base
+      responses:
+        '200':
+          description: List of KB files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetKBFilesResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/kb/files/list:
+    get:
+      summary: List knowledge base files with pagination
+      description: Retrieve a paginated list of knowledge base files with optional filtering
+      operationId: listKBFiles
+      tags:
+        - Knowledge Base
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Maximum number of files to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          description: Number of files to skip
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category
+        - name: tags
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+          style: form
+          explode: true
+          description: Filter by tags
+      responses:
+        '200':
+          description: Paginated list of KB files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListKBFilesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/kb/files/{id}:
+    get:
+      summary: Get knowledge base file by ID
+      description: Retrieve a specific knowledge base file by its ID
+      operationId: getKBFile
+      tags:
+        - Knowledge Base
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: KB file ID
+          example: "kb-file-123"
+      responses:
+        '200':
+          description: KB file details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetKBFileResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update knowledge base file
+      description: Update an existing knowledge base file
+      operationId: updateKBFile
+      tags:
+        - Knowledge Base
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: KB file ID
+          example: "kb-file-123"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateKBFileRequest'
+      responses:
+        '200':
+          description: KB file updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdateKBFileResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete knowledge base file
+      description: Delete a knowledge base file by its ID
+      operationId: deleteKBFile
+      tags:
+        - Knowledge Base
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: KB file ID
+          example: "kb-file-123"
+      responses:
+        '200':
+          description: KB file deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteKBFileResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/kb/search:
+    post:
+      summary: Search knowledge base files
+      description: Search through knowledge base files using query, categories, and tags
+      operationId: searchKBFiles
+      tags:
+        - Knowledge Base
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchKBFilesRequest'
+            examples:
+              text_search:
+                summary: Search by text query
+                value:
+                  query: "safety guidelines"
+                  categories: ["guidelines", "policies"]
+                  tags: ["safety"]
+                  limit: 20
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchKBFilesResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  schemas:
+    ChatCompletionRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        model:
+          type: string
+          description: Model to use for completion
+          example: "gpt-4"
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+          description: List of messages in the conversation
+          minItems: 1
+        temperature:
+          type: number
+          minimum: 0
+          maximum: 2
+          description: Sampling temperature (0-2)
+          example: 0.7
+        max_tokens:
+          type: integer
+          minimum: 1
+          description: Maximum number of tokens to generate
+          example: 150
+        stream:
+          type: boolean
+          description: Whether to stream the response
+          default: false
+
+    ChatMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant, function]
+          description: Role of the message sender
+          example: "user"
+        content:
+          type: string
+          description: Content of the message
+          example: "Hello, how are you?"
+
+    ChatCompletionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the completion
+          example: "chat-123456789"
+        object:
+          type: string
+          description: Object type
+          example: "chat.completion"
+        created:
+          type: integer
+          format: int64
+          description: Unix timestamp of creation
+          example: 1699123456
+        model:
+          type: string
+          description: Model used for completion
+          example: "gpt-4"
+        choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatChoice'
+          description: List of completion choices
+        usage:
+          $ref: '#/components/schemas/Usage'
+
+    ChatChoice:
+      type: object
+      properties:
+        index:
+          type: integer
+          description: Index of the choice
+          example: 0
+        message:
+          $ref: '#/components/schemas/ChatMessage'
+        finish_reason:
+          type: string
+          description: Reason for completion finishing
+          example: "stop"
+
+    Usage:
+      type: object
+      properties:
+        prompt_tokens:
+          type: integer
+          description: Number of tokens in the prompt
+          example: 20
+        completion_tokens:
+          type: integer
+          description: Number of tokens in the completion
+          example: 30
+        total_tokens:
+          type: integer
+          description: Total number of tokens used
+          example: 50
+
+    Flow:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the flow
+          example: "flow-123"
+        name:
+          type: string
+          description: Name of the flow
+          example: "Input Validation"
+        description:
+          type: string
+          description: Description of the flow
+          example: "Validates user inputs for safety"
+        content:
+          type: string
+          description: Flow content in Colang format
+          example: "define flow input_validation\n  if input contains profanity\n    bot refuse"
+        type:
+          type: string
+          enum: [input, output, dialog, retrieval, execution]
+          description: Type of the flow
+          example: "input"
+        active:
+          type: boolean
+          description: Whether the flow is active
+          example: true
+        version:
+          type: integer
+          description: Version number of the flow
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    CreateFlowRequest:
+      type: object
+      required:
+        - name
+        - content
+        - type
+      properties:
+        name:
+          type: string
+          description: Name of the flow
+          example: "Input Validation"
+        description:
+          type: string
+          description: Description of the flow
+          example: "Validates user inputs for safety"
+        content:
+          type: string
+          description: Flow content in Colang format
+          example: "define flow input_validation\n  if input contains profanity\n    bot refuse"
+        type:
+          type: string
+          enum: [input, output, dialog, retrieval, execution]
+          description: Type of the flow
+          example: "input"
+        active:
+          type: boolean
+          description: Whether the flow is active
+          default: true
+
+    CreateFlowResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID of the created flow
+          example: "flow-123"
+        message:
+          type: string
+          description: Success message
+          example: "Flow created successfully"
+
+    GetFlowResponse:
+      type: object
+      properties:
+        flow:
+          $ref: '#/components/schemas/Flow'
+
+    GetFlowsResponse:
+      type: object
+      properties:
+        flows:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flow'
+
+    UpdateFlowRequest:
+      type: object
+      required:
+        - name
+        - content
+        - type
+      properties:
+        name:
+          type: string
+          description: Name of the flow
+        description:
+          type: string
+          description: Description of the flow
+        content:
+          type: string
+          description: Flow content in Colang format
+        type:
+          type: string
+          enum: [input, output, dialog, retrieval, execution]
+          description: Type of the flow
+        active:
+          type: boolean
+          description: Whether the flow is active
+
+    UpdateFlowResponse:
+      type: object
+      properties:
+        flow:
+          $ref: '#/components/schemas/Flow'
+        message:
+          type: string
+          description: Success message
+          example: "Flow updated successfully"
+
+    DeleteFlowResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success message
+          example: "Flow deleted successfully"
+
+    KBFile:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the KB file
+          example: "kb-file-123"
+        name:
+          type: string
+          description: Name of the KB file
+          example: "Product Guidelines"
+        content:
+          type: string
+          description: Content of the KB file
+          example: "# Guidelines\n\nSafety first..."
+        type:
+          type: string
+          enum: [markdown, text, json, yaml]
+          description: Type of the KB file
+          example: "markdown"
+        category:
+          type: string
+          description: Category of the KB file
+          example: "guidelines"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags associated with the KB file
+          example: ["safety", "guidelines"]
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata for the KB file
+          example:
+            author: "Safety Team"
+            version: "1.0"
+        active:
+          type: boolean
+          description: Whether the KB file is active
+          example: true
+        version:
+          type: integer
+          description: Version number of the KB file
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+
+    CreateKBFileRequest:
+      type: object
+      required:
+        - name
+        - content
+        - type
+        - category
+      properties:
+        name:
+          type: string
+          description: Name of the KB file
+          example: "Product Guidelines"
+        content:
+          type: string
+          description: Content of the KB file
+          example: "# Guidelines\n\nSafety first..."
+        type:
+          type: string
+          enum: [markdown, text, json, yaml]
+          description: Type of the KB file
+          example: "markdown"
+        category:
+          type: string
+          description: Category of the KB file
+          example: "guidelines"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags associated with the KB file
+          example: ["safety", "guidelines"]
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata for the KB file
+        active:
+          type: boolean
+          description: Whether the KB file is active
+          default: true
+
+    CreateKBFileResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID of the created KB file
+          example: "kb-file-123"
+        message:
+          type: string
+          description: Success message
+          example: "KB file created successfully"
+
+    GetKBFileResponse:
+      type: object
+      properties:
+        file:
+          $ref: '#/components/schemas/KBFile'
+
+    GetKBFilesResponse:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/KBFile'
+
+    ListKBFilesResponse:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/KBFile'
+        limit:
+          type: integer
+          description: Maximum number of files returned
+          example: 10
+        offset:
+          type: integer
+          description: Number of files skipped
+          example: 0
+        total:
+          type: integer
+          description: Total number of files available
+          example: 100
+
+    UpdateKBFileRequest:
+      type: object
+      required:
+        - name
+        - content
+        - type
+        - category
+      properties:
+        name:
+          type: string
+          description: Name of the KB file
+        content:
+          type: string
+          description: Content of the KB file
+        type:
+          type: string
+          enum: [markdown, text, json, yaml]
+          description: Type of the KB file
+        category:
+          type: string
+          description: Category of the KB file
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags associated with the KB file
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata for the KB file
+        active:
+          type: boolean
+          description: Whether the KB file is active
+
+    UpdateKBFileResponse:
+      type: object
+      properties:
+        file:
+          $ref: '#/components/schemas/KBFile'
+        message:
+          type: string
+          description: Success message
+          example: "KB file updated successfully"
+
+    DeleteKBFileResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Success message
+          example: "KB file deleted successfully"
+
+    SearchKBFilesRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Search query
+          example: "safety guidelines"
+        categories:
+          type: array
+          items:
+            type: string
+          description: Categories to search in
+          example: ["guidelines", "policies"]
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags to filter by
+          example: ["safety"]
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+          description: Maximum number of results to return
+
+    SearchKBFilesResponse:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/KBFile'
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            message:
+              type: string
+              description: Error message
+              example: "Bad Request: Invalid request format"
+            type:
+              type: string
+              description: Error type
+              example: "error"
+            code:
+              type: integer
+              description: HTTP status code
+              example: 400
+
+  responses:
+    BadRequest:
+      description: Bad Request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              message: "Bad Request: Invalid request format"
+              type: "error"
+              code: 400
+
+    NotFound:
+      description: Not Found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              message: "Not Found"
+              type: "error"
+              code: 404
+
+    InternalServerError:
+      description: Internal Server Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            error:
+              message: "Internal Server Error"
+              type: "error"
+              code: 500
+
+tags:
+  - name: Health
+    description: Health check and monitoring endpoints
+  - name: Monitoring
+    description: Metrics and monitoring endpoints
+  - name: Chat
+    description: Chat completion endpoints with guardrails
+  - name: Configuration
+    description: NeMo Guardrails configuration management
+  - name: Flows
+    description: Guardrails flow management
+  - name: Knowledge Base
+    description: Knowledge base file management

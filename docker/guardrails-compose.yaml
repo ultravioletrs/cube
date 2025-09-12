@@ -1,0 +1,109 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+volumes:
+  cube-guardrails-db-volume:
+  nemo-logs:
+  cube-guardrails-logs:
+  nemo-config:
+
+services:
+  nemo-guardrails:
+    image: ghcr.io/ultravioletrs/cube/nemo-guardrails:latest
+    container_name: nemo-guardrails
+    depends_on:
+      cube-guardrails:
+        condition: service_healthy
+    environment:
+      - OLLAMA_BASE_URL=http://109.92.195.153:6107
+      - OLLAMA_MODEL=llama3.1:8b
+      - OLLAMA_API_KEY=ollama
+      - LOG_LEVEL=${GUARDRAILS_LOG_LEVEL:-info}
+      # Enhanced logging configuration
+      - NEMO_LOG_LLM_CALLS=true
+      - NEMO_LOG_USER_MESSAGES=true
+      - NEMO_LOG_BOT_MESSAGES=true
+      - NEMO_LOG_SAFETY_VIOLATIONS=true
+      - NEMO_LOG_REDACTION_ACTIONS=true
+      - NEMO_LOG_FORMAT=json
+      - NEMO_LOG_FILE=/logs/nemo-guardrails.log
+      # Webhook configuration
+      - ENABLE_WEBHOOK=true
+      - WEBHOOK_HOST=0.0.0.0
+      - WEBHOOK_PORT=8080
+      - CONFIG_RW_DIR=/config-rw
+      # HMAC security configuration
+      - NEMO_WEBHOOK_SECRET=${NEMO_WEBHOOK_SECRET:-secure-webhook-secret-change-in-production}
+    volumes:
+      - ./guardrails/config:/config:ro
+      - nemo-config:/config-rw
+      - nemo-logs:/logs
+    ports:
+      - "8001:8001"
+      - "8080:8080"  # Webhook port
+    networks:
+      - cube-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  cube-guardrails:
+    image: ghcr.io/ultravioletrs/cube/guardrails:latest
+    container_name: cube-guardrails
+    depends_on:
+      - guardrails-db
+    environment:
+      - UV_CUBE_GUARDRAILS_LOG_LEVEL=debug
+      - UV_CUBE_GUARDRAILS_HTTP_HOST=0.0.0.0
+      - UV_CUBE_GUARDRAILS_HTTP_PORT=8002
+      - UV_CUBE_GUARDRAILS_NEMO_URL=http://nemo-guardrails:8001
+      - UV_CUBE_GUARDRAILS_TARGET_URL=http://cube-agent:8901
+      - UV_CUBE_GUARDRAILS_POLICY_CONFIG=/config/guardrails_config.yaml
+      - UV_CUBE_GUARDRAILS_TIMEOUT=30
+      # HMAC security configuration
+      - NEMO_WEBHOOK_SECRET=${NEMO_WEBHOOK_SECRET:-secure-webhook-secret-change-in-production}
+
+      - UV_CUBE_GUARDRAILS_DB_HOST=guardrails-db
+      - UV_CUBE_GUARDRAILS_DB_PORT=5432
+      - UV_CUBE_GUARDRAILS_DB_NAME=${CUBE_GUARDRAILS_DB_NAME}
+      - UV_CUBE_GUARDRAILS_DB_USER=${CUBE_GUARDRAILS_DB_USER}
+      - UV_CUBE_GUARDRAILS_DB_PASS=${CUBE_GUARDRAILS_DB_PASS}
+      - UV_CUBE_GUARDRAILS_DB_SSL_MODE=disable
+      - SMQ_JAEGER_URL=${SMQ_JAEGER_URL}
+      - SMQ_JAEGER_TRACE_RATIO=${SMQ_JAEGER_TRACE_RATIO}
+      - SMQ_SEND_TELEMETRY=${SMQ_SEND_TELEMETRY}
+    volumes:
+      - ./guardrails/config:/config:ro
+      - cube-guardrails-logs:/logs
+    ports:
+      - "8002:8002"
+    networks:
+      - cube-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  guardrails-db:
+    image: postgres:16.2-alpine
+    container_name: cube-guardrails-db
+    restart: on-failure
+    command: postgres -c "max_connections=${CUBE_POSTGRES_MAX_CONNECTIONS}"
+    environment:
+      POSTGRES_USER: ${CUBE_GUARDRAILS_DB_USER}
+      POSTGRES_PASSWORD: ${CUBE_GUARDRAILS_DB_PASS}
+      POSTGRES_DB: ${CUBE_GUARDRAILS_DB_NAME}
+      CUBE_POSTGRES_MAX_CONNECTIONS: ${CUBE_POSTGRES_MAX_CONNECTIONS}
+    ports:
+      - "7070:5432"
+    volumes:
+      - cube-guardrails-db-volume:/var/lib/postgresql/data
+    networks:
+      - cube-network

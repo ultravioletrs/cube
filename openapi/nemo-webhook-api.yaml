@@ -1,0 +1,487 @@
+openapi: 3.0.3
+info:
+  title: NeMo Guardrails Webhook Receiver API
+  description: |
+    Configuration webhook receiver for NeMo Guardrails integration.
+    
+    This service receives configuration updates from the Cube Guardrails service
+    and manages the local NeMo Guardrails configuration files, flows, and knowledge base.
+    
+    The webhook receiver:
+    - Receives HMAC-signed configuration pushes
+    - Validates and processes configuration updates
+    - Manages local configuration files and knowledge base
+    - Provides health and status monitoring endpoints
+  version: 1.0.0
+  contact:
+    name: Ultraviolet Support
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080
+    description: Local NeMo webhook receiver
+  - url: http://nemo-guardrails:8080
+    description: Docker container webhook receiver
+
+paths:
+  /webhook/config:
+    post:
+      summary: Receive configuration updates
+      description: |
+        Receives configuration updates from the Cube Guardrails service.
+        The request must include a valid HMAC signature for security.
+        
+        Updates can include:
+        - Base NeMo Guardrails configuration
+        - Flow definitions (Colang files)
+        - Knowledge base files (markdown, text, etc.)
+        - Additional configuration files
+      operationId: receiveConfigUpdate
+      tags:
+        - Configuration
+      security:
+        - HMACAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigurationPush'
+            examples:
+              full_config:
+                summary: Complete configuration update
+                value:
+                  version: "v1.2.3"
+                  timestamp: 1699123456
+                  base_config:
+                    models:
+                      - type: main
+                        engine: openai
+                        model: gpt-4
+                    rails:
+                      input:
+                        flows:
+                          - self check input
+                      output:
+                        flows:
+                          - self check output
+                  flows_config:
+                    input_flows:
+                      - name: "self check input"
+                        content: "define flow self check input\n  $allowed = execute self_check_input\n  if not $allowed\n    bot refuse\n  else\n    bot continue"
+                    output_flows:
+                      - name: "self check output" 
+                        content: "define flow self check output\n  $allowed = execute self_check_output\n  if not $allowed\n    bot refuse\n  else\n    bot continue"
+                  knowledge_base:
+                    - name: "safety_guidelines.md"
+                      content: "# Safety Guidelines\n\n## General Principles\n- Always prioritize user safety"
+                      type: "markdown"
+                    - name: "product_info.md"
+                      content: "# Product Information\n\n## Features\n- Advanced AI safety"
+                      type: "markdown"
+              flows_only:
+                summary: Flows-only update
+                value:
+                  version: "v1.2.4"
+                  timestamp: 1699123500
+                  flows_config:
+                    input_flows:
+                      - name: "updated_input_flow"
+                        content: "define flow updated_input_flow\n  # Updated logic"
+      responses:
+        '200':
+          description: Configuration update successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigurationUpdateResponse'
+              example:
+                status: "success"
+                version: "v1.2.3"
+                timestamp: "2023-11-04T10:30:56"
+        '400':
+          description: Bad Request - Invalid configuration data
+          content:
+            text/plain:
+              schema:
+                type: string
+              examples:
+                invalid_json:
+                  summary: Invalid JSON format
+                  value: "Invalid JSON"
+                invalid_config:
+                  summary: Invalid configuration data
+                  value: "Invalid configuration data"
+        '401':
+          description: Unauthorized - Invalid HMAC signature
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: "Unauthorized: Invalid signature"
+        '500':
+          description: Internal Server Error - Configuration update failed
+          content:
+            text/plain:
+              schema:
+                type: string
+              examples:
+                update_failed:
+                  summary: Configuration update failed
+                  value: "Configuration update failed"
+                internal_error:
+                  summary: Internal server error
+                  value: "Internal server error"
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: |
+        Returns the health status of the webhook receiver service.
+        Includes basic information about the current configuration version
+        and last update time.
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: "healthy"
+                service: "nemo-webhook-receiver"
+                current_version: "v1.2.3"
+                last_update: "2023-11-04T10:30:56"
+
+  /status:
+    get:
+      summary: Detailed status information
+      description: |
+        Returns detailed status information about the webhook receiver,
+        including configuration files, directory structure, and service state.
+        Useful for debugging and monitoring.
+      operationId: getStatus
+      tags:
+        - Status
+      responses:
+        '200':
+          description: Detailed status information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                status: "running"
+                service: "nemo-webhook-receiver"
+                current_version: "v1.2.3"
+                last_update: "2023-11-04T10:30:56"
+                config_directory: "/config-rw"
+                active_config_exists: true
+                config_files:
+                  - name: "active_config.yml"
+                    path: "active_config.yml"
+                    size: 2048
+                    modified: "2023-11-04T10:30:56"
+                  - name: "safety_guidelines.md"
+                    path: "kb/safety_guidelines.md"
+                    size: 1024
+                    modified: "2023-11-04T10:30:56"
+
+components:
+  securitySchemes:
+    HMACAuth:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: |
+        HMAC-SHA256 signature of the request body.
+        Format: "sha256=<hex_encoded_signature>"
+        
+        The signature is calculated using the webhook secret and the raw request body.
+        Additional headers used for verification:
+        - X-Timestamp: Unix timestamp of the request
+        - X-Config-Version: Version of the configuration being pushed
+
+  schemas:
+    ConfigurationPush:
+      type: object
+      required:
+        - version
+        - timestamp
+      properties:
+        version:
+          type: string
+          description: Version identifier for this configuration
+          example: "v1.2.3"
+        timestamp:
+          type: integer
+          format: int64
+          description: Unix timestamp when the configuration was created
+          example: 1699123456
+        base_config:
+          type: object
+          description: Base NeMo Guardrails configuration
+          additionalProperties: true
+          example:
+            models:
+              - type: main
+                engine: openai
+                model: gpt-4
+            rails:
+              input:
+                flows:
+                  - self check input
+              output:
+                flows:
+                  - self check output
+        flows_config:
+          type: object
+          description: Flow definitions for NeMo Guardrails
+          additionalProperties: true
+          properties:
+            input_flows:
+              type: array
+              items:
+                $ref: '#/components/schemas/FlowDefinition'
+              description: Input validation flows
+            output_flows:
+              type: array
+              items:
+                $ref: '#/components/schemas/FlowDefinition'
+              description: Output validation flows
+            dialog_flows:
+              type: array
+              items:
+                $ref: '#/components/schemas/FlowDefinition'
+              description: Dialog management flows
+        knowledge_base:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeBaseFile'
+          description: Knowledge base files
+        additional_files:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigurationFile'
+          description: Additional configuration files
+
+    FlowDefinition:
+      type: object
+      required:
+        - name
+        - content
+      properties:
+        name:
+          type: string
+          description: Name of the flow
+          example: "self check input"
+        content:
+          type: string
+          description: Flow content in Colang format
+          example: |
+            define flow self check input
+              $allowed = execute self_check_input
+              if not $allowed
+                bot refuse
+              else
+                bot continue
+        type:
+          type: string
+          enum: [input, output, dialog, retrieval, execution]
+          description: Type of the flow
+          example: "input"
+
+    KnowledgeBaseFile:
+      type: object
+      required:
+        - name
+        - content
+        - type
+      properties:
+        name:
+          type: string
+          description: Name of the knowledge base file
+          example: "safety_guidelines.md"
+        content:
+          type: string
+          description: Content of the knowledge base file
+          example: |
+            # Safety Guidelines
+            
+            ## General Principles
+            - Always prioritize user safety
+            - Provide helpful and accurate information
+        type:
+          type: string
+          enum: [markdown, text, json, yaml]
+          description: Type of the knowledge base file
+          example: "markdown"
+        category:
+          type: string
+          description: Category of the knowledge base file
+          example: "guidelines"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata for the file
+          example:
+            author: "Safety Team"
+            version: "1.0"
+
+    ConfigurationFile:
+      type: object
+      required:
+        - name
+        - content
+        - path
+      properties:
+        name:
+          type: string
+          description: Name of the configuration file
+          example: "custom_actions.py"
+        content:
+          type: string
+          description: Content of the configuration file
+          example: "# Custom actions for NeMo Guardrails"
+        path:
+          type: string
+          description: Relative path where the file should be stored
+          example: "actions/custom_actions.py"
+        type:
+          type: string
+          enum: [python, yaml, json, text, colang]
+          description: Type of the configuration file
+          example: "python"
+
+    ConfigurationUpdateResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          description: Status of the configuration update
+          example: "success"
+        version:
+          type: string
+          description: Version of the applied configuration
+          example: "v1.2.3"
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when the update was applied
+          example: "2023-11-04T10:30:56"
+        message:
+          type: string
+          description: Additional status message
+          example: "Configuration updated successfully"
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          description: Health status of the service
+          example: "healthy"
+        service:
+          type: string
+          description: Service identifier
+          example: "nemo-webhook-receiver"
+        current_version:
+          type: string
+          nullable: true
+          description: Current configuration version
+          example: "v1.2.3"
+        last_update:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last configuration update
+          example: "2023-11-04T10:30:56"
+
+    StatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [running, stopped, error]
+          description: Current status of the service
+          example: "running"
+        service:
+          type: string
+          description: Service identifier
+          example: "nemo-webhook-receiver"
+        current_version:
+          type: string
+          nullable: true
+          description: Current configuration version
+          example: "v1.2.3"
+        last_update:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the last configuration update
+          example: "2023-11-04T10:30:56"
+        config_directory:
+          type: string
+          description: Path to the configuration directory
+          example: "/config-rw"
+        active_config_exists:
+          type: boolean
+          description: Whether the active configuration file exists
+          example: true
+        config_files:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConfigurationFileInfo'
+          description: List of configuration files
+
+    ConfigurationFileInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Name of the file
+          example: "active_config.yml"
+        path:
+          type: string
+          description: Relative path of the file
+          example: "active_config.yml"
+        size:
+          type: integer
+          description: Size of the file in bytes
+          example: 2048
+        modified:
+          type: string
+          format: date-time
+          description: Last modification timestamp
+          example: "2023-11-04T10:30:56"
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+          example: "Invalid configuration data"
+        details:
+          type: string
+          description: Additional error details
+          example: "Missing required field: version"
+
+tags:
+  - name: Configuration
+    description: Configuration update endpoints
+  - name: Health
+    description: Health check endpoints
+  - name: Status
+    description: Service status and monitoring endpoints
+
+externalDocs:
+  description: Learn more about NeMo Guardrails
+  url: https://docs.nvidia.com/nemo/guardrails/
