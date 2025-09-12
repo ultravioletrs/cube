@@ -41,6 +41,7 @@ var (
 	errFailedToLoadRootCA        = errors.New("failed to load root ca file")
 	errCertificateParse          = errors.New("failed to parse x509 certificate")
 	errAttVerification           = errors.New("certificate is not self signed")
+	errAttesstionPolicyIrregular = errors.New("attestation policy file is not a regular file")
 )
 
 type ClientConfiguration interface {
@@ -57,6 +58,7 @@ type BaseConfig struct {
 
 type AgentClientConfig struct {
 	BaseConfig
+
 	AttestationPolicy string `env:"ATTESTATION_POLICY" envDefault:""`
 	AttestedTLS       bool   `env:"ATTESTED_TLS"       envDefault:"false"`
 	ProductName       string `env:"PRODUCT_NAME"       envDefault:"Milan"`
@@ -70,7 +72,7 @@ func (a BaseConfig) GetBaseConfig() BaseConfig {
 	return a
 }
 
-func (a AgentClientConfig) GetBaseConfig() BaseConfig {
+func (a *AgentClientConfig) GetBaseConfig() BaseConfig {
 	return a.BaseConfig
 }
 
@@ -119,6 +121,8 @@ func (c *client) Secure() string {
 		return WithATLS
 	case withmaTLS:
 		return WithMATLS
+	case withoutTLS:
+		return "without TLS"
 	default:
 		return "without TLS"
 	}
@@ -137,7 +141,7 @@ func createTransport(cfg ClientConfiguration) (*http.Transport, security, error)
 
 	secure := withoutTLS
 
-	if agcfg, ok := cfg.(AgentClientConfig); ok && agcfg.AttestedTLS {
+	if agcfg, ok := cfg.(*AgentClientConfig); ok && agcfg.AttestedTLS {
 		tlsConfig, sec, err := setupATLS(agcfg)
 		if err != nil {
 			return nil, secure, err
@@ -147,6 +151,7 @@ func createTransport(cfg ClientConfiguration) (*http.Transport, security, error)
 		secure = sec
 	} else {
 		conf := cfg.GetBaseConfig()
+
 		tlsConfig, sec, err := loadTLSConfig(conf.ServerCAFile, conf.ClientCert, conf.ClientKey)
 		if err != nil {
 			return nil, secure, err
@@ -155,6 +160,7 @@ func createTransport(cfg ClientConfiguration) (*http.Transport, security, error)
 		if sec != withoutTLS {
 			transport.TLSClientConfig = tlsConfig
 		}
+
 		secure = sec
 	}
 
@@ -175,11 +181,13 @@ func loadTLSConfig(serverCAFile, clientCert, clientKey string) (*tls.Config, sec
 		if err != nil {
 			return nil, secure, errors.Wrap(errFailedToLoadRootCA, err)
 		}
+
 		if len(rootCA) > 0 {
 			capool := x509.NewCertPool()
 			if !capool.AppendCertsFromPEM(rootCA) {
-				return nil, secure, fmt.Errorf("failed to append root ca to tls.Config")
+				return nil, secure, errors.New("failed to append root ca to tls.Config")
 			}
+
 			tlsConfig.RootCAs = capool
 			secure = withTLS
 		}
@@ -190,6 +198,7 @@ func loadTLSConfig(serverCAFile, clientCert, clientKey string) (*tls.Config, sec
 		if err != nil {
 			return nil, secure, errors.Wrap(errFailedToLoadClientCertKey, err)
 		}
+
 		tlsConfig.Certificates = []tls.Certificate{certificate}
 		secure = withmTLS
 	}
@@ -197,40 +206,40 @@ func loadTLSConfig(serverCAFile, clientCert, clientKey string) (*tls.Config, sec
 	return tlsConfig, secure, nil
 }
 
-// setupATLS configures Attested TLS for the HTTP client
-func setupATLS(cfg AgentClientConfig) (*tls.Config, security, error) {
+// setupATLS configures Attested TLS for the HTTP client.
+func setupATLS(cfg *AgentClientConfig) (*tls.Config, security, error) {
 	security := withaTLS
 
 	info, err := os.Stat(cfg.AttestationPolicy)
 	if err != nil {
-		return nil, withoutTLS, errors.Wrap(fmt.Errorf("failed to stat attestation policy file"), err)
+		return nil, withoutTLS, errors.Wrap(errors.New("failed to stat attestation policy file"), err)
 	}
 
 	if !info.Mode().IsRegular() {
-		return nil, withoutTLS, fmt.Errorf("attestation policy file is not a regular file: %s", cfg.AttestationPolicy)
+		return nil, withoutTLS, errAttesstionPolicyIrregular
 	}
 
 	attestation.AttestationPolicyPath = cfg.AttestationPolicy
 
-	var rootCAs *x509.CertPool = nil
+	var rootCAs *x509.CertPool
 
-	if len(cfg.ServerCAFile) > 0 {
+	if cfg.ServerCAFile != "" {
 		// Read the certificate file
 		certPEM, err := os.ReadFile(cfg.ServerCAFile)
 		if err != nil {
-			return nil, withoutTLS, errors.Wrap(fmt.Errorf("failed to read certificate file"), err)
+			return nil, withoutTLS, errors.Wrap(errors.New("failed to read certificate file"), err)
 		}
 
 		// Decode the PEM block
 		block, _ := pem.Decode(certPEM)
 		if block == nil {
-			return nil, withoutTLS, fmt.Errorf("failed to decode PEM block")
+			return nil, withoutTLS, errors.New("failed to decode PEM block")
 		}
 
 		// Parse the certificate
 		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
-			return nil, withoutTLS, errors.Wrap(fmt.Errorf("failed to parse certificate"), err)
+			return nil, withoutTLS, errors.Wrap(errors.New("failed to parse certificate"), err)
 		}
 
 		rootCAs = x509.NewCertPool()
@@ -241,11 +250,11 @@ func setupATLS(cfg AgentClientConfig) (*tls.Config, security, error) {
 
 	nonce := make([]byte, 64)
 	if _, err := rand.Read(nonce); err != nil {
-		return nil, withoutTLS, errors.Wrap(fmt.Errorf("failed to generate nonce"), err)
+		return nil, withoutTLS, errors.Wrap(errors.New("failed to generate nonce"), err)
 	}
 
 	encoded := hex.EncodeToString(nonce)
-	sni := fmt.Sprintf("%s.nonce", encoded)
+	sni := encoded + ".nonce"
 
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true,
@@ -261,6 +270,7 @@ func setupATLS(cfg AgentClientConfig) (*tls.Config, security, error) {
 		if err != nil {
 			return nil, withoutTLS, errors.Wrap(errFailedToLoadClientCertKey, err)
 		}
+
 		tlsConfig.Certificates = []tls.Certificate{certificate}
 	}
 
@@ -290,7 +300,7 @@ func verifyPeerCertificateATLS(rawCerts [][]byte, _ [][]*x509.Certificate, nonce
 		}
 	}
 
-	return fmt.Errorf("attestation extension not found in certificate")
+	return errors.New("attestation extension not found in certificate")
 }
 
 func checkIfCertificateSigned(cert *x509.Certificate, rootCAs *x509.CertPool) error {

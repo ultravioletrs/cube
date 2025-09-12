@@ -149,7 +149,8 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger, cfg.CAUrl)
+	httpSvr := http.NewServer(
+		ctx, cancel, svcName, &httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger, cfg.CAUrl)
 
 	g.Go(func() error {
 		return httpSvr.Start()

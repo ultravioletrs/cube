@@ -30,7 +30,9 @@ type BaseServer struct {
 	Protocol string
 }
 
-func NewBaseServer(ctx context.Context, cancel context.CancelFunc, name string, config Config, logger *slog.Logger) BaseServer {
+func NewBaseServer(
+	ctx context.Context, cancel context.CancelFunc, name string, config *Config, logger *slog.Logger,
+) BaseServer {
 	address := fmt.Sprintf("%s:%s", config.Host, config.Port)
 
 	return BaseServer{
@@ -38,7 +40,7 @@ func NewBaseServer(ctx context.Context, cancel context.CancelFunc, name string, 
 		Cancel:  cancel,
 		Name:    name,
 		Address: address,
-		Config:  config,
+		Config:  *config,
 		Logger:  logger,
 	}
 }

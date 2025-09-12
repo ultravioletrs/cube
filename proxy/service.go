@@ -31,7 +31,6 @@ func New(config *httpclient.AgentClientConfig) (Service, error) {
 	}
 
 	client, err := httpclient.NewClient(config)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
@@ -47,6 +46,7 @@ func (s *service) Proxy() *httputil.ReverseProxy {
 	target, err := url.Parse(s.config.URL)
 	if err != nil {
 		log.Printf("Invalid Agent URL: %v", err)
+
 		return nil
 	}
 
@@ -78,7 +78,8 @@ func (s *service) modifyHeaders(req *http.Request) {
 
 	// Add security-related headers if using aTLS
 	if s.config.AttestedTLS {
-		req.Header.Set("X-Attested-TLS", "true")
+		req.Header.Set("X-Attested-Tls", "true")
+
 		if s.config.ProductName != "" {
 			req.Header.Set("X-Product-Name", s.config.ProductName)
 		}

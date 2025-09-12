@@ -98,7 +98,7 @@ func main() {
 		return
 	}
 
-	svc, err := newService(logger, tracer, agentConfig)
+	svc, err := newService(logger, tracer, &agentConfig)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -107,7 +107,9 @@ func main() {
 		return
 	}
 
-	logger.Info(fmt.Sprintf("%s service %s client configured to connect to agent at %s with %s", svcName, svc.Secure(), agentConfig.URL, svc.Secure()))
+	logger.Info(fmt.Sprintf(
+		"%s service %s client configured to connect to agent at %s with %s",
+		svcName, svc.Secure(), agentConfig.URL, svc.Secure()))
 
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
@@ -138,8 +140,10 @@ func main() {
 	}
 }
 
-func newService(logger *slog.Logger, tracer trace.Tracer, agentConfig httpclient.AgentClientConfig) (proxy.Service, error) {
-	svc, err := proxy.New(&agentConfig)
+func newService(
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *httpclient.AgentClientConfig,
+) (proxy.Service, error) {
+	svc, err := proxy.New(agentConfig)
 	if err != nil {
 		return nil, err
 	}
