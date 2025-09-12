@@ -34,7 +34,7 @@ const (
 
 type Config struct {
 	LogLevel      string `env:"UV_CUBE_AGENT_LOG_LEVEL"   envDefault:"info"`
-	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://ollama:11434"`
+	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://109.92.195.153:7107"`
 	InstanceID    string `env:"UV_CUBE_AGENT_INSTANCE_ID" envDefault:""`
 	AgentMaaURL   string `env:"AGENT_MAA_URL"             envDefault:"https://sharedeus2.eus2.attest.azure.net"`
 	AgentOSBuild  string `env:"AGENT_OS_BUILD"            envDefault:"UVC"`

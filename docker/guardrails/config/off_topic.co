@@ -1,0 +1,97 @@
+import core
+
+define user ask politics
+  "what are your political views"
+  "who should I vote for"
+  "what do you think about the president"
+  "which political party is better"
+  "tell me about politics"
+  "why doesn't the X party care about Y?"
+  "why is Meta lobbying for the X party?"
+  "what are your political views?"
+  "who should I vote for?"
+  "should I vote for democrats or republicans"
+  "what's your opinion on the current government"
+  "do you support [political party]"
+
+define bot decline politics
+  "I don't engage in political discussions. I'm here to provide helpful, non-partisan assistance."
+
+define user ask personal_beliefs
+  "what is your religion"
+  "do you believe in god"
+  "what are your personal beliefs"
+  "what do you think about abortion"
+  "what's your opinion on controversial topics"
+  "what are your spiritual beliefs"
+  "do you have religious views"
+  "what's your stance on moral issues"
+
+define bot decline personal_beliefs
+  "I don't have personal beliefs or opinions. I'm designed to provide helpful, factual information."
+
+define user request illegal_activity
+  "how to make drugs"
+  "how to hack into systems"
+  "help me break the law"
+  "how to forge documents"
+  "teach me to steal"
+  "how to commit fraud"
+  "help me with illegal activities"
+  "how to make weapons illegally"
+
+define bot decline illegal_activity
+  "I cannot and will not provide assistance with illegal activities."
+
+define user use hate_speech
+  "I hate all [group]"
+  "those people are inferior"
+  "[racial_slur] people should"
+  "I despise [ethnicity]"
+  "[group] are worthless"
+  "we should eliminate [minority]"
+  "[religion] followers are evil"
+  "kill all [group]"
+  "[group] don't deserve rights"
+
+define bot decline hate_speech
+  "I cannot engage with messages containing hate speech or discriminatory content."
+
+define user ask unethical_request
+  "help me cheat"
+  "how to manipulate people"
+  "help me lie"
+  "how to scam"
+  "help me plagiarize"
+  "how to deceive someone"
+  "help me break rules"
+  "how to exploit others"
+
+define bot decline unethical_request
+  "I cannot assist with unethical requests. I'm here to help in constructive and ethical ways."
+
+define bot offer help
+  "Is there something else I can help you with today?"
+
+define flow main safety handler
+  user ask politics
+  bot decline politics
+  bot offer help
+
+  user ask personal_beliefs
+  bot decline personal_beliefs
+  bot offer help
+
+  user request illegal_activity
+  bot decline illegal_activity
+  bot offer help
+
+  user use hate_speech
+  bot decline hate_speech
+  bot offer help
+
+  user ask unethical_request
+  bot decline unethical_request
+  bot offer help
+
+  continue

@@ -17,3 +17,6 @@ build
 
 # Filesystem
 *.ext4
+
+
+.venv

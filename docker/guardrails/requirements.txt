@@ -1,0 +1,13 @@
+pandas
+nemoguardrails
+
+# Dependencies for redaction functionality
+regex>=2023.6.3
+phonenumbers>=8.13.0
+
+# Embedding dependencies
+#sentence-transformers
+
+# Tracing dependencies for monitoring and debugging
+nemoguardrails[tracing]
+nemoguardrails[sdd]

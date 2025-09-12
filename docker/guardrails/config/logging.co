@@ -1,0 +1,23 @@
+import core
+
+define flow log input processing
+  $timestamp = execute get_timestamp
+  $user_message = $last_user_message
+  $message_length = execute get_message_length(message=$user_message)
+  
+  execute log_structured(level="INFO", event="input_processing_start", timestamp=$timestamp, message_length=$message_length)
+
+define flow log llm response
+  $timestamp = execute get_timestamp
+  $llm_response = $last_bot_message
+  $response_length = execute get_message_length(message=$llm_response)
+  $token_count = execute estimate_token_count(message=$llm_response)
+  
+  execute log_structured(level="INFO", event="llm_response_generated", timestamp=$timestamp, response_length=$response_length, estimated_tokens=$token_count)
+
+define flow log output processing
+  $timestamp = execute get_timestamp
+  $final_response = $last_bot_message
+  $final_length = execute get_message_length(message=$final_response)
+  
+  execute log_structured(level="INFO", event="output_processing_complete", timestamp=$timestamp, final_response_length=$final_length, status="success")

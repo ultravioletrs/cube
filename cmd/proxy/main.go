@@ -4,11 +4,15 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"log/slog"
+	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/absmach/callhome/pkg/client"
 	"github.com/absmach/supermq"
@@ -16,7 +20,7 @@ import (
 	"github.com/absmach/supermq/pkg/jaeger"
 	"github.com/absmach/supermq/pkg/prometheus"
 	"github.com/absmach/supermq/pkg/server"
-	"github.com/absmach/supermq/pkg/server/http"
+	smqHttp "github.com/absmach/supermq/pkg/server/http"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/proxy"
@@ -33,12 +37,73 @@ const (
 )
 
 type config struct {
-	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
-	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"        envDefault:"true"`
-	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
-	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"            envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"    envDefault:"1.0"`
+	LogLevel          string  `env:"UV_CUBE_PROXY_LOG_LEVEL"      envDefault:"info"`
+	TargetURL         string  `env:"UV_CUBE_PROXY_TARGET_URL"     envDefault:"http://cube-agent:8901"`
+	GuardrailsURL     string  `env:"UV_CUBE_GUARDRAILS_URL"       envDefault:"http://cube-guardrails:8002"`
+	GuardrailsEnabled bool    `env:"UV_CUBE_GUARDRAILS_ENABLED"   envDefault:"true"`
+	SendTelemetry     bool    `env:"SMQ_SEND_TELEMETRY"           envDefault:"true"`
+	InstanceID        string  `env:"UV_CUBE_PROXY_INSTANCE_ID"    envDefault:""`
+	JaegerURL         url.URL `env:"SMQ_JAEGER_URL"               envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio        float64 `env:"SMQ_JAEGER_TRACE_RATIO"       envDefault:"1.0"`
+}
+
+type guardrailsHTTPClient struct {
+	guardrailsURL string
+	targetURL     string
+	httpClient    *http.Client
+	logger        *slog.Logger
+}
+
+type guardrailsProxyService struct {
+	proxy            proxy.Service
+	guardrailsClient *guardrailsHTTPClient
+}
+
+type directProxyService struct {
+	proxy proxy.Service
+}
+
+func newGuardrailsHTTPClient(guardrailsURL, targetURL string, logger *slog.Logger) *guardrailsHTTPClient {
+	return &guardrailsHTTPClient{
+		guardrailsURL: guardrailsURL,
+		targetURL:     targetURL,
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		},
+		logger: logger,
+	}
+}
+
+func (g *guardrailsProxyService) Proxy() *httputil.ReverseProxy {
+	target, _ := url.Parse(g.guardrailsClient.guardrailsURL)
+	reverseProxy := httputil.NewSingleHostReverseProxy(target)
+
+	originalDirector := reverseProxy.Director
+	reverseProxy.Director = func(req *http.Request) {
+		log.Printf("[MAIN-PROXY] Request routing through GUARDRAILS HTTP service: %s %s", req.Method, req.URL.Path)
+		originalDirector(req)
+	}
+
+	reverseProxy.Transport = &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+
+	return reverseProxy
+}
+
+func (d *directProxyService) Proxy() *httputil.ReverseProxy {
+	reverseProxy := d.proxy.Proxy()
+
+	originalDirector := reverseProxy.Director
+	reverseProxy.Director = func(req *http.Request) {
+		log.Printf("[MAIN-PROXY] Request routing DIRECTLY (no guardrails): %s %s", req.Method, req.URL.Path)
+		originalDirector(req)
+	}
+
+	return reverseProxy
 }
 
 func main() {
@@ -86,7 +151,7 @@ func main() {
 
 	tracer := tp.Tracer(svcName)
 
-	svc, err := newService(logger, tracer, cfg.TargetURL)
+	svc, err := newService(logger, tracer, cfg)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -104,7 +169,7 @@ func main() {
 		return
 	}
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger)
+	httpSvr := smqHttp.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger)
 
 	if cfg.SendTelemetry {
 		chc := client.New(svcName, supermq.Version, logger, cancel)
@@ -124,10 +189,34 @@ func main() {
 	}
 }
 
-func newService(logger *slog.Logger, tracer trace.Tracer, targetURL string) (proxy.Service, error) {
-	svc, err := proxy.New(&proxy.Config{AgentURL: targetURL, TLS: proxy.InsecureTLSConfig()})
-	if err != nil {
-		return nil, err
+func newService(logger *slog.Logger, tracer trace.Tracer, cfg config) (proxy.Service, error) {
+	var svc proxy.Service
+
+	if cfg.GuardrailsEnabled {
+		logger.Info("guardrails enabled", "guardrails_url", cfg.GuardrailsURL, "target_url", cfg.TargetURL)
+
+		guardrailsClient := newGuardrailsHTTPClient(cfg.GuardrailsURL, cfg.TargetURL, logger)
+
+		proxySvc, err := proxy.New(&proxy.Config{
+			AgentURL: cfg.TargetURL,
+			TLS:      proxy.InsecureTLSConfig(),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		svc = &guardrailsProxyService{
+			proxy:            proxySvc,
+			guardrailsClient: guardrailsClient,
+		}
+	} else {
+		logger.Info("guardrails disabled, using direct proxy", "target_url", cfg.TargetURL)
+		proxySvc, err := proxy.New(&proxy.Config{AgentURL: cfg.TargetURL, TLS: proxy.InsecureTLSConfig()})
+		if err != nil {
+			return nil, err
+		}
+
+		svc = &directProxyService{proxy: proxySvc}
 	}
 
 	svc = middleware.NewLoggingMiddleware(logger, svc)

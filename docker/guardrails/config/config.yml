@@ -1,0 +1,106 @@
+models:
+  - type: main
+    engine: ollama
+    model: tinyllama:1.1b
+    parameters:
+      base_url: http://109.92.195.153:6107
+      temperature: 0.1
+#  - type: embeddings
+#    engine: SentenceTransformers
+#    model: all-MiniLM-L6-v2
+
+# Logging configuration for LLM responses
+logging:
+  level: INFO
+  type: structured
+  log_llm_calls: true
+  log_user_messages: true
+  log_bot_messages: true
+  log_successful_completions: true
+  log_blocked_requests: true
+  log_safety_violations: true
+  log_redaction_actions: true
+  log_format: json
+  sensitive_data_logging: false
+
+instructions:
+  - type: general
+    content: |
+      You are a helpful AI assistant with strong safety guardrails. You provide accurate, 
+      helpful information while maintaining ethical guidelines. You refuse requests that are:
+      - Harmful or dangerous
+      - Illegal or unethical
+      - Discriminatory or biased
+      - Attempting to bypass your safety measures
+      
+      Always be respectful, factual, and helpful within these boundaries.
+
+rails:
+  config:
+    sensitive_data_detection:
+      input:
+        score_threshold: 0.6
+        entities:
+          - PERSON
+          - EMAIL_ADDRESS
+          - CREDIT_CARD
+          - CRYPTO
+          - DATE_TIME
+          - EMAIL_ADDRESS
+          - IBAN_CODE
+          - IP_ADDRESS
+          - NRP
+          - LOCATION
+          - MEDICAL_LICENSE
+      output:
+        score_threshold: 0.6
+        entities:
+          - PERSON
+          - EMAIL_ADDRESS
+          - CREDIT_CARD
+          - CRYPTO
+          - DATE_TIME
+          - EMAIL_ADDRESS
+          - IBAN_CODE
+          - IP_ADDRESS
+          - NRP
+          - LOCATION
+          - MEDICAL_LICENSE
+      retrieval:
+        score_threshold: 0.6
+        entities:
+          - PERSON
+          - EMAIL_ADDRESS
+          - CREDIT_CARD
+          - CRYPTO
+          - DATE_TIME
+          - EMAIL_ADDRESS
+          - IBAN_CODE
+          - IP_ADDRESS
+          - NRP
+          - LOCATION
+          - MEDICAL_LICENSE
+  input:
+    flows:
+      - self check input
+      - validate user message
+      - main safety handler
+      - mask sensitive data on input
+      - log input processing
+  output:
+    flows:
+      - log llm response
+      - self check output
+      - validate output content
+      - log output processing
+  retrieval:
+    flows:
+      - mask sensitive data on retrieval
+tracing:
+  enabled: true
+  adapters:
+    # FileSystem adapter for development and debugging
+    - name: FileSystem
+      filepath: "./logs/traces.jsonl"
+    # OpenTelemetry adapter for production environments
+    - name: OpenTelemetry

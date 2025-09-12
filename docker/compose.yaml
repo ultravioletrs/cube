@@ -14,6 +14,8 @@ include:
     env_file: .env
   - path: ./proxy-compose.yaml
     env_file: .env
+  - path: ./guardrails-compose.yaml
+    env_file: .env
 
 services:
   traefik:
