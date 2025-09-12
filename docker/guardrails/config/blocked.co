@@ -1,0 +1,63 @@
+# Content blocking flows for Cube Guardrails
+
+define bot inform cannot about restricted content
+  "I cannot provide information about that topic as it falls under restricted content guidelines."
+
+define bot inform cannot about proprietary technology  
+  "I cannot discuss proprietary or sensitive technology details."
+
+define bot refuse inappropriate request
+  "I cannot assist with that request as it violates our content guidelines."
+
+# Check for blocked terms in responses
+define subflow check blocked terms
+  $blocked = execute check_blocked_terms
+  if $blocked
+    bot inform cannot about proprietary technology
+    stop
+
+# Check for restricted topics
+define subflow check restricted topics
+  $is_restricted = execute check_restricted_topics_list
+  if $is_restricted
+    bot inform cannot about restricted content
+    stop
+
+# Main blocking flow for input
+define flow check input blocking
+  $blocked = execute check_jailbreak_attempt
+  if $blocked
+    bot refuse inappropriate request
+    stop
+  
+  $toxic = execute check_toxicity_level
+  if $toxic
+    bot refuse inappropriate request
+    stop
+  
+  $injection = execute detect_prompt_injection
+  if $injection
+    bot refuse inappropriate request
+    stop
+  
+  $biased = execute check_bias_patterns
+  if $biased
+    bot refuse inappropriate request
+    stop
+
+# Main blocking flow for output
+define flow check output blocking
+  $blocked = execute check_blocked_terms
+  if $blocked
+    bot inform cannot about proprietary technology
+    stop
+  
+  $is_restricted = execute check_restricted_topics_list
+  if $is_restricted
+    bot inform cannot about restricted content
+    stop
+  
+  $unsafe = execute check_output_safety
+  if not $unsafe
+    bot inform cannot about restricted content
+    stop

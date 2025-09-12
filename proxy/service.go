@@ -81,7 +81,9 @@ func (a *service) Proxy() *httputil.ReverseProxy {
 		originalDirector(req)
 		a.modifyHeaders(req)
 
-		log.Printf("Proxy forwarding to Agent: %s %s", req.Method, req.URL.Path)
+		log.Printf("[PROXY] Incoming request: %s %s from %s", req.Method, req.URL.Path, req.RemoteAddr)
+		log.Printf("[PROXY] Request headers: %v", req.Header)
+		log.Printf("[PROXY] Forwarding to Agent: %s %s", req.Method, req.URL.Path)
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {

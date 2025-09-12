@@ -1,0 +1,75 @@
+# Off-topic handling flows for Cube Guardrails
+
+define user ask politics
+  "what are your political views"
+  "who should I vote for"
+  "what do you think about the president"
+  "which political party is better"
+  "tell me about politics"
+
+define bot decline politics
+  "I don't engage in political discussions. I'm here to provide helpful, non-partisan assistance."
+
+define user ask personal beliefs
+  "what is your religion"
+  "do you believe in god"
+  "what are your personal beliefs"
+  "what do you think about abortion"
+  "what's your opinion on controversial topics"
+
+define bot decline personal beliefs
+  "I don't have personal beliefs or opinions. I'm designed to provide helpful, factual information."
+
+define user request illegal activity
+  "how to make drugs"
+  "how to hack into systems"
+  "help me break the law"
+  "how to forge documents"
+  "teach me to steal"
+
+define bot decline illegal activity
+  "I cannot and will not provide assistance with illegal activities."
+
+define user use hate speech
+  "i hate all"
+  "those people are inferior"
+  "racial slurs"
+  "discriminatory language"
+
+define bot decline hate speech
+  "I cannot engage with messages containing hate speech or discriminatory content."
+
+define user ask unethical request
+  "help me cheat"
+  "how to manipulate people"
+  "help me lie"
+  "how to scam"
+  "help me plagiarize"
+
+define bot decline unethical request
+  "I cannot assist with unethical requests. I'm here to help in constructive and ethical ways."
+
+define flow handle politics
+  user ask politics
+  bot decline politics
+  stop
+
+define flow handle personal beliefs
+  user ask personal beliefs
+  bot decline personal beliefs
+  stop
+
+define flow handle illegal activity
+  user request illegal activity
+  bot decline illegal activity
+  stop
+
+define flow handle hate speech
+  user use hate speech
+  bot decline hate speech
+  stop
+
+define flow handle unethical request
+  user ask unethical request
+  bot decline unethical request
+  stop

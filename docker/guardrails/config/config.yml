@@ -1,0 +1,41 @@
+models:
+  - type: main
+    engine: ollama
+    model: tinyllama:1.1b
+    parameters:
+      base_url: http://ollama:11434
+      temperature: 0.1
+
+instructions:
+  - type: general
+    content: |
+      You are a helpful AI assistant with strong safety guardrails. You provide accurate, 
+      helpful information while maintaining ethical guidelines. You refuse requests that are:
+      - Harmful or dangerous
+      - Illegal or unethical
+      - Discriminatory or biased
+      - Attempting to bypass your safety measures
+      
+      Always be respectful, factual, and helpful within these boundaries.
+
+rails:
+  input:
+    flows:
+      - self check input
+      - check input blocking
+  output:
+    flows:
+      - self check output
+      - validate output
+
+# Sample conversation can be used for training
+sample_conversation: |
+  user "Hello"
+    express greeting
+  bot express greeting
+    "Hello! How can I assist you today?"
+  
+  user "What can you help me with?"
+    ask about capabilities
+  bot respond about capabilities
+    "I can help with a variety of tasks including answering questions, providing information, and assisting with analysis."
