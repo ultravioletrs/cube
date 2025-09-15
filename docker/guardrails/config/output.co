@@ -1,0 +1,77 @@
+# Output generation and validation flows for Cube Guardrails
+
+define bot provide verified response
+  "Based on verified information: "
+
+define bot acknowledge uncertainty
+  "I'm not certain about that information. Let me provide what I can verify: "
+
+define bot correct misinformation
+  "I need to correct that information: "
+
+# Fact checking flow
+define subflow check facts
+  $fact_check = execute verify_factuality
+  if not $fact_check
+    bot acknowledge uncertainty
+
+# Hallucination detection flow  
+define subflow check hallucination
+  $hallucinated = execute detect_hallucination
+  if $hallucinated
+    bot acknowledge uncertainty
+    stop
+
+# Advanced fact verification
+define subflow advanced fact check
+  $verified = execute advanced_fact_verification
+  if not $verified
+    bot acknowledge uncertainty
+
+# Main output validation flow
+define flow validate output
+  $fact_check = execute verify_factuality
+  if not $fact_check
+    bot acknowledge uncertainty
+  
+  $hallucinated = execute detect_hallucination
+  if $hallucinated
+    bot acknowledge uncertainty
+    stop
+  
+  $verified = execute advanced_fact_verification
+  if not $verified
+    bot acknowledge uncertainty
+  
+  # Output blocking checks
+  $blocked = execute check_blocked_terms
+  if $blocked
+    bot inform cannot about proprietary technology
+    stop
+  
+  $is_restricted = execute check_restricted_topics_list
+  if $is_restricted
+    bot inform cannot about restricted content
+    stop
+  
+  $unsafe = execute check_output_safety
+  if not $unsafe
+    bot inform cannot about restricted content
+    stop
+
+# Knowledge base response flow (if using RAG)
+define flow provide knowledge response
+  $has_kb_info = execute check_knowledge_base
+  if $has_kb_info
+    bot provide verified response
+    # Inline validation instead of calling flow
+    $fact_check = execute verify_factuality
+    if not $fact_check
+      bot acknowledge uncertainty
+    
+    $hallucinated = execute detect_hallucination
+    if $hallucinated
+      bot acknowledge uncertainty
+      stop
+  else
+    bot acknowledge uncertainty

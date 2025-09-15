@@ -1,0 +1,81 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+volumes:
+  cube-guardrails-db-volume:
+
+services:
+  nemo-guardrails:
+    image: ghcr.io/ultravioletrs/cube/nemo-guardrails:latest
+    container_name: nemo-guardrails
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_API_KEY=ollama
+      - LOG_LEVEL=${GUARDRAILS_LOG_LEVEL:-info}
+    volumes:
+      - ./guardrails/config:/config:ro
+    ports:
+      - "8001:8001"
+    networks:
+      - cube-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  cube-guardrails:
+    image: ghcr.io/ultravioletrs/cube/guardrails:latest
+    container_name: cube-guardrails
+    depends_on:
+      guardrails-db:
+        condition: service_healthy
+    environment:
+      - UV_CUBE_GUARDRAILS_LOG_LEVEL=debug
+      - UV_CUBE_GUARDRAILS_HTTP_HOST=0.0.0.0
+      - UV_CUBE_GUARDRAILS_HTTP_PORT=8002
+      - UV_CUBE_GUARDRAILS_NEMO_URL=http://nemo-guardrails:8001
+      - UV_CUBE_GUARDRAILS_TARGET_URL=http://cube-agent:8901
+      - UV_CUBE_GUARDRAILS_POLICY_CONFIG=/config/guardrails_config.yaml
+      - UV_CUBE_GUARDRAILS_TIMEOUT=30
+
+      - UV_CUBE_GUARDRAILS_DB_HOST=guardrails-db
+      - UV_CUBE_GUARDRAILS_DB_PORT=5432
+      - UV_CUBE_GUARDRAILS_DB_NAME=guardrails
+      - UV_CUBE_GUARDRAILS_DB_USER=guardrails
+      - UV_CUBE_GUARDRAILS_DB_PASS=guardrails_password
+      - UV_CUBE_GUARDRAILS_DB_SSL_MODE=disable
+      - SMQ_JAEGER_URL=${SMQ_JAEGER_URL}
+      - SMQ_JAEGER_TRACE_RATIO=${SMQ_JAEGER_TRACE_RATIO}
+      - SMQ_SEND_TELEMETRY=${SMQ_SEND_TELEMETRY}
+    volumes:
+      - ./guardrails/config:/config:ro
+    ports:
+      - "8002:8002"
+    networks:
+      - cube-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+
+  guardrails-db:
+    image: postgres:16.1-alpine
+    container_name: cube-guardrails-db
+    restart: on-failure
+    environment:
+      - POSTGRES_USER=guardrails
+      - POSTGRES_PASSWORD=guardrails_password
+      - POSTGRES_DB=guardrails
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    ports:
+      - "7070:5432"
+    volumes:
+      - cube-guardrails-db-volume:/var/lib/postgresql/data
+    networks:
+      - cube-network
