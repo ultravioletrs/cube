@@ -31,6 +31,14 @@ linters:
       template: |-
         Copyright (c) Ultraviolet
         SPDX-License-Identifier: Apache-2.0
+    tagliatelle:
+      case:
+        use-field-name: true
+        rules:
+          json: snake
+        extended-rules:
+          json:
+            case: snake
   exclusions:
     generated: lax
     presets:

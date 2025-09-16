@@ -48,7 +48,7 @@ type TLSConfig struct {
 	MaxVersion         uint16
 }
 
-// RouteCondition defines the type of condition to match
+// RouteCondition defines the type of condition to match.
 type RouteCondition string
 
 const (
@@ -60,7 +60,7 @@ const (
 	RouteConditionQueryParam RouteCondition = "query_param"
 )
 
-// RouteMatcher defines a single matching condition
+// RouteMatcher defines a single matching condition.
 type RouteMatcher struct {
 	Condition RouteCondition `json:"condition"`
 	Field     string         `json:"field,omitempty"`    // For headers, query params, or body fields
@@ -68,16 +68,16 @@ type RouteMatcher struct {
 	IsRegex   bool           `json:"is_regex,omitempty"` // Whether pattern is a regex
 }
 
-// RouteRule defines a complete routing rule
+// RouteRule defines a complete routing rule.
 type RouteRule struct {
 	Name        string         `json:"name"`
 	TargetURL   string         `json:"target_url"`
-	Matchers    []RouteMatcher `json:"matchers"` // All matchers must match (AND logic)
-	Priority    int            `json:"priority"` // Higher priority rules are checked first
-	DefaultRule bool           `json:"default"`  // If true, this rule matches when no others do
+	Matchers    []RouteMatcher `json:"matchers"`     // All matchers must match (AND logic)
+	Priority    int            `json:"priority"`     // Higher priority rules are checked first
+	DefaultRule bool           `json:"default_rule"` // If true, this rule matches when no others do
 }
 
-// RouterConfig contains the routing configuration
+// RouterConfig contains the routing configuration.
 type RouterConfig struct {
 	Routes     []RouteRule `json:"routes"`
 	DefaultURL string      `json:"default_url,omitempty"` // Fallback if no default rule is defined
@@ -127,6 +127,7 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 	// Sort routes by priority (higher first)
 	routes := make([]RouteRule, len(config.Router.Routes))
 	copy(routes, config.Router.Routes)
+
 	for i := 0; i < len(routes); i++ {
 		for j := i + 1; j < len(routes); j++ {
 			if routes[j].Priority > routes[i].Priority {
@@ -165,6 +166,7 @@ func (a *agentService) Proxy() http.Handler {
 		if err != nil {
 			log.Printf("Failed to determine target: %v", err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
 			return
 		}
 
@@ -172,6 +174,7 @@ func (a *agentService) Proxy() http.Handler {
 		if err != nil {
 			log.Printf("Invalid target URL %s: %v", targetURL, err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
 			return
 		}
 
@@ -197,12 +200,15 @@ func (a *agentService) Proxy() http.Handler {
 func (a *agentService) determineTarget(r *http.Request) (string, error) {
 	// Read body once and create a copy for each route check
 	var bodyBytes []byte
+
 	if r.Body != nil {
 		var err error
+
 		bodyBytes, err = io.ReadAll(r.Body)
 		if err != nil {
 			return "", fmt.Errorf("failed to read request body: %w", err)
 		}
+
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
 
@@ -214,6 +220,7 @@ func (a *agentService) determineTarget(r *http.Request) (string, error) {
 
 		if a.matchesRoute(r, bodyBytes, route) {
 			log.Printf("Request matched route: %s -> %s", route.Name, route.TargetURL)
+
 			return route.TargetURL, nil
 		}
 	}
@@ -222,6 +229,7 @@ func (a *agentService) determineTarget(r *http.Request) (string, error) {
 	for _, route := range a.routes {
 		if route.DefaultRule {
 			log.Printf("Request matched default route: %s -> %s", route.Name, route.TargetURL)
+
 			return route.TargetURL, nil
 		}
 	}
@@ -229,6 +237,7 @@ func (a *agentService) determineTarget(r *http.Request) (string, error) {
 	// Use config default URL if available
 	if a.config.Router.DefaultURL != "" {
 		log.Printf("Request using config default URL: %s", a.config.Router.DefaultURL)
+
 		return a.config.Router.DefaultURL, nil
 	}
 
@@ -242,6 +251,7 @@ func (a *agentService) matchesRoute(r *http.Request, bodyBytes []byte, route Rou
 			return false
 		}
 	}
+
 	return len(route.Matchers) > 0 // Must have at least one matcher
 }
 
@@ -255,26 +265,31 @@ func (a *agentService) matchesSingleCondition(r *http.Request, bodyBytes []byte,
 
 	case RouteConditionHeader:
 		headerValue := r.Header.Get(matcher.Field)
+
 		return a.matchString(headerValue, matcher.Pattern, matcher.IsRegex)
 
 	case RouteConditionQueryParam:
 		paramValue := r.URL.Query().Get(matcher.Field)
+
 		return a.matchString(paramValue, matcher.Pattern, matcher.IsRegex)
 
 	case RouteConditionBodyField:
 		if len(bodyBytes) == 0 {
 			return false
 		}
+
 		return a.matchBodyField(bodyBytes, matcher.Field, matcher.Pattern, matcher.IsRegex)
 
 	case RouteConditionBodyRegex:
 		if len(bodyBytes) == 0 {
 			return false
 		}
+
 		return a.matchString(string(bodyBytes), matcher.Pattern, true) // Always regex for body_regex
 
 	default:
 		log.Printf("Unknown route condition: %s", matcher.Condition)
+
 		return false
 	}
 }
@@ -284,10 +299,13 @@ func (a *agentService) matchString(value, pattern string, isRegex bool) bool {
 		matched, err := regexp.MatchString(pattern, value)
 		if err != nil {
 			log.Printf("Invalid regex pattern %s: %v", pattern, err)
+
 			return false
 		}
+
 		return matched
 	}
+
 	return value == pattern
 }
 
@@ -299,17 +317,20 @@ func (a *agentService) matchBodyField(bodyBytes []byte, field, pattern string, i
 		if strings.Contains(bodyStr, field) {
 			return a.matchString(bodyStr, pattern, isRegex)
 		}
+
 		return false
 	}
 
 	// Navigate nested fields using dot notation (e.g., "user.profile.name")
 	fieldParts := strings.Split(field, ".")
+
 	var current interface{} = bodyMap
 
 	for _, part := range fieldParts {
 		switch v := current.(type) {
 		case map[string]interface{}:
 			var ok bool
+
 			current, ok = v[part]
 			if !ok {
 				return false
@@ -321,6 +342,7 @@ func (a *agentService) matchBodyField(bodyBytes []byte, field, pattern string, i
 
 	// Convert the field value to string for matching
 	fieldValue := fmt.Sprintf("%v", current)
+
 	return a.matchString(fieldValue, pattern, isRegex)
 }
 
@@ -329,9 +351,11 @@ func (a *agentService) AddRoute(rule RouteRule) error {
 	if rule.Name == "" {
 		return errors.New("route name is required")
 	}
+
 	if rule.TargetURL == "" {
 		return errors.New("target URL is required")
 	}
+
 	if _, err := url.Parse(rule.TargetURL); err != nil {
 		return fmt.Errorf("invalid target URL: %w", err)
 	}
@@ -358,15 +382,18 @@ func (a *agentService) RemoveRoute(name string) error {
 	for i, route := range a.routes {
 		if route.Name == name {
 			a.routes = append(a.routes[:i], a.routes[i+1:]...)
+
 			return nil
 		}
 	}
+
 	return fmt.Errorf("route %s not found", name)
 }
 
 func (a *agentService) GetRoutes() []RouteRule {
 	routes := make([]RouteRule, len(a.routes))
 	copy(routes, a.routes)
+
 	return routes
 }
 
@@ -379,18 +406,21 @@ func (a *agentService) Attestation(
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
 		}
+
 		return rawQuote, nil
 	case attestation.VTPM:
 		vTPMQuote, err := a.provider.VTpmAttestation(nonce[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
 		}
+
 		return vTPMQuote, nil
 	case attestation.SNPvTPM:
 		vTPMQuote, err := a.provider.Attestation(reportData[:], nonce[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
 		}
+
 		return vTPMQuote, nil
 	case attestation.Azure, attestation.NoCC:
 		return []byte{}, ErrAttestationType
@@ -405,8 +435,10 @@ func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			log.Printf("Authentication failed: %v", err)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 			return
 		}
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -434,6 +466,7 @@ func setTLSConfig(config *Config) (*tls.Config, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to load client certificate: %w", err)
 		}
+
 		tlsConfig.Certificates = []tls.Certificate{cert}
 	}
 
