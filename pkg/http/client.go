@@ -37,18 +37,18 @@ const (
 )
 
 var (
-	errFailedToLoadClientCertKey = errors.New("failed to load client certificate and key")
-	errFailedToLoadRootCA        = errors.New("failed to load root ca file")
-	errCertificateParse          = errors.New("failed to parse x509 certificate")
-	errAttVerification           = errors.New("certificate is not self signed")
-	errAttesstionPolicyIrregular = errors.New("attestation policy file is not a regular file")
+	errFailedToLoadClientCertKey  = errors.New("failed to load client certificate and key")
+	errFailedToLoadRootCA         = errors.New("failed to load root ca file")
+	errCertificateParse           = errors.New("failed to parse x509 certificate")
+	errAttVerification            = errors.New("certificate is not self signed")
+	errAttestationPolicyIrregular = errors.New("attestation policy file is not a regular file")
 )
 
 type ClientConfiguration interface {
-	GetBaseConfig() BaseConfig
+	Configuration() Config
 }
 
-type BaseConfig struct {
+type Config struct {
 	URL          string        `env:"URL"             envDefault:"localhost:8080"`
 	Timeout      time.Duration `env:"TIMEOUT"         envDefault:"60s"`
 	ClientCert   string        `env:"CLIENT_CERT"     envDefault:""`
@@ -57,7 +57,7 @@ type BaseConfig struct {
 }
 
 type AgentClientConfig struct {
-	BaseConfig
+	Config
 
 	AttestationPolicy string `env:"ATTESTATION_POLICY" envDefault:""`
 	AttestedTLS       bool   `env:"ATTESTED_TLS"       envDefault:"false"`
@@ -65,19 +65,19 @@ type AgentClientConfig struct {
 }
 
 type ProxyClientConfig struct {
-	BaseConfig
+	Config
 }
 
-func (a BaseConfig) GetBaseConfig() BaseConfig {
-	return a
+func (c Config) Configuration() Config {
+	return c
 }
 
-func (a *AgentClientConfig) GetBaseConfig() BaseConfig {
-	return a.BaseConfig
+func (a *AgentClientConfig) Configuration() Config {
+	return a.Config
 }
 
-func (a ProxyClientConfig) GetBaseConfig() BaseConfig {
-	return a.BaseConfig
+func (a ProxyClientConfig) Configuration() Config {
+	return a.Config
 }
 
 type Client interface {
@@ -129,7 +129,7 @@ func (c *client) Secure() string {
 }
 
 func (c *client) Timeout() time.Duration {
-	return c.cfg.GetBaseConfig().Timeout
+	return c.cfg.Configuration().Timeout
 }
 
 func createTransport(cfg ClientConfiguration) (*http.Transport, security, error) {
@@ -150,7 +150,7 @@ func createTransport(cfg ClientConfiguration) (*http.Transport, security, error)
 		transport.TLSClientConfig = tlsConfig
 		secure = sec
 	} else {
-		conf := cfg.GetBaseConfig()
+		conf := cfg.Configuration()
 
 		tlsConfig, sec, err := loadTLSConfig(conf.ServerCAFile, conf.ClientCert, conf.ClientKey)
 		if err != nil {
@@ -216,7 +216,7 @@ func setupATLS(cfg *AgentClientConfig) (*tls.Config, security, error) {
 	}
 
 	if !info.Mode().IsRegular() {
-		return nil, withoutTLS, errAttesstionPolicyIrregular
+		return nil, withoutTLS, errAttestationPolicyIrregular
 	}
 
 	attestation.AttestationPolicyPath = cfg.AttestationPolicy
