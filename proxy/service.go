@@ -11,7 +11,7 @@ import (
 	"net/url"
 
 	"github.com/absmach/supermq/pkg/errors"
-	httpclient "github.com/ultraviolet/cube/pkg/http"
+	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 )
 
 type service struct {

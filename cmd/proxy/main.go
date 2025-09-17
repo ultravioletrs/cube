@@ -19,10 +19,10 @@ import (
 	"github.com/absmach/supermq/pkg/server/http"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
-	httpclient "github.com/ultraviolet/cube/pkg/http"
 	"github.com/ultraviolet/cube/proxy"
 	"github.com/ultraviolet/cube/proxy/api"
 	"github.com/ultraviolet/cube/proxy/middleware"
+	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )

@@ -17,12 +17,12 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/agent"
 	"github.com/ultraviolet/cube/agent/api"
-	"github.com/ultraviolet/cube/internal/server"
-	"github.com/ultraviolet/cube/internal/server/http"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
 	"github.com/ultravioletrs/cocos/pkg/attestation/tdx"
 	"github.com/ultravioletrs/cocos/pkg/attestation/vtpm"
+	"github.com/ultravioletrs/cocos/pkg/server"
+	"github.com/ultravioletrs/cocos/pkg/server/http"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -92,7 +92,7 @@ func main() {
 
 	logger.Info("AuthN  successfully connected to auth gRPC server " + authnClient.Secure())
 
-	httpServerConfig := server.Config{Port: defSvcHTTPPort}
+	httpServerConfig := server.ServerConfig{Config: server.Config{Port: defSvcHTTPPort}}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 
@@ -126,7 +126,7 @@ func main() {
 		logger.Info("TEE device not found")
 
 		provider = &attestation.EmptyProvider{}
-	case attestation.VTPM, attestation.AzureToken:
+	case attestation.VTPM:
 		logger.Info("vTPM attestation is not supported")
 
 		exitCode = 1
