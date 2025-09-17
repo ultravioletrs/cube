@@ -17,6 +17,7 @@ linters:
     - containedctx
     - gosec
     - noinlineerr
+    - gomoddirectives
   settings:
     gocritic:
       enabled-tags:
