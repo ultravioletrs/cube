@@ -25,8 +25,8 @@ const (
 )
 
 var (
-	errFailedToAppendServerCA = errors.New("failed to append server ca to tls.Config")
-	errFailedToAppendClientCA = errors.New("failed to append client ca to tls.Config")
+	errAppendServerCA = errors.New("failed to append server ca to tls.Config")
+	errAppendClientCA = errors.New("failed to append client ca to tls.Config")
 )
 
 type tlsSetupResult struct {
@@ -204,7 +204,7 @@ func (s *httpServer) configureRootCA(tlsConfig *tls.Config) error {
 	}
 
 	if !tlsConfig.RootCAs.AppendCertsFromPEM(rootCA) {
-		return errFailedToAppendServerCA
+		return errAppendServerCA
 	}
 
 	return nil
@@ -225,7 +225,7 @@ func (s *httpServer) configureClientCA(tlsConfig *tls.Config) (bool, error) {
 	}
 
 	if !tlsConfig.ClientCAs.AppendCertsFromPEM(clientCA) {
-		return false, errFailedToAppendClientCA
+		return false, errAppendClientCA
 	}
 
 	return true, nil
