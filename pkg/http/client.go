@@ -283,7 +283,7 @@ func verifyPeerCertificateATLS(rawCerts [][]byte, _ [][]*x509.Certificate, nonce
 		return errors.Wrap(errCertificateParse, err)
 	}
 
-	err = checkIfCertificateSigned(cert, rootCAs)
+	err = checkSignature(cert, rootCAs)
 	if err != nil {
 		return errors.Wrap(errAttVerification, err)
 	}
@@ -303,7 +303,7 @@ func verifyPeerCertificateATLS(rawCerts [][]byte, _ [][]*x509.Certificate, nonce
 	return errors.New("attestation extension not found in certificate")
 }
 
-func checkIfCertificateSigned(cert *x509.Certificate, rootCAs *x509.CertPool) error {
+func checkSignature(cert *x509.Certificate, rootCAs *x509.CertPool) error {
 	if rootCAs == nil {
 		rootCAs = x509.NewCertPool()
 		rootCAs.AddCert(cert)
