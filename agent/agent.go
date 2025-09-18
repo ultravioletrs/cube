@@ -157,7 +157,7 @@ func (a *agentService) Attestation(
 		}
 
 		return vTPMQuote, nil
-	case attestation.Azure, attestation.NoCC, attestation.AzureToken:
+	case attestation.Azure, attestation.NoCC:
 		return []byte{}, ErrAttestationType
 	default:
 		return []byte{}, ErrAttestationType

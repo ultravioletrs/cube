@@ -36,3 +36,8 @@ func (m *metricsMiddleware) Proxy() *httputil.ReverseProxy {
 
 	return m.svc.Proxy()
 }
+
+// Secure implements proxy.Service.
+func (m *metricsMiddleware) Secure() string {
+	return m.svc.Secure()
+}

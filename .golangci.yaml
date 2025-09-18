@@ -14,8 +14,10 @@ linters:
     - wrapcheck
     - wsl
     - godox
+    - containedctx
     - gosec
     - noinlineerr
+    - gomoddirectives
   settings:
     gocritic:
       enabled-tags:

@@ -12,8 +12,7 @@ import (
 	mglog "github.com/absmach/supermq/logger"
 	"github.com/absmach/supermq/pkg/authn/authsvc"
 	"github.com/absmach/supermq/pkg/grpcclient"
-	"github.com/absmach/supermq/pkg/server"
-	"github.com/absmach/supermq/pkg/server/http"
+	smqserver "github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/agent"
@@ -22,6 +21,8 @@ import (
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
 	"github.com/ultravioletrs/cocos/pkg/attestation/tdx"
 	"github.com/ultravioletrs/cocos/pkg/attestation/vtpm"
+	"github.com/ultravioletrs/cocos/pkg/server"
+	"github.com/ultravioletrs/cocos/pkg/server/http"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -41,6 +42,7 @@ type Config struct {
 	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
 	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
 	Vmpl          int    `env:"AGENT_VMPL"                envDefault:"2"`
+	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
 }
 
 func main() {
@@ -90,7 +92,7 @@ func main() {
 
 	logger.Info("AuthN  successfully connected to auth gRPC server " + authnClient.Secure())
 
-	httpServerConfig := server.Config{Port: defSvcHTTPPort}
+	httpServerConfig := server.ServerConfig{Config: server.Config{Port: defSvcHTTPPort}}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 
@@ -124,7 +126,7 @@ func main() {
 		logger.Info("TEE device not found")
 
 		provider = &attestation.EmptyProvider{}
-	case attestation.VTPM, attestation.AzureToken:
+	case attestation.VTPM:
 		logger.Info("vTPM attestation is not supported")
 
 		exitCode = 1
@@ -147,14 +149,15 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger)
+	httpSvr := http.NewServer(
+		ctx, cancel, svcName, &httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger, cfg.CAUrl)
 
 	g.Go(func() error {
 		return httpSvr.Start()
 	})
 
 	g.Go(func() error {
-		return server.StopSignalHandler(ctx, cancel, logger, svcName, httpSvr)
+		return smqserver.StopSignalHandler(ctx, cancel, logger, svcName, httpSvr)
 	})
 
 	if err := g.Wait(); err != nil {

@@ -22,6 +22,7 @@ import (
 	"github.com/ultraviolet/cube/proxy"
 	"github.com/ultraviolet/cube/proxy/api"
 	"github.com/ultraviolet/cube/proxy/middleware"
+	"github.com/ultravioletrs/cocos/pkg/clients"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
@@ -30,6 +31,7 @@ const (
 	svcName        = "cube_proxy"
 	envPrefixHTTP  = "UV_CUBE_PROXY_"
 	defSvcHTTPPort = "8900"
+	envPrefixAgent = "UV_CUBE_AGENT_"
 )
 
 type config struct {
@@ -86,7 +88,17 @@ func main() {
 
 	tracer := tp.Tracer(svcName)
 
-	svc, err := newService(logger, tracer, cfg.TargetURL)
+	agentConfig := clients.AttestedClientConfig{}
+
+	if err := env.ParseWithOptions(&agentConfig, env.Options{Prefix: envPrefixAgent}); err != nil {
+		logger.Error(fmt.Sprintf("failed to load %s agent client configuration : %s", svcName, err))
+
+		exitCode = 1
+
+		return
+	}
+
+	svc, err := newService(logger, tracer, &agentConfig)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -94,6 +106,10 @@ func main() {
 
 		return
 	}
+
+	logger.Info(fmt.Sprintf(
+		"%s service %s client configured to connect to agent at %s with %s",
+		svcName, svc.Secure(), agentConfig.URL, svc.Secure()))
 
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
@@ -124,8 +140,10 @@ func main() {
 	}
 }
 
-func newService(logger *slog.Logger, tracer trace.Tracer, targetURL string) (proxy.Service, error) {
-	svc, err := proxy.New(&proxy.Config{AgentURL: targetURL, TLS: proxy.InsecureTLSConfig()})
+func newService(
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig,
+) (proxy.Service, error) {
+	svc, err := proxy.New(agentConfig)
 	if err != nil {
 		return nil, err
 	}
