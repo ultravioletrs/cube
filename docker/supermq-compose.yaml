@@ -265,7 +265,7 @@ services:
       - cube-network
 
   ui:
-    image: ghcr.io/ultravioletrs/cube/ui:latest
+    image: ghcr.io/absmach/magistrala/ui-cube-ai:latest
     container_name: cube-ui
     restart: on-failure
     depends_on:
@@ -291,6 +291,8 @@ services:
       NEXTAUTH_SECRET: ${UV_CUBE_UI_NEXTAUTH_SECRET}
       NEXTAUTH_URL: ${UV_CUBE_NEXTAUTH_URL}
       NODE_ENV: ${UV_CUBE_NODE_ENV}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      OLLAMA_DEFAULT_MODEL: ${OLLAMA_DEFAULT_MODEL}
 
   domains-db:
     image: postgres:16.2-alpine
