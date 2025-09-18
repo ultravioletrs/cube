@@ -16,7 +16,6 @@ linters:
     - godox
     - containedctx
     - gosec
-    - containedctx
     - noinlineerr
     - gomoddirectives
   settings:

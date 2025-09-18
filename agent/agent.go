@@ -36,16 +36,18 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 	// ErrNoMatchingRoute indicates that no route matched the request.
 	ErrNoMatchingRoute = errors.New("no matching route found")
+	// errRouteNotFound indicates that the specified route was not found.
+	errRouteNotFound = errors.New("route not found")
 )
 
 type TLSConfig struct {
-	Enabled            bool
-	InsecureSkipVerify bool
-	CertFile           string
-	KeyFile            string
-	CAFile             string
-	MinVersion         uint16
-	MaxVersion         uint16
+	Enabled            bool   `json:"enabled"`
+	InsecureSkipVerify bool   `json:"insecure_skip_verify"`
+	CertFile           string `json:"cert_file"`
+	KeyFile            string `json:"key_file"`
+	CAFile             string `json:"ca_file"`
+	MinVersion         uint16 `json:"min_version"`
+	MaxVersion         uint16 `json:"max_version"`
 }
 
 // RouteCondition defines the type of condition to match.
@@ -197,6 +199,132 @@ func (a *agentService) Proxy() http.Handler {
 	})
 }
 
+func (a *agentService) AddRoute(rule RouteRule) error {
+	if rule.Name == "" {
+		return errors.New("route name is required")
+	}
+
+	if rule.TargetURL == "" {
+		return errors.New("target URL is required")
+	}
+
+	if _, err := url.Parse(rule.TargetURL); err != nil {
+		return fmt.Errorf("invalid target URL: %w", err)
+	}
+
+	err := a.RemoveRoute(rule.Name)
+	if err != nil && !errors.Contains(err, errRouteNotFound) {
+		return err
+	}
+
+	a.routes = append(a.routes, rule)
+
+	for i := 0; i < len(a.routes); i++ {
+		for j := i + 1; j < len(a.routes); j++ {
+			if a.routes[j].Priority > a.routes[i].Priority {
+				a.routes[i], a.routes[j] = a.routes[j], a.routes[i]
+			}
+		}
+	}
+
+	return nil
+}
+
+func (a *agentService) RemoveRoute(name string) error {
+	for i, route := range a.routes {
+		if route.Name == name {
+			a.routes = append(a.routes[:i], a.routes[i+1:]...)
+
+			return nil
+		}
+	}
+
+	return errRouteNotFound
+}
+
+func (a *agentService) GetRoutes() []RouteRule {
+	routes := make([]RouteRule, len(a.routes))
+	copy(routes, a.routes)
+
+	return routes
+}
+
+func (a *agentService) Attestation(
+	reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
+) ([]byte, error) {
+	switch attType {
+	case attestation.SNP, attestation.TDX:
+		rawQuote, err := a.provider.TeeAttestation(reportData[:])
+		if err != nil {
+			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
+		}
+
+		return rawQuote, nil
+	case attestation.VTPM:
+		vTPMQuote, err := a.provider.VTpmAttestation(nonce[:])
+		if err != nil {
+			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
+		}
+
+		return vTPMQuote, nil
+	case attestation.SNPvTPM:
+		vTPMQuote, err := a.provider.Attestation(reportData[:], nonce[:])
+		if err != nil {
+			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
+		}
+
+		return vTPMQuote, nil
+	case attestation.Azure, attestation.NoCC:
+		return []byte{}, ErrAttestationType
+	default:
+		return []byte{}, ErrAttestationType
+	}
+}
+
+func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := a.Authenticate(r)
+		if err != nil {
+			log.Printf("Authentication failed: %v", err)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (a *agentService) modifyHeaders(req *http.Request) {
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Del("Authorization")
+}
+
+func setTLSConfig(config *Config) (*tls.Config, error) {
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: config.TLS.InsecureSkipVerify,
+	}
+
+	if config.TLS.MinVersion != 0 {
+		tlsConfig.MinVersion = config.TLS.MinVersion
+	}
+
+	if config.TLS.MaxVersion != 0 {
+		tlsConfig.MaxVersion = config.TLS.MaxVersion
+	}
+
+	if config.TLS.CertFile != "" && config.TLS.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(config.TLS.CertFile, config.TLS.KeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load client certificate: %w", err)
+		}
+
+		tlsConfig.Certificates = []tls.Certificate{cert}
+	}
+
+	return tlsConfig, nil
+}
+
 func (a *agentService) determineTarget(r *http.Request) (string, error) {
 	// Read body once and create a copy for each route check
 	var bodyBytes []byte
@@ -311,7 +439,9 @@ func (a *agentService) matchString(value, pattern string, isRegex bool) bool {
 
 func (a *agentService) matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool {
 	var bodyMap map[string]interface{}
-	if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
+
+	err := json.Unmarshal(bodyBytes, &bodyMap)
+	if err != nil {
 		// If it's not JSON, try to match the field as a substring
 		bodyStr := string(bodyBytes)
 		if strings.Contains(bodyStr, field) {
@@ -344,131 +474,4 @@ func (a *agentService) matchBodyField(bodyBytes []byte, field, pattern string, i
 	fieldValue := fmt.Sprintf("%v", current)
 
 	return a.matchString(fieldValue, pattern, isRegex)
-}
-
-func (a *agentService) AddRoute(rule RouteRule) error {
-	// Validate the rule
-	if rule.Name == "" {
-		return errors.New("route name is required")
-	}
-
-	if rule.TargetURL == "" {
-		return errors.New("target URL is required")
-	}
-
-	if _, err := url.Parse(rule.TargetURL); err != nil {
-		return fmt.Errorf("invalid target URL: %w", err)
-	}
-
-	// Remove existing route with same name
-	a.RemoveRoute(rule.Name)
-
-	// Add new route
-	a.routes = append(a.routes, rule)
-
-	// Re-sort by priority
-	for i := 0; i < len(a.routes); i++ {
-		for j := i + 1; j < len(a.routes); j++ {
-			if a.routes[j].Priority > a.routes[i].Priority {
-				a.routes[i], a.routes[j] = a.routes[j], a.routes[i]
-			}
-		}
-	}
-
-	return nil
-}
-
-func (a *agentService) RemoveRoute(name string) error {
-	for i, route := range a.routes {
-		if route.Name == name {
-			a.routes = append(a.routes[:i], a.routes[i+1:]...)
-
-			return nil
-		}
-	}
-
-	return fmt.Errorf("route %s not found", name)
-}
-
-func (a *agentService) GetRoutes() []RouteRule {
-	routes := make([]RouteRule, len(a.routes))
-	copy(routes, a.routes)
-
-	return routes
-}
-
-func (a *agentService) Attestation(
-	reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
-) ([]byte, error) {
-	switch attType {
-	case attestation.SNP, attestation.TDX:
-		rawQuote, err := a.provider.TeeAttestation(reportData[:])
-		if err != nil {
-			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
-		}
-
-		return rawQuote, nil
-	case attestation.VTPM:
-		vTPMQuote, err := a.provider.VTpmAttestation(nonce[:])
-		if err != nil {
-			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
-		}
-
-		return vTPMQuote, nil
-	case attestation.SNPvTPM:
-		vTPMQuote, err := a.provider.Attestation(reportData[:], nonce[:])
-		if err != nil {
-			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
-		}
-
-		return vTPMQuote, nil
-	case attestation.Azure, attestation.NoCC:
-		return []byte{}, ErrAttestationType
-	default:
-		return []byte{}, ErrAttestationType
-	}
-}
-
-func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := a.Authenticate(r)
-		if err != nil {
-			log.Printf("Authentication failed: %v", err)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-func (a *agentService) modifyHeaders(req *http.Request) {
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Del("Authorization")
-}
-
-func setTLSConfig(config *Config) (*tls.Config, error) {
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: config.TLS.InsecureSkipVerify,
-	}
-
-	if config.TLS.MinVersion != 0 {
-		tlsConfig.MinVersion = config.TLS.MinVersion
-	}
-
-	if config.TLS.MaxVersion != 0 {
-		tlsConfig.MaxVersion = config.TLS.MaxVersion
-	}
-
-	if config.TLS.CertFile != "" && config.TLS.KeyFile != "" {
-		cert, err := tls.LoadX509KeyPair(config.TLS.CertFile, config.TLS.KeyFile)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load client certificate: %w", err)
-		}
-
-		tlsConfig.Certificates = []tls.Certificate{cert}
-	}
-
-	return tlsConfig, nil
 }

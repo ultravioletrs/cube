@@ -41,7 +41,7 @@ type Config struct {
 	AgentOSBuild  string `env:"AGENT_OS_BUILD"              envDefault:"UVC"`
 	AgentOSDistro string `env:"AGENT_OS_DISTRO"             envDefault:"UVC"`
 	AgentOSType   string `env:"AGENT_OS_TYPE"               envDefault:"UVC"`
-	Vmpl          int    `env:"AGENT_VMPL"                  envDefault:"2"`
+	Vmpl          uint   `env:"AGENT_VMPL"                  envDefault:"2"`
 	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"        envDefault:"http://am-certs:9010"`
 	TargetConfig  string `env:"UV_CUBE_AGENT_ROUTER_CONFIG" envDefault:"/etc/cube/agent/config.json"`
 }
@@ -116,9 +116,9 @@ func main() {
 
 	switch ccPlatform {
 	case attestation.SNP:
-		provider = vtpm.NewProvider(false, uint(cfg.Vmpl))
+		provider = vtpm.NewProvider(false, cfg.Vmpl)
 	case attestation.SNPvTPM:
-		provider = vtpm.NewProvider(true, uint(cfg.Vmpl))
+		provider = vtpm.NewProvider(true, cfg.Vmpl)
 	case attestation.Azure:
 		provider = azure.NewProvider()
 	case attestation.TDX:
