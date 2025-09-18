@@ -9,7 +9,7 @@ require (
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/go-kit/kit v0.13.0
 	github.com/prometheus/client_golang v1.23.0
-	github.com/ultravioletrs/cocos v0.7.0
+	github.com/ultravioletrs/cocos v0.7.1-0.20250918151020-906d7877b249
 	go.opentelemetry.io/otel/trace v1.37.0
 	golang.org/x/sync v0.16.0
 )
@@ -77,5 +77,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	moul.io/http2curl v1.0.0 // indirect
 )
-
-replace github.com/ultravioletrs/cocos => github.com/sammyoina/cocos-ai v0.13.31-0.20250917131313-539182c354e4

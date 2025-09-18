@@ -11,11 +11,12 @@ import (
 	"net/url"
 
 	"github.com/absmach/supermq/pkg/errors"
+	"github.com/ultravioletrs/cocos/pkg/clients"
 	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 )
 
 type service struct {
-	config    *httpclient.AgentClientConfig
+	config    *clients.AttestedClientConfig
 	transport *http.Transport
 	secure    string
 }
@@ -25,7 +26,7 @@ type Service interface {
 	Secure() string
 }
 
-func New(config *httpclient.AgentClientConfig) (Service, error) {
+func New(config *clients.AttestedClientConfig) (Service, error) {
 	if config.URL == "" {
 		return nil, errors.New("agent URL must be provided")
 	}

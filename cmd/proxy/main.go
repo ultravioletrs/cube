@@ -22,7 +22,7 @@ import (
 	"github.com/ultraviolet/cube/proxy"
 	"github.com/ultraviolet/cube/proxy/api"
 	"github.com/ultraviolet/cube/proxy/middleware"
-	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
+	"github.com/ultravioletrs/cocos/pkg/clients"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
@@ -88,7 +88,7 @@ func main() {
 
 	tracer := tp.Tracer(svcName)
 
-	agentConfig := httpclient.AgentClientConfig{}
+	agentConfig := clients.AttestedClientConfig{}
 
 	if err := env.ParseWithOptions(&agentConfig, env.Options{Prefix: envPrefixAgent}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s agent client configuration : %s", svcName, err))
@@ -141,7 +141,7 @@ func main() {
 }
 
 func newService(
-	logger *slog.Logger, tracer trace.Tracer, agentConfig *httpclient.AgentClientConfig,
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig,
 ) (proxy.Service, error) {
 	svc, err := proxy.New(agentConfig)
 	if err != nil {
