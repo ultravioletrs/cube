@@ -4,12 +4,18 @@
 package agent
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/absmach/supermq/api/http/util"
@@ -29,21 +35,68 @@ var (
 	ErrAttestationType = errors.New("invalid attestation type")
 	// ErrUnauthorized indicates that authentication failed.
 	ErrUnauthorized = errors.New("unauthorized")
+	// ErrNoMatchingRoute indicates that no route matched the request.
+	ErrNoMatchingRoute = errors.New("no matching route found")
+	// errRouteNotFound indicates that the specified route was not found.
+	errRouteNotFound = errors.New("route not found")
 )
 
 type TLSConfig struct {
-	Enabled            bool
-	InsecureSkipVerify bool
-	CertFile           string
-	KeyFile            string
-	CAFile             string
-	MinVersion         uint16
-	MaxVersion         uint16
+	Enabled            bool   `json:"enabled"`
+	InsecureSkipVerify bool   `json:"insecure_skip_verify"`
+	CertFile           string `json:"cert_file"`
+	KeyFile            string `json:"key_file"`
+	CAFile             string `json:"ca_file"`
+	MinVersion         uint16 `json:"min_version"`
+	MaxVersion         uint16 `json:"max_version"`
+}
+
+// RouteCondition defines the type of condition to match.
+type RouteCondition string
+
+const (
+	RouteConditionPath       RouteCondition = "path"
+	RouteConditionMethod     RouteCondition = "method"
+	RouteConditionHeader     RouteCondition = "header"
+	RouteConditionBodyField  RouteCondition = "body_field"
+	RouteConditionBodyRegex  RouteCondition = "body_regex"
+	RouteConditionQueryParam RouteCondition = "query_param"
+)
+
+// RouteMatcher defines a single matching condition.
+type RouteMatcher struct {
+	Condition RouteCondition `json:"condition"`
+	Field     string         `json:"field,omitempty"`    // For headers, query params, or body fields
+	Pattern   string         `json:"pattern"`            // Pattern to match (can be regex or exact)
+	IsRegex   bool           `json:"is_regex,omitempty"` // Whether pattern is a regex
+}
+
+// RouteRule defines a complete routing rule.
+type RouteRule struct {
+	Name        string         `json:"name"`
+	TargetURL   string         `json:"target_url"`
+	Matchers    []RouteMatcher `json:"matchers"`     // All matchers must match (AND logic)
+	Priority    int            `json:"priority"`     // Higher priority rules are checked first
+	DefaultRule bool           `json:"default_rule"` // If true, this rule matches when no others do
+}
+
+// RouteRules implements sort.Interface for []RouteRule based on Priority field.
+// Routes are sorted in descending order of priority (higher priority first).
+type RouteRules []RouteRule
+
+func (r RouteRules) Len() int           { return len(r) }
+func (r RouteRules) Less(i, j int) bool { return r[i].Priority > r[j].Priority } // Descending order
+func (r RouteRules) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+
+// RouterConfig contains the routing configuration.
+type RouterConfig struct {
+	Routes     []RouteRule `json:"routes"`
+	DefaultURL string      `json:"default_url,omitempty"` // Fallback if no default rule is defined
 }
 
 type Config struct {
-	OllamaURL string
-	TLS       TLSConfig
+	Router RouterConfig `json:"router"`
+	TLS    TLSConfig    `json:"tls"`
 }
 
 type agentService struct {
@@ -51,22 +104,22 @@ type agentService struct {
 	provider  attestation.Provider
 	transport *http.Transport
 	auth      authn.Authentication
+	routes    RouteRules
 }
 
 type Service interface {
-	Proxy() *httputil.ReverseProxy
+	Proxy() http.Handler
 	Attestation(
 		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
 	) ([]byte, error)
 	Authenticate(req *http.Request) error
 	AuthMiddleware(next http.Handler) http.Handler
+	AddRoute(rule RouteRule) error
+	RemoveRoute(name string) error
+	GetRoutes() []RouteRule
 }
 
 func New(config *Config, auth authn.Authentication, provider attestation.Provider) (Service, error) {
-	if config.OllamaURL == "" {
-		return nil, errors.New("ollama URL is required")
-	}
-
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
@@ -82,11 +135,16 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 		transport.TLSClientConfig = tlsConfig
 	}
 
+	routes := make(RouteRules, len(config.Router.Routes))
+	copy(routes, config.Router.Routes)
+	sort.Sort(routes)
+
 	return &agentService{
 		config:    config,
 		transport: transport,
 		provider:  provider,
 		auth:      auth,
+		routes:    routes,
 	}, nil
 }
 
@@ -105,31 +163,89 @@ func (a *agentService) Authenticate(req *http.Request) error {
 	return nil
 }
 
-func (a *agentService) Proxy() *httputil.ReverseProxy {
-	target, err := url.Parse(a.config.OllamaURL)
-	if err != nil {
-		log.Printf("Invalid Ollama URL: %v", err)
+func (a *agentService) Proxy() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetURL, err := a.determineTarget(r)
+		if err != nil {
+			log.Printf("Failed to determine target: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 
-		return nil
+			return
+		}
+
+		target, err := url.Parse(targetURL)
+		if err != nil {
+			log.Printf("Invalid target URL %s: %v", targetURL, err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
+			return
+		}
+
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.Transport = a.transport
+
+		originalDirector := proxy.Director
+		proxy.Director = func(req *http.Request) {
+			originalDirector(req)
+			a.modifyHeaders(req)
+			log.Printf("Agent forwarding to %s: %s %s", targetURL, req.Method, req.URL.Path)
+		}
+
+		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		proxy.ServeHTTP(w, r)
+	})
+}
+
+func (a *agentService) AddRoute(rule RouteRule) error {
+	if rule.Name == "" {
+		return errors.New("route name is required")
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	proxy.Transport = a.transport
-
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		a.modifyHeaders(req)
-		log.Printf("Agent forwarding to Ollama: %s %s", req.Method, req.URL.Path)
+	if rule.TargetURL == "" {
+		return errors.New("target URL is required")
 	}
 
-	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		log.Printf("Proxy error: %v", err)
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+	if _, err := url.Parse(rule.TargetURL); err != nil {
+		return fmt.Errorf("invalid target URL: %w", err)
 	}
 
-	return proxy
+	err := a.RemoveRoute(rule.Name)
+	if err != nil && !errors.Contains(err, errRouteNotFound) {
+		return err
+	}
+
+	insertPos := sort.Search(len(a.routes), func(i int) bool {
+		return a.routes[i].Priority <= rule.Priority
+	})
+
+	a.routes = append(a.routes, RouteRule{})
+	copy(a.routes[insertPos+1:], a.routes[insertPos:])
+	a.routes[insertPos] = rule
+
+	return nil
+}
+
+func (a *agentService) RemoveRoute(name string) error {
+	for i, route := range a.routes {
+		if route.Name == name {
+			a.routes = append(a.routes[:i], a.routes[i+1:]...)
+
+			return nil
+		}
+	}
+
+	return errRouteNotFound
+}
+
+func (a *agentService) GetRoutes() []RouteRule {
+	routes := make([]RouteRule, len(a.routes))
+	copy(routes, a.routes)
+
+	return routes
 }
 
 func (a *agentService) Attestation(
@@ -178,27 +294,8 @@ func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func DefaultTLSConfig() TLSConfig {
-	return TLSConfig{
-		Enabled:            true,
-		InsecureSkipVerify: false,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS13,
-	}
-}
-
-func InsecureTLSConfig() TLSConfig {
-	return TLSConfig{
-		Enabled:            true,
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS13,
-	}
-}
-
 func (a *agentService) modifyHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-
 	req.Header.Del("Authorization")
 }
 
@@ -225,4 +322,154 @@ func setTLSConfig(config *Config) (*tls.Config, error) {
 	}
 
 	return tlsConfig, nil
+}
+
+func (a *agentService) determineTarget(r *http.Request) (string, error) {
+	// Read body once and create a copy for each route check
+	var bodyBytes []byte
+
+	if r.Body != nil {
+		var err error
+
+		bodyBytes, err = io.ReadAll(r.Body)
+		if err != nil {
+			return "", fmt.Errorf("failed to read request body: %w", err)
+		}
+
+		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	}
+
+	for _, route := range a.routes {
+		if route.DefaultRule {
+			continue // Skip default rules in main loop
+		}
+
+		if a.matchesRoute(r, bodyBytes, route) {
+			log.Printf("Request matched route: %s -> %s", route.Name, route.TargetURL)
+
+			return route.TargetURL, nil
+		}
+	}
+
+	// Check for default rule
+	for _, route := range a.routes {
+		if route.DefaultRule {
+			log.Printf("Request matched default route: %s -> %s", route.Name, route.TargetURL)
+
+			return route.TargetURL, nil
+		}
+	}
+
+	// Use config default URL if available
+	if a.config.Router.DefaultURL != "" {
+		log.Printf("Request using config default URL: %s", a.config.Router.DefaultURL)
+
+		return a.config.Router.DefaultURL, nil
+	}
+
+	return "", ErrNoMatchingRoute
+}
+
+func (a *agentService) matchesRoute(r *http.Request, bodyBytes []byte, route RouteRule) bool {
+	// All matchers must match (AND logic)
+	for _, matcher := range route.Matchers {
+		if !a.matchesSingleCondition(r, bodyBytes, matcher) {
+			return false
+		}
+	}
+
+	return len(route.Matchers) > 0 // Must have at least one matcher
+}
+
+func (a *agentService) matchesSingleCondition(r *http.Request, bodyBytes []byte, matcher RouteMatcher) bool {
+	switch matcher.Condition {
+	case RouteConditionPath:
+		return a.matchString(r.URL.Path, matcher.Pattern, matcher.IsRegex)
+
+	case RouteConditionMethod:
+		return a.matchString(r.Method, matcher.Pattern, matcher.IsRegex)
+
+	case RouteConditionHeader:
+		headerValue := r.Header.Get(matcher.Field)
+
+		return a.matchString(headerValue, matcher.Pattern, matcher.IsRegex)
+
+	case RouteConditionQueryParam:
+		paramValue := r.URL.Query().Get(matcher.Field)
+
+		return a.matchString(paramValue, matcher.Pattern, matcher.IsRegex)
+
+	case RouteConditionBodyField:
+		if len(bodyBytes) == 0 {
+			return false
+		}
+
+		return a.matchBodyField(bodyBytes, matcher.Field, matcher.Pattern, matcher.IsRegex)
+
+	case RouteConditionBodyRegex:
+		if len(bodyBytes) == 0 {
+			return false
+		}
+
+		return a.matchString(string(bodyBytes), matcher.Pattern, true) // Always regex for body_regex
+
+	default:
+		log.Printf("Unknown route condition: %s", matcher.Condition)
+
+		return false
+	}
+}
+
+func (a *agentService) matchString(value, pattern string, isRegex bool) bool {
+	if isRegex {
+		matched, err := regexp.MatchString(pattern, value)
+		if err != nil {
+			log.Printf("Invalid regex pattern %s: %v", pattern, err)
+
+			return false
+		}
+
+		return matched
+	}
+
+	return value == pattern
+}
+
+func (a *agentService) matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool {
+	var bodyMap map[string]interface{}
+
+	err := json.Unmarshal(bodyBytes, &bodyMap)
+	if err != nil {
+		// If it's not JSON, try to match the field as a substring
+		bodyStr := string(bodyBytes)
+		if strings.Contains(bodyStr, field) {
+			return a.matchString(bodyStr, pattern, isRegex)
+		}
+
+		return false
+	}
+
+	// Navigate nested fields using dot notation (e.g., "user.profile.name")
+	fieldParts := strings.Split(field, ".")
+
+	var current interface{} = bodyMap
+
+	for _, part := range fieldParts {
+		switch v := current.(type) {
+		case map[string]interface{}:
+			var ok bool
+
+			current, ok = v[part]
+			if !ok {
+				return false
+			}
+		default:
+			return false
+		}
+	}
+
+	// Convert the field value to string for matching
+	fieldValue := fmt.Sprintf("%v", current)
+
+	return a.matchString(fieldValue, pattern, isRegex)
 }
