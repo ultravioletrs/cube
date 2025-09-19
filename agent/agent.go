@@ -14,6 +14,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
@@ -79,6 +80,14 @@ type RouteRule struct {
 	DefaultRule bool           `json:"default_rule"` // If true, this rule matches when no others do
 }
 
+// RouteRules implements sort.Interface for []RouteRule based on Priority field.
+// Routes are sorted in descending order of priority (higher priority first).
+type RouteRules []RouteRule
+
+func (r RouteRules) Len() int           { return len(r) }
+func (r RouteRules) Less(i, j int) bool { return r[i].Priority > r[j].Priority } // Descending order
+func (r RouteRules) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
+
 // RouterConfig contains the routing configuration.
 type RouterConfig struct {
 	Routes     []RouteRule `json:"routes"`
@@ -95,7 +104,7 @@ type agentService struct {
 	provider  attestation.Provider
 	transport *http.Transport
 	auth      authn.Authentication
-	routes    []RouteRule
+	routes    RouteRules
 }
 
 type Service interface {
@@ -126,17 +135,9 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 		transport.TLSClientConfig = tlsConfig
 	}
 
-	// Sort routes by priority (higher first)
-	routes := make([]RouteRule, len(config.Router.Routes))
+	routes := make(RouteRules, len(config.Router.Routes))
 	copy(routes, config.Router.Routes)
-
-	for i := 0; i < len(routes); i++ {
-		for j := i + 1; j < len(routes); j++ {
-			if routes[j].Priority > routes[i].Priority {
-				routes[i], routes[j] = routes[j], routes[i]
-			}
-		}
-	}
+	sort.Sort(routes)
 
 	return &agentService{
 		config:    config,
@@ -217,15 +218,13 @@ func (a *agentService) AddRoute(rule RouteRule) error {
 		return err
 	}
 
-	a.routes = append(a.routes, rule)
+	insertPos := sort.Search(len(a.routes), func(i int) bool {
+		return a.routes[i].Priority <= rule.Priority
+	})
 
-	for i := 0; i < len(a.routes); i++ {
-		for j := i + 1; j < len(a.routes); j++ {
-			if a.routes[j].Priority > a.routes[i].Priority {
-				a.routes[i], a.routes[j] = a.routes[j], a.routes[i]
-			}
-		}
-	}
+	a.routes = append(a.routes, RouteRule{})
+	copy(a.routes[insertPos+1:], a.routes[insertPos:])
+	a.routes[insertPos] = rule
 
 	return nil
 }
@@ -340,7 +339,6 @@ func (a *agentService) determineTarget(r *http.Request) (string, error) {
 		r.Body = io.NopCloser(bytes.NewReader(bodyBytes))
 	}
 
-	// Check routes in priority order
 	for _, route := range a.routes {
 		if route.DefaultRule {
 			continue // Skip default rules in main loop
