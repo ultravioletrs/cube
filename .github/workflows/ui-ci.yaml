@@ -29,7 +29,7 @@ jobs:
       - name: Checkout UI repository
         uses: actions/checkout@v4
         with:
-          repository: absmach/magistrala-ui-new
+          repository: absmach/magistrala-ui
           path: ui
           token: ${{ secrets.GITHUBPAT }}
 
