@@ -36,7 +36,7 @@ services:
     #             - gpu
 
   open-webui:
-    profiles: ["open-webui", "default"]
+    profiles: ["ollama", "default"]
     container_name: open-webui
     image: ghcr.io/open-webui/open-webui:0.3.32-ollama
     restart: unless-stopped
@@ -50,7 +50,7 @@ services:
       - cube-network
 
   pull-tinyllama:
-    profiles: ["pull-tinyllama", "default"]
+    profiles: ["ollama", "default"]
     image: docker:27.3.1
     container_name: pull-tinyllama
     restart: on-failure
@@ -64,7 +64,7 @@ services:
       - cube-network
 
   pull-starcoder2:
-    profiles: ["pull-starcoder2", "default"]
+    profiles: ["ollama", "default"]
     image: docker:27.3.1
     container_name: pull-starcoder2
     restart: on-failure
@@ -78,7 +78,7 @@ services:
       - cube-network
 
   pull-nomic-embed-text:
-    profiles: ["pull-nomic-embed-text", "default"]
+    profiles: ["ollama", "default"]
     image: docker:27.3.1
     container_name: pull-nomic-embed-text
     restart: on-failure

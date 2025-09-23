@@ -11,16 +11,31 @@ services:
   vllm:
     profiles: ["vllm"]
     container_name: vllm
-    image: vllm/vllm-openai:v0.6.2
+    image: vllm/vllm-openai:v0.10.2
     restart: unless-stopped
     command: >
       --model ${VLLM_MODEL:-microsoft/DialoGPT-medium}
       --host 0.0.0.0
       --port 8000
+      --trust-remote-code
+      --gpu-memory-utilization 0.85
+      --max-model-len 1024
     volumes:
       - vllm-cache:/root/.cache
     networks:
       - cube-network
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - VLLM_LOGGING_LEVEL=INFO
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   open-webui-vllm:
     profiles: ["vllm"]
