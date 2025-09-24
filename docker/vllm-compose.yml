@@ -1,0 +1,52 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+volumes:
+  vllm-cache:
+    driver: local
+  open-webui-vllm:
+    driver: local
+
+services:
+  vllm:
+    profiles: ["vllm"]
+    container_name: vllm
+    image: vllm/vllm-openai:v0.10.2
+    restart: unless-stopped
+    command: >
+      --model ${VLLM_MODEL:-microsoft/DialoGPT-medium}
+      --host 0.0.0.0
+      --port 8000
+      --trust-remote-code
+      --gpu-memory-utilization 0.85
+      --max-model-len 1024
+    volumes:
+      - vllm-cache:/root/.cache
+    networks:
+      - cube-network
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES}
+      - VLLM_LOGGING_LEVEL=${VLLM_LOGGING_LEVEL}
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  open-webui-vllm:
+    profiles: ["vllm"]
+    container_name: open-webui-vllm
+    image: ghcr.io/open-webui/open-webui:main
+    restart: unless-stopped
+    volumes:
+      - open-webui-vllm:/app/backend/data
+    ports:
+      - 3001:8080
+    environment:
+      - OPENAI_API_BASE_URL=http://vllm:8000/v1
+    networks:
+      - cube-network

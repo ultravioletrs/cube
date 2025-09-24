@@ -30,8 +30,6 @@ services:
     restart: on-failure
     networks:
       - cube-network
-    depends_on:
-      - ollama
     environment:
       UV_CUBE_AGENT_LOG_LEVEL: ${UV_CUBE_AGENT_LOG_LEVEL}
       UV_CUBE_AGENT_HOST: ${UV_CUBE_AGENT_HOST}

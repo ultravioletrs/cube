@@ -9,6 +9,7 @@ volumes:
 
 services:
   ollama:
+    profiles: ["ollama", "default"]
     container_name: ollama
     image: ollama/ollama:0.3.12 # For AMD GPU, use ollama/ollama:0.3.8-rocm
     restart: unless-stopped
@@ -35,6 +36,7 @@ services:
     #             - gpu
 
   open-webui:
+    profiles: ["ollama", "default"]
     container_name: open-webui
     image: ghcr.io/open-webui/open-webui:0.3.32-ollama
     restart: unless-stopped
@@ -48,6 +50,7 @@ services:
       - cube-network
 
   pull-tinyllama:
+    profiles: ["ollama", "default"]
     image: docker:27.3.1
     container_name: pull-tinyllama
     restart: on-failure
@@ -61,6 +64,7 @@ services:
       - cube-network
 
   pull-starcoder2:
+    profiles: ["ollama", "default"]
     image: docker:27.3.1
     container_name: pull-starcoder2
     restart: on-failure
@@ -74,6 +78,7 @@ services:
       - cube-network
 
   pull-nomic-embed-text:
+    profiles: ["ollama", "default"]
     image: docker:27.3.1
     container_name: pull-nomic-embed-text
     restart: on-failure
