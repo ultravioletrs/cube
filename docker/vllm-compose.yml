@@ -25,9 +25,9 @@ services:
     networks:
       - cube-network
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - VLLM_LOGGING_LEVEL=INFO
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES}
+      - VLLM_LOGGING_LEVEL=${VLLM_LOGGING_LEVEL}
     runtime: nvidia
     deploy:
       resources:
