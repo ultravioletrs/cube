@@ -18,8 +18,15 @@ import (
 	"time"
 )
 
-// AuditEvent represents a complete audit log entry.
-type AuditEvent struct {
+type contextKey string
+
+const (
+	RequestIDCtxKey contextKey = "request_id"
+	TraceIDCtxKey   contextKey = "trace_id"
+)
+
+// Event represents a complete audit log entry.
+type Event struct {
 	// Core identification
 	TraceID   string    `json:"trace_id"`
 	RequestID string    `json:"request_id"`
@@ -32,7 +39,7 @@ type AuditEvent struct {
 	AuthMethod      string   `json:"auth_method,omitempty"`
 	Permissions     []string `json:"permissions,omitempty"`
 	AttestationType string   `json:"attestation_type,omitempty"`
-	AttestationOK   bool     `json:"attestation_verified"`
+	AttestationOK   bool     `json:"attestation_ok,omitempty"`
 
 	// Request details
 	Method    string            `json:"method"`
@@ -44,10 +51,10 @@ type AuditEvent struct {
 
 	// Response details
 	StatusCode       int           `json:"status_code"`
-	ResponseSize     int64         `json:"response_size_bytes"`
-	RequestSize      int64         `json:"request_size_bytes"`
-	Duration         time.Duration `json:"duration_ms"`
-	UpstreamDuration time.Duration `json:"upstream_duration_ms,omitempty"`
+	ResponseSize     int64         `json:"response_size"`
+	RequestSize      int64         `json:"request_size"`
+	Duration         time.Duration `json:"duration"`
+	UpstreamDuration time.Duration `json:"upstream_duration,omitempty"`
 
 	// LLM specific
 	Model        string  `json:"model,omitempty"`
@@ -72,13 +79,18 @@ type AuditEvent struct {
 }
 
 // AuditMiddleware provides structured audit logging.
-type AuditMiddleware struct {
+type auditMiddleware struct {
 	logger    *slog.Logger
-	config    AuditConfig
+	config    Config
 	extractor TokenExtractor
 }
 
-type AuditConfig struct {
+type Service interface {
+	// Middleware returns the HTTP middleware function for audit logging.
+	Middleware(next http.Handler) http.Handler
+}
+
+type Config struct {
 	LogLevel         slog.Level
 	EnablePIIMask    bool
 	EnableTokens     bool
@@ -120,8 +132,8 @@ func (rc *responseCapture) Write(data []byte) (int, error) {
 }
 
 // NewAuditMiddleware creates a new audit middleware instance.
-func NewAuditMiddleware(logger *slog.Logger, config AuditConfig, extractor TokenExtractor) *AuditMiddleware {
-	return &AuditMiddleware{
+func NewAuditMiddleware(logger *slog.Logger, config Config, extractor TokenExtractor) Service {
+	return &auditMiddleware{
 		logger:    logger,
 		config:    config,
 		extractor: extractor,
@@ -129,17 +141,30 @@ func NewAuditMiddleware(logger *slog.Logger, config AuditConfig, extractor Token
 }
 
 // Middleware returns the HTTP middleware function.
-func (am *AuditMiddleware) Middleware(next http.Handler) http.Handler {
+func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
 		// Generate trace and request IDs
-		traceID := generateID()
-		requestID := generateID()
+		traceID, err := generateID()
+		if err != nil {
+			am.logger.Error("failed to generate trace ID", slog.String("error", err.Error()))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
+			return
+		}
+
+		requestID, err := generateID()
+		if err != nil {
+			am.logger.Error("failed to generate request ID", slog.String("error", err.Error()))
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+
+			return
+		}
 
 		// Create context with trace information
-		ctx := context.WithValue(r.Context(), "trace_id", traceID)
-		ctx = context.WithValue(ctx, "request_id", requestID)
+		ctx := context.WithValue(r.Context(), TraceIDCtxKey, traceID)
+		ctx = context.WithValue(ctx, RequestIDCtxKey, requestID)
 		r = r.WithContext(ctx)
 
 		// Capture request body for audit (if needed)
@@ -172,11 +197,11 @@ func (am *AuditMiddleware) Middleware(next http.Handler) http.Handler {
 
 		// Create and log audit event
 		event := am.createAuditEvent(r, capture, userInfo, traceID, requestID, start, upstreamDuration, requestBody)
-		am.logAuditEvent(event)
+		am.logAuditEvent(&event)
 	})
 }
 
-func (am *AuditMiddleware) createAuditEvent(
+func (am *auditMiddleware) createAuditEvent(
 	r *http.Request,
 	capture *responseCapture,
 	userInfo UserInfo,
@@ -184,8 +209,8 @@ func (am *AuditMiddleware) createAuditEvent(
 	start time.Time,
 	upstreamDuration time.Duration,
 	requestBody []byte,
-) AuditEvent {
-	event := AuditEvent{
+) Event {
+	event := Event{
 		TraceID:          traceID,
 		RequestID:        requestID,
 		Timestamp:        start,
@@ -225,7 +250,7 @@ func (am *AuditMiddleware) createAuditEvent(
 	return event
 }
 
-func (am *AuditMiddleware) extractLLMMetadata(event *AuditEvent, requestBody []byte) {
+func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) {
 	var requestData map[string]interface{}
 	if err := json.Unmarshal(requestBody, &requestData); err != nil {
 		return
@@ -259,7 +284,7 @@ func (am *AuditMiddleware) extractLLMMetadata(event *AuditEvent, requestBody []b
 	}
 }
 
-func (am *AuditMiddleware) extractLLMResponse(event *AuditEvent, responseBody []byte) {
+func (am *auditMiddleware) extractLLMResponse(event *Event, responseBody []byte) {
 	var responseData map[string]interface{}
 	if err := json.Unmarshal(responseBody, &responseData); err != nil {
 		return
@@ -276,7 +301,7 @@ func (am *AuditMiddleware) extractLLMResponse(event *AuditEvent, responseBody []
 	}
 }
 
-func (am *AuditMiddleware) logAuditEvent(event AuditEvent) {
+func (am *auditMiddleware) logAuditEvent(event *Event) {
 	// Convert duration to milliseconds for logging
 	durationMs := float64(event.Duration.Nanoseconds()) / 1e6
 	upstreamMs := float64(event.UpstreamDuration.Nanoseconds()) / 1e6
@@ -303,18 +328,20 @@ func (am *AuditMiddleware) logAuditEvent(event AuditEvent) {
 }
 
 // Utility functions.
-func generateID() string {
-	bytes := make([]byte, 8)
-	rand.Read(bytes)
+func generateID() (string, error) {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("failed to generate ID: %w", err)
+	}
 
-	return hex.EncodeToString(bytes)
+	return hex.EncodeToString(b), nil
 }
 
-func (am *AuditMiddleware) shouldCaptureBody(r *http.Request) bool {
+func (am *auditMiddleware) shouldCaptureBody(r *http.Request) bool {
 	return r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch
 }
 
-func (am *AuditMiddleware) extractUserInfo(r *http.Request) UserInfo {
+func (am *auditMiddleware) extractUserInfo(r *http.Request) UserInfo {
 	token := am.extractBearerToken(r)
 	if token == "" || am.extractor == nil {
 		return UserInfo{}
@@ -328,7 +355,7 @@ func (am *AuditMiddleware) extractUserInfo(r *http.Request) UserInfo {
 	return userInfo
 }
 
-func (am *AuditMiddleware) extractBearerToken(r *http.Request) string {
+func (am *auditMiddleware) extractBearerToken(r *http.Request) string {
 	auth := r.Header.Get("Authorization")
 	if auth == "" {
 		return ""
@@ -342,7 +369,7 @@ func (am *AuditMiddleware) extractBearerToken(r *http.Request) string {
 	return parts[1]
 }
 
-func (am *AuditMiddleware) extractClientIP(r *http.Request) string {
+func (am *auditMiddleware) extractClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header first
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		ips := strings.Split(xff, ",")
@@ -364,7 +391,7 @@ func (am *AuditMiddleware) extractClientIP(r *http.Request) string {
 	return ip
 }
 
-func (am *AuditMiddleware) sanitizeHeaders(headers http.Header) map[string]string {
+func (am *auditMiddleware) sanitizeHeaders(headers http.Header) map[string]string {
 	sanitized := make(map[string]string)
 
 	sensitiveHeaders := map[string]bool{
@@ -385,7 +412,7 @@ func (am *AuditMiddleware) sanitizeHeaders(headers http.Header) map[string]strin
 	return sanitized
 }
 
-func (am *AuditMiddleware) getTLSVersion(r *http.Request) string {
+func (am *auditMiddleware) getTLSVersion(r *http.Request) string {
 	if r.TLS == nil {
 		return ""
 	}
@@ -404,7 +431,7 @@ func (am *AuditMiddleware) getTLSVersion(r *http.Request) string {
 	}
 }
 
-func (am *AuditMiddleware) detectPII(requestBody, responseBody []byte) bool {
+func (am *auditMiddleware) detectPII(requestBody, responseBody []byte) bool {
 	// Simple PII detection patterns
 	piiPatterns := []string{
 		`\b\d{3}-\d{2}-\d{4}\b`,                               // SSN
@@ -423,7 +450,7 @@ func (am *AuditMiddleware) detectPII(requestBody, responseBody []byte) bool {
 	return false
 }
 
-func (am *AuditMiddleware) checkContentFilter(event *AuditEvent) bool {
+func (am *auditMiddleware) checkContentFilter(_ *Event) bool {
 	// Implement content filtering logic
 	// This could integrate with external content filtering services
 	return false
