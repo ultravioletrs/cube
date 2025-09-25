@@ -1,0 +1,12 @@
+{
+  "router": {
+    "default_url": "http://ollama:11434",
+    "routes": []
+  },
+  "tls": {
+    "enabled": true,
+    "insecure_skip_verify": false,
+    "min_version": 771,
+    "max_version": 772
+  }
+}
