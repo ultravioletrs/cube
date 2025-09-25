@@ -13,7 +13,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/absmach/supermq/api/http/util"
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/errors"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
@@ -64,8 +63,6 @@ type Service interface {
 	Attestation(
 		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
 	) ([]byte, error)
-	Authenticate(req *http.Request) error
-	AuthMiddleware(next http.Handler) http.Handler
 	AddRoute(rule *RouteRule) error
 	RemoveRoute(name string) error
 	GetRoutes() []RouteRule
@@ -103,21 +100,6 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 		auth:      auth,
 		routes:    routes,
 	}, nil
-}
-
-func (a *agentService) Authenticate(req *http.Request) error {
-	token := util.ExtractBearerToken(req)
-
-	if token == "" {
-		return errors.Wrap(ErrUnauthorized, errors.New("missing or invalid token"))
-	}
-
-	_, err := a.auth.Authenticate(req.Context(), token)
-	if err != nil {
-		return errors.Wrap(ErrUnauthorized, err)
-	}
-
-	return nil
 }
 
 func (a *agentService) Proxy() http.Handler {
@@ -237,20 +219,6 @@ func (a *agentService) Attestation(
 	default:
 		return []byte{}, ErrAttestationType
 	}
-}
-
-func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := a.Authenticate(r)
-		if err != nil {
-			log.Printf("Authentication failed: %v", err)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 func (a *agentService) modifyHeaders(req *http.Request) {

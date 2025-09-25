@@ -16,6 +16,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/absmach/supermq/pkg/authn"
 )
 
 type contextKey string
@@ -34,12 +36,10 @@ type Event struct {
 	EventType string    `json:"event_type"`
 
 	// Authentication & Authorization
-	UserID          string   `json:"user_id,omitempty"`
-	ClientID        string   `json:"client_id,omitempty"`
-	AuthMethod      string   `json:"auth_method,omitempty"`
-	Permissions     []string `json:"permissions,omitempty"`
-	AttestationType string   `json:"attestation_type,omitempty"`
-	AttestationOK   bool     `json:"attestation_ok,omitempty"`
+	Session         authn.Session `json:"session,omitempty"`
+	AuthMethod      string        `json:"auth_method,omitempty"`
+	AttestationType string        `json:"attestation_type,omitempty"`
+	AttestationOK   bool          `json:"attestation_ok,omitempty"`
 
 	// Request details
 	Method    string            `json:"method"`
@@ -80,9 +80,8 @@ type Event struct {
 
 // AuditMiddleware provides structured audit logging.
 type auditMiddleware struct {
-	logger    *slog.Logger
-	config    Config
-	extractor TokenExtractor
+	logger *slog.Logger
+	config Config
 }
 
 type Service interface {
@@ -96,16 +95,6 @@ type Config struct {
 	EnableTokens     bool
 	SensitiveHeaders []string
 	ComplianceMode   bool
-}
-
-type TokenExtractor interface {
-	ExtractUserInfo(ctx context.Context, token string) (UserInfo, error)
-}
-
-type UserInfo struct {
-	UserID      string
-	ClientID    string
-	Permissions []string
 }
 
 // responseCapture captures response data for audit logging.
@@ -132,11 +121,10 @@ func (rc *responseCapture) Write(data []byte) (int, error) {
 }
 
 // NewAuditMiddleware creates a new audit middleware instance.
-func NewAuditMiddleware(logger *slog.Logger, config Config, extractor TokenExtractor) Service {
+func NewAuditMiddleware(logger *slog.Logger, config Config) Service {
 	return &auditMiddleware{
-		logger:    logger,
-		config:    config,
-		extractor: extractor,
+		logger: logger,
+		config: config,
 	}
 }
 
@@ -196,7 +184,7 @@ func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 		upstreamDuration := time.Since(upstreamStart)
 
 		// Create and log audit event
-		event := am.createAuditEvent(r, capture, userInfo, traceID, requestID, start, upstreamDuration, requestBody)
+		event := am.createAuditEvent(r, capture, &userInfo, traceID, requestID, start, upstreamDuration, requestBody)
 		am.logAuditEvent(&event)
 	})
 }
@@ -204,7 +192,7 @@ func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 func (am *auditMiddleware) createAuditEvent(
 	r *http.Request,
 	capture *responseCapture,
-	userInfo UserInfo,
+	session *authn.Session,
 	traceID, requestID string,
 	start time.Time,
 	upstreamDuration time.Duration,
@@ -215,9 +203,7 @@ func (am *auditMiddleware) createAuditEvent(
 		RequestID:        requestID,
 		Timestamp:        start,
 		EventType:        "llm_request",
-		UserID:           userInfo.UserID,
-		ClientID:         userInfo.ClientID,
-		Permissions:      userInfo.Permissions,
+		Session:          *session,
 		Method:           r.Method,
 		Path:             r.URL.Path,
 		Endpoint:         fmt.Sprintf("%s %s", r.Method, r.URL.Path),
@@ -310,8 +296,7 @@ func (am *auditMiddleware) logAuditEvent(event *Event) {
 		slog.String("trace_id", event.TraceID),
 		slog.String("request_id", event.RequestID),
 		slog.String("event_type", event.EventType),
-		slog.String("user_id", event.UserID),
-		slog.String("client_id", event.ClientID),
+		slog.String("user_id", event.Session.UserID),
 		slog.String("method", event.Method),
 		slog.String("endpoint", event.Endpoint),
 		slog.String("client_ip", event.ClientIP),
@@ -341,32 +326,13 @@ func (am *auditMiddleware) shouldCaptureBody(r *http.Request) bool {
 	return r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch
 }
 
-func (am *auditMiddleware) extractUserInfo(r *http.Request) UserInfo {
-	token := am.extractBearerToken(r)
-	if token == "" || am.extractor == nil {
-		return UserInfo{}
+func (am *auditMiddleware) extractUserInfo(r *http.Request) authn.Session {
+	session, ok := r.Context().Value(authn.SessionKey).(authn.Session)
+	if !ok {
+		return authn.Session{}
 	}
 
-	userInfo, err := am.extractor.ExtractUserInfo(r.Context(), token)
-	if err != nil {
-		return UserInfo{}
-	}
-
-	return userInfo
-}
-
-func (am *auditMiddleware) extractBearerToken(r *http.Request) string {
-	auth := r.Header.Get("Authorization")
-	if auth == "" {
-		return ""
-	}
-
-	parts := strings.SplitN(auth, " ", 2)
-	if len(parts) != 2 || parts[0] != "Bearer" {
-		return ""
-	}
-
-	return parts[1]
+	return session
 }
 
 func (am *auditMiddleware) extractClientIP(r *http.Request) string {
