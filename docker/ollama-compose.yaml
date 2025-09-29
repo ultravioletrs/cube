@@ -35,20 +35,6 @@ services:
     #           capabilities:
     #             - gpu
 
-  open-webui:
-    profiles: ["ollama", "default"]
-    container_name: open-webui
-    image: ghcr.io/open-webui/open-webui:0.3.32-ollama
-    restart: unless-stopped
-    volumes:
-      - open-webui:/app/backend/data
-    ports:
-      - 3000:8080
-    environment:
-      - OLLAMA_BASE_URL=http://ollama:11434
-    networks:
-      - cube-network
-
   pull-tinyllama:
     profiles: ["ollama", "default"]
     image: docker:27.3.1
