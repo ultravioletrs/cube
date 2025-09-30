@@ -54,7 +54,9 @@ type Event struct {
 	ResponseSize     int64         `json:"response_size"`
 	RequestSize      int64         `json:"request_size"`
 	Duration         time.Duration `json:"duration"`
+	DurationMs       float64       `json:"duration_ms"`
 	UpstreamDuration time.Duration `json:"upstream_duration,omitempty"`
+	UpstreamMs       float64       `json:"upstream_ms,omitempty"`
 
 	// LLM specific
 	Model        string  `json:"model,omitempty"`
@@ -95,6 +97,7 @@ type Config struct {
 	EnableTokens     bool
 	SensitiveHeaders []string
 	ComplianceMode   bool
+	MaxBodyCapture   int
 }
 
 // responseCapture captures response data for audit logging.
@@ -122,6 +125,10 @@ func (rc *responseCapture) Write(data []byte) (int, error) {
 
 // NewAuditMiddleware creates a new audit middleware instance.
 func NewAuditMiddleware(logger *slog.Logger, config Config) Service {
+	if config.MaxBodyCapture == 0 {
+		config.MaxBodyCapture = 10240 // 10KB default
+	}
+
 	return &auditMiddleware{
 		logger: logger,
 		config: config,
@@ -159,7 +166,7 @@ func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 		var requestBody []byte
 
 		if am.shouldCaptureBody(r) {
-			body, err := io.ReadAll(r.Body)
+			body, err := io.ReadAll(io.LimitReader(r.Body, int64(am.config.MaxBodyCapture)))
 			if err == nil {
 				requestBody = body
 				r.Body = io.NopCloser(bytes.NewReader(body))
@@ -198,6 +205,10 @@ func (am *auditMiddleware) createAuditEvent(
 	upstreamDuration time.Duration,
 	requestBody []byte,
 ) Event {
+	duration := time.Since(start)
+	durationMs := float64(duration.Nanoseconds()) / 1e6
+	upstreamMs := float64(upstreamDuration.Nanoseconds()) / 1e6
+
 	event := Event{
 		TraceID:          traceID,
 		RequestID:        requestID,
@@ -212,8 +223,10 @@ func (am *auditMiddleware) createAuditEvent(
 		StatusCode:       capture.statusCode,
 		ResponseSize:     capture.size,
 		RequestSize:      r.ContentLength,
-		Duration:         time.Since(start),
+		Duration:         duration,
+		DurationMs:       durationMs,
 		UpstreamDuration: upstreamDuration,
+		UpstreamMs:       upstreamMs,
 		Headers:          am.sanitizeHeaders(r.Header),
 		TLSVersion:       am.getTLSVersion(r),
 		ComplianceTags:   []string{"enterprise", "audit"},
@@ -230,7 +243,9 @@ func (am *auditMiddleware) createAuditEvent(
 	}
 
 	// Perform content analysis
-	event.PIIDetected = am.detectPII(requestBody, capture.body.Bytes())
+	if am.config.EnablePIIMask {
+		event.PIIDetected = am.detectPII(requestBody, capture.body.Bytes())
+	}
 	event.ContentFiltered = am.checkContentFilter(&event)
 
 	return event
@@ -288,28 +303,43 @@ func (am *auditMiddleware) extractLLMResponse(event *Event, responseBody []byte)
 }
 
 func (am *auditMiddleware) logAuditEvent(event *Event) {
-	// Convert duration to milliseconds for logging
-	durationMs := float64(event.Duration.Nanoseconds()) / 1e6
-	upstreamMs := float64(event.UpstreamDuration.Nanoseconds()) / 1e6
-
-	am.logger.Info("audit_event",
+	logAttrs := []slog.Attr{
 		slog.String("trace_id", event.TraceID),
 		slog.String("request_id", event.RequestID),
+		slog.Time("timestamp", event.Timestamp),
 		slog.String("event_type", event.EventType),
 		slog.String("user_id", event.Session.UserID),
 		slog.String("method", event.Method),
+		slog.String("path", event.Path),
 		slog.String("endpoint", event.Endpoint),
 		slog.String("client_ip", event.ClientIP),
 		slog.Int("status_code", event.StatusCode),
-		slog.Float64("duration_ms", durationMs),
-		slog.Float64("upstream_duration_ms", upstreamMs),
-		slog.String("model", event.Model),
-		slog.Int("input_tokens", event.InputTokens),
-		slog.Int("output_tokens", event.OutputTokens),
+		slog.Float64("duration_ms", event.DurationMs),
+		slog.Float64("upstream_duration_ms", event.UpstreamMs),
+		slog.Int64("response_size", event.ResponseSize),
+		slog.Int64("request_size", event.RequestSize),
+	}
+
+	if event.Model != "" {
+		logAttrs = append(logAttrs,
+			slog.String("model", event.Model),
+			slog.Int("input_tokens", event.InputTokens),
+			slog.Int("output_tokens", event.OutputTokens),
+		)
+	}
+
+	logAttrs = append(logAttrs,
 		slog.Bool("pii_detected", event.PIIDetected),
 		slog.Bool("content_filtered", event.ContentFiltered),
-		slog.Any("metadata", event),
 	)
+
+	if event.TLSVersion != "" {
+		logAttrs = append(logAttrs, slog.String("tls_version", event.TLSVersion))
+	}
+
+	logAttrs = append(logAttrs, slog.Any("event", event))
+
+	am.logger.LogAttrs(context.Background(), slog.LevelInfo, "audit_event", logAttrs...)
 }
 
 // Utility functions.
