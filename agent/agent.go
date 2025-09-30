@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/errors"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/quoteprovider"
@@ -49,7 +48,6 @@ type agentService struct {
 	config    *Config
 	provider  attestation.Provider
 	transport *http.Transport
-	auth      authn.Authentication
 }
 
 type Service interface {
@@ -59,7 +57,7 @@ type Service interface {
 	) ([]byte, error)
 }
 
-func New(config *Config, auth authn.Authentication, provider attestation.Provider) (Service, error) {
+func New(config *Config, provider attestation.Provider) (Service, error) {
 	if config.OllamaURL == "" {
 		return nil, errors.New("ollama URL is required")
 	}
@@ -83,7 +81,6 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 		config:    config,
 		transport: transport,
 		provider:  provider,
-		auth:      auth,
 	}, nil
 }
 

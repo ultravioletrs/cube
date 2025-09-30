@@ -140,7 +140,7 @@ func main() {
 	svc, err := agent.New(&agent.Config{
 		OllamaURL: cfg.TargetURL,
 		TLS:       agent.InsecureTLSConfig(),
-	}, auth, provider)
+	}, provider)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent service: %s", err))
 
