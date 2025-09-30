@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"log/slog"
 	"os"
 
 	mglog "github.com/absmach/supermq/logger"
@@ -166,7 +165,6 @@ func main() {
 	}
 
 	auditSvc := audit.NewAuditMiddleware(logger, audit.Config{
-		LogLevel:         slog.LevelDebug,
 		ComplianceMode:   true,
 		EnablePIIMask:    true,
 		EnableTokens:     true,
