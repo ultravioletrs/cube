@@ -25,6 +25,36 @@ services:
       timeout: 10s
       retries: 5
 
+  opensearch-init:
+    image: curlimages/curl:latest
+    container_name: opensearch-init
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - cube-network
+    volumes:
+      - ./opensearch-index-template.json:/tmp/index-template.json:ro
+    command: >
+      sh -c '
+        echo "Creating index template for audit logs...";
+        curl -X PUT "http://opensearch:9200/_index_template/cube-audit-template" 
+          -H "Content-Type: application/json" 
+          -d @/tmp/index-template.json;
+        
+        echo "";
+        echo "Creating initial indices...";
+        TODAY=$$(date +%%Y.%%m.%%d);
+        curl -X PUT "http://opensearch:9200/cube-audit-logs-$$TODAY";
+        curl -X PUT "http://opensearch:9200/cube-error-logs-$$TODAY";
+        curl -X PUT "http://opensearch:9200/cube-app-logs-$$TODAY";
+        
+        echo "";
+        echo "OpenSearch setup complete!";
+        curl -s "http://opensearch:9200/_cat/indices?v";
+      '
+    restart: "no"
+
   fluent-bit:
     image: fluent/fluent-bit:2.2
     container_name: fluent-bit
@@ -36,6 +66,8 @@ services:
     depends_on:
       opensearch:
         condition: service_healthy
+      opensearch-init:
+        condition: service_completed_successfully
     networks:
       - cube-network
     restart: unless-stopped

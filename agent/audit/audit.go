@@ -92,7 +92,6 @@ type Service interface {
 }
 
 type Config struct {
-	LogLevel         slog.Level
 	EnablePIIMask    bool
 	EnableTokens     bool
 	SensitiveHeaders []string
