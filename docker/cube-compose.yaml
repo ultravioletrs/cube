@@ -3,29 +3,42 @@
 
 volumes:
   opensearch-data:
+
 services:
-  cube-proxy:
-    container_name: cube-proxy
-    image: ghcr.io/ultravioletrs/cube/proxy:latest
-    restart: on-failure
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9600:9600"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
     networks:
       - cube-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  fluent-bit:
+    image: fluent/fluent-bit:2.2
+    container_name: fluent-bit
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
-      - auth
-    environment:
-      UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
-      UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
-      UV_CUBE_PROXY_HOST: ${UV_CUBE_PROXY_HOST}
-      UV_CUBE_PROXY_PORT: ${UV_CUBE_PROXY_PORT}
-      UV_CUBE_PROXY_SERVER_CERT: ${UV_CUBE_PROXY_SERVER_CERT}
-      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY}  
-      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
-      UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
-      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
-      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
-    ports:
-      - ${UV_CUBE_PROXY_PORT}:${UV_CUBE_PROXY_PORT}
-  
+      opensearch:
+        condition: service_healthy
+    networks:
+      - cube-network
+    restart: unless-stopped
+
   cube-agent:
     container_name: cube-agent
     image: ghcr.io/ultravioletrs/cube/agent:latest
@@ -49,7 +62,6 @@ services:
       SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
       SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
     volumes:
-      - ./logs:/var/log/agent
       # Auth gRPC client certificates
       - type: bind
         source: ${SMQ_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
@@ -66,20 +78,38 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
-  opensearch:
-    image: opensearchproject/opensearch:2.11.0
-    environment:
-      - discovery.type=single-node
-      - plugins.security.disabled=true
-    ports:
-      - "9200:9200"
-    volumes:
-      - opensearch-data:/usr/share/opensearch/data
-      
-  fluent-bit:
-    image: fluent/fluent-bit:2.2
-    volumes:
-      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
-      - ./logs:/var/log/agent:ro
+    labels:
+      # Labels for log parsing
+      logging: "cube-agent"
+      service: "agent"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
     depends_on:
-      - opensearch
+      - fluent-bit
+      - auth
+
+  cube-proxy:
+    container_name: cube-proxy
+    image: ghcr.io/ultravioletrs/cube/proxy:latest
+    restart: on-failure
+    networks:
+      - cube-network
+    depends_on:
+      - cube-agent
+    environment:
+      UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
+      UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
+      UV_CUBE_PROXY_HOST: ${UV_CUBE_PROXY_HOST}
+      UV_CUBE_PROXY_PORT: ${UV_CUBE_PROXY_PORT}
+      UV_CUBE_PROXY_SERVER_CERT: ${UV_CUBE_PROXY_SERVER_CERT}
+      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY}  
+      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
+      UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
+      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
+      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
+    ports:
+      - ${UV_CUBE_PROXY_PORT}:${UV_CUBE_PROXY_PORT}
