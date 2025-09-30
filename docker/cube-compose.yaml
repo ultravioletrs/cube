@@ -30,6 +30,7 @@ services:
     container_name: fluent-bit
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
@@ -88,6 +89,7 @@ services:
         max-size: "10m"
         max-file: "3"
         labels: "logging,service"
+        tag: "cube-agent|{{.Name}}"
     depends_on:
       - fluent-bit
       - auth
