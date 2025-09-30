@@ -13,7 +13,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/errors"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/quoteprovider"
@@ -54,7 +53,6 @@ type agentService struct {
 	config    *Config
 	provider  attestation.Provider
 	transport *http.Transport
-	auth      authn.Authentication
 	routes    RouteRules
 }
 
@@ -68,7 +66,7 @@ type Service interface {
 	GetRoutes() []RouteRule
 }
 
-func New(config *Config, auth authn.Authentication, provider attestation.Provider) (Service, error) {
+func New(config *Config, provider attestation.Provider) (Service, error) {
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
@@ -97,7 +95,6 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 		config:    config,
 		transport: transport,
 		provider:  provider,
-		auth:      auth,
 		routes:    routes,
 	}, nil
 }

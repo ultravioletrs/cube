@@ -156,7 +156,7 @@ func main() {
 		return
 	}
 
-	svc, err := agent.New(&config, auth, provider)
+	svc, err := agent.New(&config, provider)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent service: %s", err))
 
