@@ -38,9 +38,7 @@ services:
     command: >
       sh -c '
         echo "Creating index template for audit logs...";
-        curl -X PUT "http://opensearch:9200/_index_template/cube-audit-template" 
-          -H "Content-Type: application/json" 
-          -d @/tmp/index-template.json;
+        curl -X PUT "http://opensearch:9200/_index_template/cube-audit-template" -H "Content-Type: application/json" -d @/tmp/index-template.json;
         
         echo "";
         echo "Creating initial indices...";
