@@ -1,0 +1,133 @@
+{
+  "index_patterns": ["cube-audit-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.refresh_interval": "5s"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date"
+        },
+        "timestamp": {
+          "type": "date"
+        },
+        "trace_id": {
+          "type": "keyword"
+        },
+        "request_id": {
+          "type": "keyword"
+        },
+        "event_type": {
+          "type": "keyword"
+        },
+        "session": {
+          "properties": {
+            "user_id": {
+              "type": "keyword"
+            },
+            "domain_id": {
+              "type": "keyword"
+            },
+            "domain_user_id": {
+              "type": "keyword"
+            }
+          }
+        },
+        "auth_method": {
+          "type": "keyword"
+        },
+        "method": {
+          "type": "keyword"
+        },
+        "path": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "endpoint": {
+          "type": "keyword"
+        },
+        "client_ip": {
+          "type": "ip"
+        },
+        "user_agent": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "status_code": {
+          "type": "integer"
+        },
+        "response_size": {
+          "type": "long"
+        },
+        "request_size": {
+          "type": "long"
+        },
+        "duration_ms": {
+          "type": "float"
+        },
+        "upstream_ms": {
+          "type": "float"
+        },
+        "model": {
+          "type": "keyword"
+        },
+        "input_tokens": {
+          "type": "integer"
+        },
+        "output_tokens": {
+          "type": "integer"
+        },
+        "temperature": {
+          "type": "float"
+        },
+        "max_tokens": {
+          "type": "integer"
+        },
+        "tls_version": {
+          "type": "keyword"
+        },
+        "pii_detected": {
+          "type": "boolean"
+        },
+        "content_filtered": {
+          "type": "boolean"
+        },
+        "compliance_tags": {
+          "type": "keyword"
+        },
+        "error": {
+          "type": "text"
+        },
+        "error_code": {
+          "type": "keyword"
+        },
+        "cluster": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "source": {
+          "type": "keyword"
+        },
+        "container_name": {
+          "type": "keyword"
+        },
+        "container_id": {
+          "type": "keyword"
+        }
+      }
+    }
+  }
+}

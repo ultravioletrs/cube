@@ -12,8 +12,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/absmach/supermq/api/http/util"
-	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/errors"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/quoteprovider"
@@ -50,7 +48,6 @@ type agentService struct {
 	config    *Config
 	provider  attestation.Provider
 	transport *http.Transport
-	auth      authn.Authentication
 }
 
 type Service interface {
@@ -58,11 +55,9 @@ type Service interface {
 	Attestation(
 		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
 	) ([]byte, error)
-	Authenticate(req *http.Request) error
-	AuthMiddleware(next http.Handler) http.Handler
 }
 
-func New(config *Config, auth authn.Authentication, provider attestation.Provider) (Service, error) {
+func New(config *Config, provider attestation.Provider) (Service, error) {
 	if config.OllamaURL == "" {
 		return nil, errors.New("ollama URL is required")
 	}
@@ -86,23 +81,7 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 		config:    config,
 		transport: transport,
 		provider:  provider,
-		auth:      auth,
 	}, nil
-}
-
-func (a *agentService) Authenticate(req *http.Request) error {
-	token := util.ExtractBearerToken(req)
-
-	if token == "" {
-		return errors.Wrap(ErrUnauthorized, errors.New("missing or invalid token"))
-	}
-
-	_, err := a.auth.Authenticate(req.Context(), token)
-	if err != nil {
-		return errors.Wrap(ErrUnauthorized, err)
-	}
-
-	return nil
 }
 
 func (a *agentService) Proxy() *httputil.ReverseProxy {
@@ -115,6 +94,7 @@ func (a *agentService) Proxy() *httputil.ReverseProxy {
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
+	proxy.ErrorLog = log.New(log.Writer(), "ProxyError: ", log.LstdFlags)
 	proxy.Transport = a.transport
 
 	originalDirector := proxy.Director
@@ -162,20 +142,6 @@ func (a *agentService) Attestation(
 	default:
 		return []byte{}, ErrAttestationType
 	}
-}
-
-func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		err := a.Authenticate(r)
-		if err != nil {
-			log.Printf("Authentication failed: %v", err)
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
 
 func DefaultTLSConfig() TLSConfig {

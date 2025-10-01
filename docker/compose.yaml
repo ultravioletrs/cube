@@ -14,7 +14,7 @@ include:
     env_file: .env
   - path: ./supermq-compose.yaml
     env_file: .env
-  - path: ./proxy-compose.yaml
+  - path: ./cube-compose.yaml
     env_file: .env
 
 services:
