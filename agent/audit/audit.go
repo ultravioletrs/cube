@@ -191,7 +191,7 @@ func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 
 		// Create and log audit event
 		event := am.createAuditEvent(r, capture, &userInfo, traceID, requestID, start, upstreamDuration, requestBody)
-		am.logAuditEvent(&event)
+		am.logAuditEvent(ctx, &event)
 	})
 }
 
@@ -245,6 +245,7 @@ func (am *auditMiddleware) createAuditEvent(
 	if am.config.EnablePIIMask {
 		event.PIIDetected = am.detectPII(requestBody, capture.body.Bytes())
 	}
+
 	event.ContentFiltered = am.checkContentFilter(&event)
 
 	return event
@@ -301,7 +302,7 @@ func (am *auditMiddleware) extractLLMResponse(event *Event, responseBody []byte)
 	}
 }
 
-func (am *auditMiddleware) logAuditEvent(event *Event) {
+func (am *auditMiddleware) logAuditEvent(ctx context.Context, event *Event) {
 	logAttrs := []slog.Attr{
 		slog.String("trace_id", event.TraceID),
 		slog.String("request_id", event.RequestID),
@@ -338,7 +339,7 @@ func (am *auditMiddleware) logAuditEvent(event *Event) {
 
 	logAttrs = append(logAttrs, slog.Any("event", event))
 
-	am.logger.LogAttrs(context.Background(), slog.LevelInfo, "audit_event", logAttrs...)
+	am.logger.LogAttrs(ctx, slog.LevelInfo, "audit_event", logAttrs...)
 }
 
 // Utility functions.
