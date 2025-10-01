@@ -94,6 +94,7 @@ func (a *agentService) Proxy() *httputil.ReverseProxy {
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
 
+	proxy.ErrorLog = log.New(log.Writer(), "ProxyError: ", log.LstdFlags)
 	proxy.Transport = a.transport
 
 	originalDirector := proxy.Director

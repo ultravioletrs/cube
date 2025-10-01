@@ -44,7 +44,7 @@ type Config struct {
 	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
 	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
 	Vmpl          int    `env:"AGENT_VMPL"                envDefault:"2"`
-	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
+	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:""`
 }
 
 func main() {
@@ -164,9 +164,11 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
+	handler := api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp)
+
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, &httpServerConfig,
-		api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp), logger, cfg.CAUrl)
+		handler, logger, cfg.CAUrl)
 
 	g.Go(func() error {
 		return httpSvr.Start()
