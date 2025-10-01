@@ -180,9 +180,11 @@ func main() {
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
+	handler := api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp)
+
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, &httpServerConfig,
-		api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp), logger, cfg.CAUrl)
+		handler, logger, cfg.CAUrl)
 
 	g.Go(func() error {
 		return httpSvr.Start()
