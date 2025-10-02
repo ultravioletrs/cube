@@ -1,0 +1,59 @@
+#!/bin/sh
+
+DAEMON="cube-agent"
+PIDFILE="/var/run/$DAEMON.pid"
+DAEMON_PATH="/usr/bin/$DAEMON"
+ENV_FILE="/etc/cube/agent.env"
+
+# Source environment variables
+[ -r "$ENV_FILE" ] && . "$ENV_FILE"
+
+start() {
+    printf "Starting $DAEMON: "
+    
+    # Wait for LLM backend to be ready
+    for i in $(seq 1 30); do
+        if curl -s "${UV_CUBE_AGENT_TARGET_URL:-http://localhost:11434}" > /dev/null 2>&1; then
+            break
+        fi
+        sleep 2
+    done
+    
+    start-stop-daemon -S -q -b -m -p "$PIDFILE" -x "$DAEMON_PATH"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "OK"
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+stop() {
+    printf "Stopping $DAEMON: "
+    start-stop-daemon -K -q -p "$PIDFILE"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        rm -f "$PIDFILE"
+        echo "OK"
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+case "$1" in
+    start|stop|restart)
+        "$1";;
+    reload)
+        restart;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload}"
+        exit 1
+esac

@@ -1,0 +1,70 @@
+config BR2_PACKAGE_CUBE_AGENT
+	bool "cube-agent"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_HOST_GO_TARGET_CGO_LINKING_SUPPORTS
+	help
+	  Cube Agent - Ultraviolet Cube Agent for AI workloads
+
+	  https://github.com/ultravioletrs/cube
+
+if BR2_PACKAGE_CUBE_AGENT
+
+config BR2_PACKAGE_CUBE_AGENT_INSTANCE_ID
+	string "Agent Instance ID"
+	default "cube-agent-01"
+	help
+	  Unique identifier for this agent instance
+
+config BR2_PACKAGE_CUBE_AGENT_HOST
+	string "Agent Host"
+	default "0.0.0.0"
+	help
+	  Host address for the agent to bind to
+
+config BR2_PACKAGE_CUBE_AGENT_PORT
+	string "Agent Port"
+	default "7001"
+	help
+	  Port for the agent to listen on
+
+config BR2_PACKAGE_CUBE_AGENT_LOG_LEVEL
+	string "Log Level"
+	default "info"
+	help
+	  Logging level (debug, info, warn, error)
+
+choice
+	prompt "LLM Backend"
+	default BR2_PACKAGE_CUBE_AGENT_BACKEND_OLLAMA
+	help
+	  Select the LLM backend to use
+
+config BR2_PACKAGE_CUBE_AGENT_BACKEND_OLLAMA
+	bool "Ollama"
+	select BR2_PACKAGE_OLLAMA
+	help
+	  Use Ollama as the LLM backend
+
+config BR2_PACKAGE_CUBE_AGENT_BACKEND_VLLM
+	bool "vLLM"
+	select BR2_PACKAGE_VLLM
+	help
+	  Use vLLM as the LLM backend
+
+config BR2_PACKAGE_CUBE_AGENT_BACKEND_CUSTOM
+	bool "Custom URL"
+	help
+	  Use a custom LLM backend URL
+
+endchoice
+
+config BR2_PACKAGE_CUBE_AGENT_TARGET_URL
+	string "Custom Target URL"
+	depends on BR2_PACKAGE_CUBE_AGENT_BACKEND_CUSTOM
+	help
+	  Custom LLM backend URL (e.g., http://192.168.1.100:8000)
+
+endif
+
+comment "cube-agent needs a toolchain w/ threads"
+	depends on !BR2_TOOLCHAIN_HAS_THREADS

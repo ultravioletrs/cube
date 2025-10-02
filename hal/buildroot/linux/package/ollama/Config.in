@@ -1,0 +1,51 @@
+config BR2_PACKAGE_OLLAMA
+	bool "ollama"
+	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
+	depends on BR2_PACKAGE_HOST_GO_TARGET_CGO_LINKING_SUPPORTS
+	help
+	  Ollama - Get up and running with large language models locally
+
+	  https://github.com/ollama/ollama
+
+if BR2_PACKAGE_OLLAMA
+
+config BR2_PACKAGE_OLLAMA_MODELS
+	bool "Install default models"
+	default y
+	help
+	  Automatically pull default models on first boot
+	  (tinyllama:1.1b, starcoder2:3b, nomic-embed-text:v1.5)
+
+config BR2_PACKAGE_OLLAMA_CUSTOM_MODELS
+	string "Custom models to install"
+	depends on BR2_PACKAGE_OLLAMA_MODELS
+	help
+	  Space-separated list of additional Ollama models to install
+	  Example: "llama2:7b mistral:7b codellama:13b"
+
+config BR2_PACKAGE_OLLAMA_GPU_SUPPORT
+	bool "Enable GPU support"
+	help
+	  Enable GPU acceleration (requires appropriate drivers)
+
+choice
+	prompt "GPU Type"
+	depends on BR2_PACKAGE_OLLAMA_GPU_SUPPORT
+	default BR2_PACKAGE_OLLAMA_GPU_NVIDIA
+
+config BR2_PACKAGE_OLLAMA_GPU_NVIDIA
+	bool "NVIDIA GPU"
+	help
+	  Use NVIDIA GPU acceleration
+
+config BR2_PACKAGE_OLLAMA_GPU_AMD
+	bool "AMD GPU (ROCm)"
+	help
+	  Use AMD GPU acceleration with ROCm
+
+endchoice
+
+endif
+
+comment "ollama needs a toolchain w/ threads, dynamic library"
+	depends on !BR2_TOOLCHAIN_HAS_THREADS || BR2_STATIC_LIBS

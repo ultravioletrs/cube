@@ -1,0 +1,25 @@
+[Unit]
+Description=Ollama Service
+Documentation=https://github.com/ollama/ollama
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ollama
+Group=ollama
+Environment="OLLAMA_HOST=0.0.0.0:11434"
+Environment="OLLAMA_MODELS=/var/lib/ollama/models"
+ExecStart=/usr/bin/ollama serve
+ExecStartPost=/usr/libexec/ollama/pull-models.sh
+Restart=always
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+
+# Directories
+StateDirectory=ollama
+StateDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target
