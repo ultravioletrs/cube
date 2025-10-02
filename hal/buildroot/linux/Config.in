@@ -1,2 +1,5 @@
-source "$BR2_EXTERNAL_CUBE_PATH/package/setup/Config.in"
-source "$BR2_EXTERNAL_CUBE_PATH/package/snpguest/Config.in"
+menu "Cube AI Services"
+	source "$BR2_EXTERNAL_CUBE_PATH/package/agent/Config.in"
+	source "$BR2_EXTERNAL_CUBE_PATH/package/ollama/Config.in"
+	source "$BR2_EXTERNAL_CUBE_PATH/package/vllm/Config.in"
+endmenu

@@ -1,0 +1,54 @@
+#!/bin/sh
+
+DAEMON="ollama"
+PIDFILE="/var/run/$DAEMON.pid"
+DAEMON_PATH="/usr/bin/ollama"
+OLLAMA_HOST="0.0.0.0:11434"
+
+export OLLAMA_HOST
+
+start() {
+    printf "Starting $DAEMON: "
+    start-stop-daemon -S -q -b -m -p "$PIDFILE" \
+        -c ollama:ollama -x "$DAEMON_PATH" -- serve
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        echo "OK"
+        # Pull models in background
+        if [ -x /usr/libexec/ollama/pull-models.sh ]; then
+            ( sleep 15; /usr/libexec/ollama/pull-models.sh ) &
+        fi
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+stop() {
+    printf "Stopping $DAEMON: "
+    start-stop-daemon -K -q -p "$PIDFILE"
+    status=$?
+    if [ "$status" -eq 0 ]; then
+        rm -f "$PIDFILE"
+        echo "OK"
+    else
+        echo "FAIL"
+    fi
+    return "$status"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+case "$1" in
+    start|stop|restart)
+        "$1";;
+    reload)
+        restart;;
+    *)
+        echo "Usage: $0 {start|stop|restart|reload}"
+        exit 1
+esac
