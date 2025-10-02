@@ -1,0 +1,39 @@
+config BR2_PACKAGE_VLLM
+	bool "vllm"
+	depends on BR2_PACKAGE_PYTHON3
+	depends on BR2_PACKAGE_PYTHON_PYTORCH
+	help
+	  vLLM - High-throughput and memory-efficient inference engine
+
+	  https://github.com/vllm-project/vllm
+
+if BR2_PACKAGE_VLLM
+
+config BR2_PACKAGE_VLLM_MODEL
+	string "Model to use"
+	default "microsoft/DialoGPT-medium"
+	help
+	  HuggingFace model identifier to use with vLLM
+
+config BR2_PACKAGE_VLLM_GPU_MEMORY
+	string "GPU Memory Utilization"
+	default "0.85"
+	help
+	  Fraction of GPU memory to use (0.0-1.0)
+
+config BR2_PACKAGE_VLLM_MAX_MODEL_LEN
+	string "Maximum Model Length"
+	default "1024"
+	help
+	  Maximum sequence length for the model
+
+config BR2_PACKAGE_VLLM_CUSTOM_MODEL_PATH
+	string "Custom model path"
+	help
+	  Path to custom model files (leave empty to download from HuggingFace)
+	  If specified, the model will be copied from this path
+
+endif
+
+comment "vllm needs python3 and pytorch"
+	depends on !BR2_PACKAGE_PYTHON3 || !BR2_PACKAGE_PYTHON_PYTORCH
