@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/absmach/supermq/api/http/util"
@@ -29,21 +30,25 @@ var (
 	ErrAttestationType = errors.New("invalid attestation type")
 	// ErrUnauthorized indicates that authentication failed.
 	ErrUnauthorized = errors.New("unauthorized")
+	// ErrNoMatchingRoute indicates that no route matched the request.
+	ErrNoMatchingRoute = errors.New("no matching route found")
+	// errRouteNotFound indicates that the specified route was not found.
+	errRouteNotFound = errors.New("route not found")
 )
 
 type TLSConfig struct {
-	Enabled            bool
-	InsecureSkipVerify bool
-	CertFile           string
-	KeyFile            string
-	CAFile             string
-	MinVersion         uint16
-	MaxVersion         uint16
+	Enabled            bool   `json:"enabled"`
+	InsecureSkipVerify bool   `json:"insecure_skip_verify"`
+	CertFile           string `json:"cert_file"`
+	KeyFile            string `json:"key_file"`
+	CAFile             string `json:"ca_file"`
+	MinVersion         uint16 `json:"min_version"`
+	MaxVersion         uint16 `json:"max_version"`
 }
 
 type Config struct {
-	OllamaURL string
-	TLS       TLSConfig
+	Router RouterConfig `json:"router"`
+	TLS    TLSConfig    `json:"tls"`
 }
 
 type agentService struct {
@@ -51,22 +56,22 @@ type agentService struct {
 	provider  attestation.Provider
 	transport *http.Transport
 	auth      authn.Authentication
+	routes    RouteRules
 }
 
 type Service interface {
-	Proxy() *httputil.ReverseProxy
+	Proxy() http.Handler
 	Attestation(
 		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
 	) ([]byte, error)
 	Authenticate(req *http.Request) error
 	AuthMiddleware(next http.Handler) http.Handler
+	AddRoute(rule *RouteRule) error
+	RemoveRoute(name string) error
+	GetRoutes() []RouteRule
 }
 
 func New(config *Config, auth authn.Authentication, provider attestation.Provider) (Service, error) {
-	if config.OllamaURL == "" {
-		return nil, errors.New("ollama URL is required")
-	}
-
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
@@ -82,11 +87,21 @@ func New(config *Config, auth authn.Authentication, provider attestation.Provide
 		transport.TLSClientConfig = tlsConfig
 	}
 
+	routes := make(RouteRules, len(config.Router.Routes))
+	copy(routes, config.Router.Routes)
+
+	for i := range routes {
+		routes[i].compiledMatcher = CreateCompositeMatcher(routes[i].Matchers)
+	}
+
+	sort.Sort(routes)
+
 	return &agentService{
 		config:    config,
 		transport: transport,
 		provider:  provider,
 		auth:      auth,
+		routes:    routes,
 	}, nil
 }
 
@@ -105,31 +120,91 @@ func (a *agentService) Authenticate(req *http.Request) error {
 	return nil
 }
 
-func (a *agentService) Proxy() *httputil.ReverseProxy {
-	target, err := url.Parse(a.config.OllamaURL)
-	if err != nil {
-		log.Printf("Invalid Ollama URL: %v", err)
+func (a *agentService) Proxy() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		targetURL, err := a.determineTarget(r)
+		if err != nil {
+			log.Printf("Failed to determine target: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 
-		return nil
+			return
+		}
+
+		target, err := url.Parse(targetURL)
+		if err != nil {
+			log.Printf("Invalid target URL %s: %v", targetURL, err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
+			return
+		}
+
+		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.Transport = a.transport
+
+		originalDirector := proxy.Director
+		proxy.Director = func(req *http.Request) {
+			originalDirector(req)
+			a.modifyHeaders(req)
+			log.Printf("Agent forwarding to %s: %s %s", targetURL, req.Method, req.URL.Path)
+		}
+
+		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
+		proxy.ServeHTTP(w, r)
+	})
+}
+
+func (a *agentService) AddRoute(rule *RouteRule) error {
+	if rule.Name == "" {
+		return errors.New("route name is required")
 	}
 
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	proxy.Transport = a.transport
-
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
-		originalDirector(req)
-		a.modifyHeaders(req)
-		log.Printf("Agent forwarding to Ollama: %s %s", req.Method, req.URL.Path)
+	if rule.TargetURL == "" {
+		return errors.New("target URL is required")
 	}
 
-	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		log.Printf("Proxy error: %v", err)
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+	if _, err := url.Parse(rule.TargetURL); err != nil {
+		return fmt.Errorf("invalid target URL: %w", err)
 	}
 
-	return proxy
+	rule.compiledMatcher = CreateCompositeMatcher(rule.Matchers)
+
+	err := a.RemoveRoute(rule.Name)
+	if err != nil && !errors.Contains(err, errRouteNotFound) {
+		return err
+	}
+
+	insertPos := sort.Search(len(a.routes), func(i int) bool {
+		return a.routes[i].Priority <= rule.Priority
+	})
+
+	a.routes = append(a.routes, RouteRule{})
+	copy(a.routes[insertPos+1:], a.routes[insertPos:])
+	a.routes[insertPos] = *rule
+
+	return nil
+}
+
+func (a *agentService) RemoveRoute(name string) error {
+	for i, route := range a.routes {
+		if route.Name == name {
+			a.routes = append(a.routes[:i], a.routes[i+1:]...)
+
+			return nil
+		}
+	}
+
+	return errRouteNotFound
+}
+
+func (a *agentService) GetRoutes() []RouteRule {
+	routes := make([]RouteRule, len(a.routes))
+	copy(routes, a.routes)
+
+	return routes
 }
 
 func (a *agentService) Attestation(
@@ -178,27 +253,8 @@ func (a *agentService) AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func DefaultTLSConfig() TLSConfig {
-	return TLSConfig{
-		Enabled:            true,
-		InsecureSkipVerify: false,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS13,
-	}
-}
-
-func InsecureTLSConfig() TLSConfig {
-	return TLSConfig{
-		Enabled:            true,
-		InsecureSkipVerify: true,
-		MinVersion:         tls.VersionTLS12,
-		MaxVersion:         tls.VersionTLS13,
-	}
-}
-
 func (a *agentService) modifyHeaders(req *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
-
 	req.Header.Del("Authorization")
 }
 
@@ -225,4 +281,34 @@ func setTLSConfig(config *Config) (*tls.Config, error) {
 	}
 
 	return tlsConfig, nil
+}
+
+func (a *agentService) determineTarget(r *http.Request) (string, error) {
+	for _, route := range a.routes {
+		if route.DefaultRule {
+			continue // Skip default rules in main loop
+		}
+
+		if route.compiledMatcher != nil && route.compiledMatcher.Match(r) {
+			log.Printf("Request matched route: %s -> %s", route.Name, route.TargetURL)
+
+			return route.TargetURL, nil
+		}
+	}
+
+	for _, route := range a.routes {
+		if route.DefaultRule {
+			log.Printf("Request matched default route: %s -> %s", route.Name, route.TargetURL)
+
+			return route.TargetURL, nil
+		}
+	}
+
+	if a.config.Router.DefaultURL != "" {
+		log.Printf("Request using config default URL: %s", a.config.Router.DefaultURL)
+
+		return a.config.Router.DefaultURL, nil
+	}
+
+	return "", ErrNoMatchingRoute
 }

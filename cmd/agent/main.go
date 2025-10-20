@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -34,15 +35,15 @@ const (
 )
 
 type Config struct {
-	LogLevel      string `env:"UV_CUBE_AGENT_LOG_LEVEL"   envDefault:"info"`
-	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://ollama:11434"`
-	InstanceID    string `env:"UV_CUBE_AGENT_INSTANCE_ID" envDefault:""`
-	AgentMaaURL   string `env:"AGENT_MAA_URL"             envDefault:"https://sharedeus2.eus2.attest.azure.net"`
-	AgentOSBuild  string `env:"AGENT_OS_BUILD"            envDefault:"UVC"`
-	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
-	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
-	Vmpl          int    `env:"AGENT_VMPL"                envDefault:"2"`
-	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
+	LogLevel      string `env:"UV_CUBE_AGENT_LOG_LEVEL"     envDefault:"info"`
+	InstanceID    string `env:"UV_CUBE_AGENT_INSTANCE_ID"   envDefault:""`
+	AgentMaaURL   string `env:"AGENT_MAA_URL"               envDefault:"https://sharedeus2.eus2.attest.azure.net"`
+	AgentOSBuild  string `env:"AGENT_OS_BUILD"              envDefault:"UVC"`
+	AgentOSDistro string `env:"AGENT_OS_DISTRO"             envDefault:"UVC"`
+	AgentOSType   string `env:"AGENT_OS_TYPE"               envDefault:"UVC"`
+	Vmpl          uint   `env:"AGENT_VMPL"                  envDefault:"2"`
+	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"        envDefault:"http://am-certs:9010"`
+	TargetConfig  string `env:"UV_CUBE_AGENT_ROUTER_CONFIG" envDefault:"/etc/cube/agent/config.json"`
 }
 
 func main() {
@@ -115,9 +116,9 @@ func main() {
 
 	switch ccPlatform {
 	case attestation.SNP:
-		provider = vtpm.NewProvider(false, uint(cfg.Vmpl))
+		provider = vtpm.NewProvider(false, cfg.Vmpl)
 	case attestation.SNPvTPM:
-		provider = vtpm.NewProvider(true, uint(cfg.Vmpl))
+		provider = vtpm.NewProvider(true, cfg.Vmpl)
 	case attestation.Azure:
 		provider = azure.NewProvider()
 	case attestation.TDX:
@@ -134,10 +135,25 @@ func main() {
 		return
 	}
 
-	svc, err := agent.New(&agent.Config{
-		OllamaURL: cfg.TargetURL,
-		TLS:       agent.InsecureTLSConfig(),
-	}, auth, provider)
+	routerFile, err := os.ReadFile(cfg.TargetConfig)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	var config agent.Config
+	if err := json.Unmarshal(routerFile, &config); err != nil {
+		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	svc, err := agent.New(&config, auth, provider)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent service: %s", err))
 
