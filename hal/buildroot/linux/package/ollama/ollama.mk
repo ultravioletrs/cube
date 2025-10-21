@@ -7,7 +7,7 @@
 #
 ################################################################################
 
-OLLAMA_VERSION = 0.3.12
+OLLAMA_VERSION = 0.12.3
 OLLAMA_SITE = $(call github,ollama,ollama,v$(OLLAMA_VERSION))
 OLLAMA_LICENSE = MIT
 OLLAMA_LICENSE_FILES = LICENSE
