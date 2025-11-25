@@ -11,6 +11,7 @@ import (
 	"os"
 
 	mglog "github.com/absmach/supermq/logger"
+	smqauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/authn/authsvc"
 	"github.com/absmach/supermq/pkg/grpcclient"
 	smqserver "github.com/absmach/supermq/pkg/server"
@@ -18,6 +19,7 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/agent"
 	"github.com/ultraviolet/cube/agent/api"
+	"github.com/ultraviolet/cube/agent/audit"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
 	"github.com/ultravioletrs/cocos/pkg/attestation/tdx"
@@ -153,7 +155,7 @@ func main() {
 		return
 	}
 
-	svc, err := agent.New(&config, auth, provider)
+	svc, err := agent.New(&config, provider)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent service: %s", err))
 
@@ -162,11 +164,27 @@ func main() {
 		return
 	}
 
+	auditSvc := audit.NewAuditMiddleware(logger, audit.Config{
+		ComplianceMode:   true,
+		EnablePIIMask:    true,
+		EnableTokens:     true,
+		SensitiveHeaders: []string{},
+	})
+
+	idp := uuid.New()
+
+	authmMiddleware := smqauthn.NewAuthNMiddleware(
+		auth, smqauthn.WithAllowUnverifiedUser(true), smqauthn.WithDomainCheck(false),
+	)
+
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
+	handler := api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp)
+
 	httpSvr := http.NewServer(
-		ctx, cancel, svcName, &httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger, cfg.CAUrl)
+		ctx, cancel, svcName, &httpServerConfig,
+		handler, logger, cfg.CAUrl)
 
 	g.Go(func() error {
 		return httpSvr.Start()
