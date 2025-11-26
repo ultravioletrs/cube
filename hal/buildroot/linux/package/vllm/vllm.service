@@ -1,0 +1,30 @@
+[Unit]
+Description=vLLM OpenAI API Server
+Documentation=https://github.com/vllm-project/vllm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=vllm
+Group=vllm
+EnvironmentFile=/etc/vllm/vllm.env
+ExecStart=/usr/bin/python3 -m vllm.entrypoints.openai.api_server \
+    --model ${VLLM_MODEL} \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION} \
+    --max-model-len ${VLLM_MAX_MODEL_LEN}
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Directories
+StateDirectory=vllm
+StateDirectoryMode=0755
+CacheDirectory=vllm
+CacheDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target

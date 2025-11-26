@@ -1,0 +1,27 @@
+[Unit]
+Description=Cube Agent Service
+Documentation=https://github.com/ultravioletrs/cube
+After=network-online.target
+Wants=network-online.target
+# Add dependency on LLM backend
+After=ollama.service vllm.service
+Wants=ollama.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/cube/agent.env
+ExecStart=/usr/bin/cube-agent
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cube
+
+[Install]
+WantedBy=multi-user.target

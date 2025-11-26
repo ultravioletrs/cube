@@ -89,3 +89,68 @@ BR2_PACKAGE_OPENSSH_CLIENT=y
 BR2_PACKAGE_OPENSSH_SERVER=y
 BR2_PACKAGE_OPENSSH_KEY_UTILS=y
 BR2_PACKAGE_OPENSSH_SANDBOX=y
+
+# ==============================================================================
+# Cube AI Services
+# ==============================================================================
+
+# Go toolchain (required for cube-agent and ollama)
+BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS=y
+BR2_PACKAGE_HOST_GO_TARGET_CGO_LINKING_SUPPORTS=y
+
+# Cube Agent
+BR2_PACKAGE_CUBE_AGENT=y
+BR2_PACKAGE_CUBE_AGENT_INSTANCE_ID="cube-agent-01"
+BR2_PACKAGE_CUBE_AGENT_HOST="0.0.0.0"
+BR2_PACKAGE_CUBE_AGENT_PORT="7001"
+BR2_PACKAGE_CUBE_AGENT_LOG_LEVEL="info"
+
+# LLM Backend Selection (choose one)
+# Default: Ollama
+BR2_PACKAGE_CUBE_AGENT_BACKEND_OLLAMA=y
+# BR2_PACKAGE_CUBE_AGENT_BACKEND_VLLM is not set
+# BR2_PACKAGE_CUBE_AGENT_BACKEND_CUSTOM is not set
+# BR2_PACKAGE_CUBE_AGENT_TARGET_URL="" (only used with BACKEND_CUSTOM)
+
+# Ollama (enabled via cube-agent backend selection)
+BR2_PACKAGE_OLLAMA=y
+BR2_PACKAGE_OLLAMA_MODELS=y
+# BR2_PACKAGE_OLLAMA_CUSTOM_MODELS="llama2:7b mistral:7b"
+# BR2_PACKAGE_OLLAMA_GPU_SUPPORT is not set
+# BR2_PACKAGE_OLLAMA_GPU_NVIDIA is not set
+# BR2_PACKAGE_OLLAMA_GPU_AMD is not set
+
+# vLLM Alternative (uncomment to use instead of Ollama)
+# Note: Only enable ONE LLM backend at a time
+# Also requires Python3 and PyTorch to be configured
+# BR2_PACKAGE_VLLM is not set
+# BR2_PACKAGE_VLLM_MODEL="microsoft/DialoGPT-medium"
+# BR2_PACKAGE_VLLM_GPU_MEMORY="0.85"
+# BR2_PACKAGE_VLLM_MAX_MODEL_LEN="1024"
+# BR2_PACKAGE_VLLM_CUSTOM_MODEL_PATH=""
+
+# Python3 (required for vLLM - uncomment if using vLLM)
+# BR2_PACKAGE_PYTHON3=y
+# BR2_PACKAGE_PYTHON_NUMPY=y
+# BR2_PACKAGE_PYTHON_PYTORCH=y (needs to be available/configured)
+# BR2_PACKAGE_PYTHON_TRANSFORMERS=y
+
+# Additional utilities for debugging
+BR2_PACKAGE_JQ=y
+BR2_PACKAGE_PROCPS_NG=y
+
+# ==============================================================================
+# Configuration Notes:
+# ==============================================================================
+# 1. Cube Agent will start automatically and connect to the selected backend
+# 2. Default backend: Ollama (http://localhost:11434)
+# 3. Alternative backend: vLLM (http://localhost:8000)
+# 4. To switch backends:
+#    - Disable current backend option
+#    - Enable desired backend option
+#    - Rebuild with 'make clean && make'
+# 5. Model installation:
+#    - Ollama: Models pulled on first boot (see BR2_PACKAGE_OLLAMA_MODELS)
+#    - vLLM: Downloaded from HuggingFace or use custom path
+# 6. GPU support requires additional driver configuration
+# ==============================================================================
