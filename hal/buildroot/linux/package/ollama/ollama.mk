@@ -54,4 +54,4 @@ define OLLAMA_USERS
 	ollama -1 ollama -1 * /var/lib/ollama - - Ollama Service
 endef
 
-$(eval $(golang-package))
+$(eval $(generic-package))
