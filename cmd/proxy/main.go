@@ -15,6 +15,8 @@ import (
 	mglog "github.com/absmach/supermq/logger"
 	smqauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/authn/authsvc"
+	authzsvc "github.com/absmach/supermq/pkg/authz/authsvc"
+	domainsgrpc "github.com/absmach/supermq/pkg/domains/grpcclient"
 	"github.com/absmach/supermq/pkg/grpcclient"
 	"github.com/absmach/supermq/pkg/jaeger"
 	"github.com/absmach/supermq/pkg/prometheus"
@@ -97,6 +99,26 @@ func main() {
 
 	logger.Info("AuthN successfully connected to auth gRPC server " + authnClient.Secure())
 
+	domainsAuthz, _, domainsClient, err := domainsgrpc.NewAuthorization(ctx, grpcCfg)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to init domains gRPC client: %s", err))
+		exitCode = 1
+		return
+	}
+	defer domainsClient.Close()
+
+	authz, authzClient, err := authzsvc.NewAuthorization(ctx, grpcCfg, domainsAuthz)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to init authz gRPC client: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+	defer authzClient.Close()
+
+	logger.Info("AuthZ successfully connected to auth gRPC server " + authzClient.Secure())
+
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
@@ -160,7 +182,7 @@ func main() {
 		return
 	}
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp), logger)
+	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, authz, idp), logger)
 
 	if cfg.SendTelemetry {
 		chc := client.New(svcName, supermq.Version, logger, cancel)

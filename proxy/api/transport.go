@@ -9,6 +9,7 @@ import (
 	"github.com/absmach/supermq"
 	api "github.com/absmach/supermq/api/http"
 	mgauthn "github.com/absmach/supermq/pkg/authn"
+	"github.com/absmach/supermq/pkg/authz"
 	"github.com/go-chi/chi/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ultraviolet/cube/agent/audit"
@@ -18,7 +19,7 @@ import (
 const ContentType = "application/json"
 
 func MakeHandler(
-	svc proxy.Service, instanceID string, auditSvc audit.Service, authn mgauthn.AuthNMiddleware, idp supermq.IDProvider,
+	svc proxy.Service, instanceID string, auditSvc audit.Service, authn mgauthn.AuthNMiddleware, authz authz.Authorization, idp supermq.IDProvider,
 ) http.Handler {
 	mux := chi.NewRouter()
 
@@ -27,6 +28,7 @@ func MakeHandler(
 
 	mux.Route("/{domainID}", func(r chi.Router) {
 		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
+		r.Use(AuthorizationMiddleware(authz))
 		r.Use(auditSvc.Middleware)
 		r.Handle("/*", svc.Proxy())
 	})
