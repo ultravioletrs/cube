@@ -4,8 +4,6 @@
 volumes:
   vllm-cache:
     driver: local
-  open-webui-vllm:
-    driver: local
 
 services:
   vllm:
@@ -36,17 +34,3 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
-
-  open-webui-vllm:
-    profiles: ["vllm"]
-    container_name: open-webui-vllm
-    image: ghcr.io/open-webui/open-webui:main
-    restart: unless-stopped
-    volumes:
-      - open-webui-vllm:/app/backend/data
-    ports:
-      - 3001:8080
-    environment:
-      - OPENAI_API_BASE_URL=http://vllm:8000/v1
-    networks:
-      - cube-network
