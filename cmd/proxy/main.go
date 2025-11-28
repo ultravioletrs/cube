@@ -13,12 +13,16 @@ import (
 	"github.com/absmach/callhome/pkg/client"
 	"github.com/absmach/supermq"
 	mglog "github.com/absmach/supermq/logger"
+	smqauthn "github.com/absmach/supermq/pkg/authn"
+	"github.com/absmach/supermq/pkg/authn/authsvc"
+	"github.com/absmach/supermq/pkg/grpcclient"
 	"github.com/absmach/supermq/pkg/jaeger"
 	"github.com/absmach/supermq/pkg/prometheus"
 	"github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/server/http"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
+	"github.com/ultraviolet/cube/agent/audit"
 	"github.com/ultraviolet/cube/proxy"
 	"github.com/ultraviolet/cube/proxy/api"
 	"github.com/ultraviolet/cube/proxy/middleware"
@@ -32,6 +36,7 @@ const (
 	envPrefixHTTP  = "UV_CUBE_PROXY_"
 	defSvcHTTPPort = "8900"
 	envPrefixAgent = "UV_CUBE_AGENT_"
+	envPrefixAuth  = "SMQ_AUTH_GRPC_"
 )
 
 type config struct {
@@ -69,6 +74,28 @@ func main() {
 			return
 		}
 	}
+
+	// Initialize auth gRPC client
+	grpcCfg := grpcclient.Config{}
+	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
+		logger.Error(fmt.Sprintf("failed to load auth gRPC client configuration : %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to init auth gRPC client: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+	defer authnClient.Close()
+
+	logger.Info("AuthN successfully connected to auth gRPC server " + authnClient.Secure())
 
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
@@ -111,6 +138,19 @@ func main() {
 		"%s service %s client configured to connect to agent at %s with %s",
 		svcName, svc.Secure(), agentConfig.URL, svc.Secure()))
 
+	auditSvc := audit.NewAuditMiddleware(logger, audit.Config{
+		ComplianceMode:   true,
+		EnablePIIMask:    true,
+		EnableTokens:     true,
+		SensitiveHeaders: []string{},
+	})
+
+	idp := uuid.New()
+
+	authmMiddleware := smqauthn.NewAuthNMiddleware(
+		auth, smqauthn.WithAllowUnverifiedUser(true), smqauthn.WithDomainCheck(false),
+	)
+
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
@@ -120,7 +160,7 @@ func main() {
 		return
 	}
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger)
+	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp), logger)
 
 	if cfg.SendTelemetry {
 		chc := client.New(svcName, supermq.Version, logger, cancel)
