@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 
 	"github.com/absmach/supermq/pkg/errors"
+	"github.com/go-chi/chi/v5"
 	"github.com/ultravioletrs/cocos/pkg/clients"
 	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 )
@@ -59,7 +61,16 @@ func (s *service) Proxy() *httputil.ReverseProxy {
 		originalDirector(req)
 		s.modifyHeaders(req)
 
-		log.Printf("Proxy forwarding to Agent (%s): %s %s", s.secure, req.Method, req.URL.Path)
+		if domainID := chi.URLParam(req, "domainID"); domainID != "" {
+			prefix := fmt.Sprintf("/%s", domainID)
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
+			if req.URL.RawPath != "" {
+				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
+			}
+			log.Printf("Proxy forwarding for domain %s to Agent (%s): %s %s", domainID, s.secure, req.Method, req.URL.Path)
+		} else {
+			log.Printf("Proxy forwarding to Agent (%s): %s %s", s.secure, req.Method, req.URL.Path)
+		}
 	}
 
 	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {

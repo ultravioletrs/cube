@@ -25,7 +25,7 @@ func MakeHandler(
 	mux.Get("/health", supermq.Health("cube-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
-	mux.Route("/", func(r chi.Router) {
+	mux.Route("/{domainID}", func(r chi.Router) {
 		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)
 		r.Handle("/*", svc.Proxy())
