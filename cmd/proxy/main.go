@@ -29,6 +29,7 @@ import (
 	"github.com/ultraviolet/cube/proxy/api"
 	"github.com/ultraviolet/cube/proxy/middleware"
 	"github.com/ultravioletrs/cocos/pkg/clients"
+	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
@@ -148,7 +149,14 @@ func main() {
 		return
 	}
 
-	svc, err := newService(logger, tracer, &agentConfig)
+	agentClient, err := httpclient.NewClient(&agentConfig)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to create agent HTTP client: %s", err))
+		exitCode = 1
+		return
+	}
+
+	svc, err := newService(logger, tracer, &agentConfig, cfg.OpenSearchURL)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -156,6 +164,8 @@ func main() {
 
 		return
 	}
+
+	svc = middleware.AuthMiddleware(authz)(svc)
 
 	logger.Info(fmt.Sprintf(
 		"%s service %s client configured to connect to agent at %s with %s",
@@ -183,7 +193,7 @@ func main() {
 		return
 	}
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, authz, idp, cfg.OpenSearchURL), logger)
+	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), agentConfig.URL), logger)
 
 	if cfg.SendTelemetry {
 		chc := client.New(svcName, supermq.Version, logger, cancel)
@@ -204,9 +214,9 @@ func main() {
 }
 
 func newService(
-	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig,
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig, opensearchURL string,
 ) (proxy.Service, error) {
-	svc, err := proxy.New(agentConfig)
+	svc, err := proxy.New(agentConfig, opensearchURL)
 	if err != nil {
 		return nil, err
 	}
