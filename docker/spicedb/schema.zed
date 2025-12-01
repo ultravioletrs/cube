@@ -2,9 +2,9 @@ definition user {}
 
 
 definition role {
-	relation entity: domain | llm | audit_log
+	relation entity: domain
 	relation member: user
-	relation built_in_role: domain | llm | audit_log
+	relation built_in_role: domain
 
 	permission delete = entity->manage_role_permission - built_in_role->manage_role_permission
 	permission update = entity->manage_role_permission - built_in_role->manage_role_permission
@@ -13,52 +13,6 @@ definition role {
 	permission add_user = entity->add_role_users_permission
 	permission remove_user = entity->remove_role_users_permission
 	permission view_user = entity->view_role_users_permission
-}
-
-definition llm {
-	relation domain: domain
-	
-	relation update: role#member
-	relation read: role#member
-	relation delete: role#member
-	relation chat_completions: role#member
-	relation completions: role#member
-	
-	relation manage_role: role#member
-	relation add_role_users: role#member
-	relation remove_role_users: role#member
-	relation view_role_users: role#member
-	
-	permission update_permission = update + domain->llm_update_permission
-	permission read_permission = read + domain->llm_read_permission
-	permission delete_permission = delete + domain->llm_delete_permission
-	permission chat_completions_permission = chat_completions + domain->llm_chat_completions_permission
-	permission completions_permission = completions + domain->llm_completions_permission
-	
-	permission manage_role_permission = manage_role + domain->llm_manage_role_permission
-	permission add_role_users_permission = add_role_users + domain->llm_add_role_users_permission
-	permission remove_role_users_permission = remove_role_users + domain->llm_remove_role_users_permission
-	permission view_role_users_permission = view_role_users + domain->llm_view_role_users_permission
-}
-
-definition audit_log {
-	relation domain: domain
-	
-	relation read: role#member
-	relation export: role#member
-	
-	relation manage_role: role#member
-	relation add_role_users: role#member
-	relation remove_role_users: role#member
-	relation view_role_users: role#member
-	
-	permission read_permission = read + domain->audit_log_read_permission
-	permission export_permission = export + domain->audit_log_export_permission
-	
-	permission manage_role_permission = manage_role + domain->audit_log_manage_role_permission
-	permission add_role_users_permission = add_role_users + domain->audit_log_add_role_users_permission
-	permission remove_role_users_permission = remove_role_users + domain->audit_log_remove_role_users_permission
-	permission view_role_users_permission = view_role_users + domain->audit_log_view_role_users_permission
 }
 
 definition domain {
