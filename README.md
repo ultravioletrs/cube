@@ -63,7 +63,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```
 
 3. **Get your authentication token**
-   
+
    All API requests require authentication using JWT tokens. Once the services are running, obtain a JWT token:
    ```bash
    curl -ksSiX POST https://localhost/users/tokens/issue \
@@ -83,20 +83,20 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```
 
 4. **Verify the installation**
-   
+
    List available models:
    ```bash
-   curl http://localhost:8900/v1/models \
+   curl -k https://localhost/proxy/api/tags \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
    ```
 
 5. **Make your first AI request**
    ```bash
-   curl http://localhost:8900/v1/chat/completions \
+   curl -k https://localhost/proxy/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
-       "model": "your-model-name",
+       "model": "tinyllama:1.1b",
        "messages": [
          {
            "role": "user",
@@ -108,11 +108,31 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
 ### API Endpoints
 
-Cube AI provides OpenAI-compatible endpoints:
+Cube AI provides OpenAI-compatible endpoints through Traefik's `/proxy` path. All requests must be authenticated with a JWT token:
+
+**Base URL:** `https://localhost/proxy/`
+
+Available endpoints:
 
 - `GET /v1/models` - List available models
 - `POST /v1/chat/completions` - Create chat completions
 - `POST /v1/completions` - Create text completions
+- `GET /api/tags` - List Ollama models (Ollama API)
+- `POST /api/generate` - Generate completions (Ollama API)
+- `POST /api/chat` - Chat completions (Ollama API)
+
+**Example:**
+```bash
+# Using OpenAI-compatible endpoint
+curl -k https://localhost/proxy/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"tinyllama:1.1b","messages":[{"role":"user","content":"Hello"}]}'
+
+# Using Ollama API endpoint
+curl -k https://localhost/proxy/api/tags \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+```
 
 ## Configuration
 
