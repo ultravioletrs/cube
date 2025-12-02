@@ -20,8 +20,7 @@ const (
 	membershipPerm         = "membership"
 	llmChatCompletionsPerm = "llm_chat_completions_permission"
 	llmCompletionsPerm     = "llm_completions_permission"
-	auditLogReadPerm       = "audit_log_read_permission"
-	auditLogExportPerm     = "audit_log_export_permission"
+	auditLogPerm           = "audit_log_permission"
 )
 
 type authMiddleware struct {
@@ -42,8 +41,11 @@ func AuthMiddleware(auth authz.Authorization) func(proxy.Service) proxy.Service 
 func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
 	permission := membershipPerm
 
-	// Check for LLM endpoints
-	if strings.Contains(path, "/v1/chat/completions") {
+	// Check for audit log endpoints
+	if strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit") {
+		permission = auditLogPerm
+	} else if strings.Contains(path, "/v1/chat/completions") {
+		// Check for LLM endpoints
 		permission = llmChatCompletionsPerm
 	} else if strings.Contains(path, "/v1/completions") {
 		permission = llmCompletionsPerm
@@ -54,26 +56,6 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 	}
 
 	return am.next.ProxyRequest(ctx, session, path)
-}
-
-func (am *authMiddleware) ListAuditLogs(
-	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
-) (map[string]any, error) {
-	if err := am.authorize(ctx, session, session.DomainID, auditLogReadPerm); err != nil {
-		return nil, err
-	}
-
-	return am.next.ListAuditLogs(ctx, session, query)
-}
-
-func (am *authMiddleware) ExportAuditLogs(
-	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
-) (body []byte, ctType string, err error) {
-	if err := am.authorize(ctx, session, session.DomainID, auditLogExportPerm); err != nil {
-		return nil, "", err
-	}
-
-	return am.next.ExportAuditLogs(ctx, session, query)
 }
 
 func (am *authMiddleware) Secure() string {

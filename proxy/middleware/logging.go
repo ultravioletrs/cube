@@ -34,26 +34,6 @@ func (l *loggingMiddleware) ProxyRequest(ctx context.Context, session *authn.Ses
 	return l.svc.ProxyRequest(ctx, session, path)
 }
 
-func (l *loggingMiddleware) ListAuditLogs(
-	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
-) (logs map[string]any, err error) {
-	defer func(begin time.Time) {
-		l.logger.Info("ListAuditLogs", "took", time.Since(begin), "error", err)
-	}(time.Now())
-
-	return l.svc.ListAuditLogs(ctx, session, query)
-}
-
-func (l *loggingMiddleware) ExportAuditLogs(
-	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
-) (content []byte, contentType string, err error) {
-	defer func(begin time.Time) {
-		l.logger.Info("ExportAuditLogs", "took", time.Since(begin), "error", err)
-	}(time.Now())
-
-	return l.svc.ExportAuditLogs(ctx, session, query)
-}
-
 func (l *loggingMiddleware) Secure() string {
 	return l.svc.Secure()
 }

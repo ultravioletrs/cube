@@ -199,7 +199,7 @@ func main() {
 
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), agentConfig.URL,
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), agentConfig.URL, cfg.OpenSearchURL,
 		),
 		logger)
 

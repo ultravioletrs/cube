@@ -32,24 +32,6 @@ func (t *tracingMiddleware) ProxyRequest(ctx context.Context, session *authn.Ses
 	return t.svc.ProxyRequest(ctx, session, path)
 }
 
-func (t *tracingMiddleware) ListAuditLogs(
-	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
-) (map[string]any, error) {
-	ctx, span := t.tracer.Start(ctx, "ListAuditLogs")
-	defer span.End()
-
-	return t.svc.ListAuditLogs(ctx, session, query)
-}
-
-func (t *tracingMiddleware) ExportAuditLogs(
-	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
-) (body []byte, ctType string, err error) {
-	ctx, span := t.tracer.Start(ctx, "ExportAuditLogs")
-	defer span.End()
-
-	return t.svc.ExportAuditLogs(ctx, session, query)
-}
-
 func (t *tracingMiddleware) Secure() string {
 	return t.svc.Secure()
 }
