@@ -12,6 +12,8 @@ import (
 	"github.com/ultraviolet/cube/proxy"
 )
 
+var errInvalidRequestType = errors.New("invalid request type")
+
 type Endpoints struct {
 	ProxyRequest    endpoint.Endpoint
 	ListAuditLogs   endpoint.Endpoint
@@ -44,7 +46,7 @@ func MakeProxyRequestEndpoint(s proxy.Service) endpoint.Endpoint {
 	return func(ctx context.Context, request any) (any, error) {
 		req, ok := request.(ProxyRequestRequest)
 		if !ok {
-			return ProxyRequestResponse{Err: errors.New("invalid request type")}, nil
+			return ProxyRequestResponse{Err: errInvalidRequestType}, nil
 		}
 
 		err := s.ProxyRequest(ctx, &req.Session, req.Path)
@@ -72,7 +74,7 @@ func MakeListAuditLogsEndpoint(s proxy.Service) endpoint.Endpoint {
 	return func(ctx context.Context, request any) (any, error) {
 		req, ok := request.(ListAuditLogsRequest)
 		if !ok {
-			return ListAuditLogsResponse{Err: errors.New("invalid request type")}, nil
+			return ListAuditLogsResponse{Err: errInvalidRequestType}, nil
 		}
 
 		logs, err := s.ListAuditLogs(ctx, &req.Session, &req.Query)
@@ -101,7 +103,7 @@ func MakeExportAuditLogsEndpoint(s proxy.Service) endpoint.Endpoint {
 	return func(ctx context.Context, request any) (any, error) {
 		req, ok := request.(ExportAuditLogsRequest)
 		if !ok {
-			return ExportAuditLogsResponse{Err: errors.New("invalid request type")}, nil
+			return ExportAuditLogsResponse{Err: errInvalidRequestType}, nil
 		}
 
 		content, contentType, err := s.ExportAuditLogs(ctx, &req.Session, &req.Query)

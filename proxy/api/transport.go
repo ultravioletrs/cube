@@ -149,7 +149,7 @@ func decodeListAuditLogsRequest(_ context.Context, r *http.Request) (any, error)
 func encodeListAuditLogsResponse(_ context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.ListAuditLogsResponse)
 	if !ok {
-		return errors.New("invalid response type")
+		return errInvalidResponseType
 	}
 
 	if resp.Err != nil {
@@ -180,7 +180,7 @@ func decodeExportAuditLogsRequest(_ context.Context, r *http.Request) (any, erro
 func encodeExportAuditLogsResponse(_ context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.ExportAuditLogsResponse)
 	if !ok {
-		return errors.New("invalid response type")
+		return errInvalidResponseType
 	}
 
 	if resp.Err != nil {
@@ -252,4 +252,7 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 	}
 }
 
-var errUnauthorized = errors.New("unauthorized")
+var (
+	errUnauthorized        = errors.New("unauthorized")
+	errInvalidResponseType = errors.New("invalid response type")
+)

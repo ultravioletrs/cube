@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,8 @@ import (
 	"github.com/ultravioletrs/cocos/pkg/clients"
 	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 )
+
+var errOpenSearchBadStatus = errors.New("opensearch returned bad status")
 
 // AuditLogQuery represents query parameters for fetching audit logs.
 type AuditLogQuery struct {
@@ -179,7 +182,7 @@ func (s *service) queryOpenSearch(ctx context.Context, query map[string]any) (*h
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
 
-		return nil, fmt.Errorf("opensearch returned status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("%w: %d", errOpenSearchBadStatus, resp.StatusCode)
 	}
 
 	return resp, nil
