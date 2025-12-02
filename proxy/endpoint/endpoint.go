@@ -5,6 +5,7 @@ package endpoint
 
 import (
 	"context"
+	"errors"
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/go-kit/kit/endpoint"
@@ -40,9 +41,14 @@ func (r ProxyRequestResponse) Failed() error {
 }
 
 func MakeProxyRequestEndpoint(s proxy.Service) endpoint.Endpoint {
-	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(ProxyRequestRequest)
-		err := s.ProxyRequest(ctx, req.Session, req.DomainID, req.Path)
+	return func(ctx context.Context, request any) (any, error) {
+		req, ok := request.(ProxyRequestRequest)
+		if !ok {
+			return ProxyRequestResponse{Err: errors.New("invalid request type")}, nil
+		}
+
+		err := s.ProxyRequest(ctx, &req.Session, req.Path)
+
 		return ProxyRequestResponse{Err: err}, nil
 	}
 }
@@ -54,7 +60,7 @@ type ListAuditLogsRequest struct {
 }
 
 type ListAuditLogsResponse struct {
-	Logs map[string]interface{}
+	Logs map[string]any
 	Err  error
 }
 
@@ -63,9 +69,14 @@ func (r ListAuditLogsResponse) Failed() error {
 }
 
 func MakeListAuditLogsEndpoint(s proxy.Service) endpoint.Endpoint {
-	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(ListAuditLogsRequest)
-		logs, err := s.ListAuditLogs(ctx, req.Session, req.DomainID, req.Query)
+	return func(ctx context.Context, request any) (any, error) {
+		req, ok := request.(ListAuditLogsRequest)
+		if !ok {
+			return ListAuditLogsResponse{Err: errors.New("invalid request type")}, nil
+		}
+
+		logs, err := s.ListAuditLogs(ctx, &req.Session, &req.Query)
+
 		return ListAuditLogsResponse{Logs: logs, Err: err}, nil
 	}
 }
@@ -87,9 +98,14 @@ func (r ExportAuditLogsResponse) Failed() error {
 }
 
 func MakeExportAuditLogsEndpoint(s proxy.Service) endpoint.Endpoint {
-	return func(ctx context.Context, request interface{}) (interface{}, error) {
-		req := request.(ExportAuditLogsRequest)
-		content, contentType, err := s.ExportAuditLogs(ctx, req.Session, req.DomainID, req.Query)
+	return func(ctx context.Context, request any) (any, error) {
+		req, ok := request.(ExportAuditLogsRequest)
+		if !ok {
+			return ExportAuditLogsResponse{Err: errors.New("invalid request type")}, nil
+		}
+
+		content, contentType, err := s.ExportAuditLogs(ctx, &req.Session, &req.Query)
+
 		return ExportAuditLogsResponse{Content: content, ContentType: contentType, Err: err}, nil
 	}
 }

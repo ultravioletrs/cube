@@ -43,13 +43,13 @@ const (
 )
 
 type config struct {
-	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"    envDefault:"info"`
-	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"   envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"         envDefault:"true"`
-	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID"  envDefault:""`
-	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"             envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"     envDefault:"1.0"`
-	OpenSearchURL string  `env:"UV_CUBE_OPENSEARCH_URL"     envDefault:"http://opensearch:9200"`
+	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
+	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
+	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"        envDefault:"true"`
+	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
+	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"            envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"    envDefault:"1.0"`
+	OpenSearchURL string  `env:"UV_CUBE_OPENSEARCH_URL"    envDefault:"http://opensearch:9200"`
 }
 
 func main() {
@@ -104,7 +104,9 @@ func main() {
 	domainsAuthz, _, domainsClient, err := domainsgrpc.NewAuthorization(ctx, grpcCfg)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init domains gRPC client: %s", err))
+
 		exitCode = 1
+
 		return
 	}
 	defer domainsClient.Close()
@@ -152,7 +154,9 @@ func main() {
 	agentClient, err := httpclient.NewClient(&agentConfig)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent HTTP client: %s", err))
+
 		exitCode = 1
+
 		return
 	}
 
@@ -193,7 +197,11 @@ func main() {
 		return
 	}
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), agentConfig.URL), logger)
+	httpSvr := http.NewServer(
+		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), agentConfig.URL,
+		),
+		logger)
 
 	if cfg.SendTelemetry {
 		chc := client.New(svcName, supermq.Version, logger, cancel)

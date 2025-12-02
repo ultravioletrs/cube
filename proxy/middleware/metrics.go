@@ -28,28 +28,35 @@ func NewMetricsMiddleware(counter metrics.Counter, latency metrics.Histogram, sv
 	}
 }
 
-func (m *metricsMiddleware) ProxyRequest(ctx context.Context, session authn.Session, domainID, path string) (err error) {
+func (m *metricsMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) (err error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "proxy_request").Add(1)
 		m.latency.With("method", "proxy_request").Observe(time.Since(begin).Seconds())
 	}(time.Now())
-	return m.svc.ProxyRequest(ctx, session, domainID, path)
+
+	return m.svc.ProxyRequest(ctx, session, path)
 }
 
-func (m *metricsMiddleware) ListAuditLogs(ctx context.Context, session authn.Session, domainID string, query proxy.AuditLogQuery) (logs map[string]interface{}, err error) {
+func (m *metricsMiddleware) ListAuditLogs(
+	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
+) (logs map[string]any, err error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "list_audit_logs").Add(1)
 		m.latency.With("method", "list_audit_logs").Observe(time.Since(begin).Seconds())
 	}(time.Now())
-	return m.svc.ListAuditLogs(ctx, session, domainID, query)
+
+	return m.svc.ListAuditLogs(ctx, session, query)
 }
 
-func (m *metricsMiddleware) ExportAuditLogs(ctx context.Context, session authn.Session, domainID string, query proxy.AuditLogQuery) (content []byte, contentType string, err error) {
+func (m *metricsMiddleware) ExportAuditLogs(
+	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
+) (content []byte, contentType string, err error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "export_audit_logs").Add(1)
 		m.latency.With("method", "export_audit_logs").Observe(time.Since(begin).Seconds())
 	}(time.Now())
-	return m.svc.ExportAuditLogs(ctx, session, domainID, query)
+
+	return m.svc.ExportAuditLogs(ctx, session, query)
 }
 
 func (m *metricsMiddleware) Secure() string {

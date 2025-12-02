@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httputil"
@@ -77,18 +78,21 @@ func MakeHandler(
 	return mux
 }
 
-func makeProxyHandler(proxyEndpoint kitendpoint.Endpoint, transport http.RoundTripper, targetURL string) http.HandlerFunc {
+func makeProxyHandler(
+	proxyEndpoint kitendpoint.Endpoint, transport http.RoundTripper, targetURL string,
+) http.HandlerFunc {
 	target, _ := url.Parse(targetURL)
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.Transport = transport
+	prxy := httputil.NewSingleHostReverseProxy(target)
+	prxy.Transport = transport
 
-	originalDirector := proxy.Director
-	proxy.Director = func(req *http.Request) {
+	originalDirector := prxy.Director
+	prxy.Director = func(req *http.Request) {
 		originalDirector(req)
 
 		// Strip domainID prefix
 		if domainID := chi.URLParam(req, "domainID"); domainID != "" {
-			prefix := fmt.Sprintf("/%s", domainID)
+			prefix := "/" + domainID
+
 			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
 			if req.URL.RawPath != "" {
 				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
@@ -98,11 +102,14 @@ func makeProxyHandler(proxyEndpoint kitendpoint.Endpoint, transport http.RoundTr
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+
 		session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 			return
 		}
+
 		domainID := chi.URLParam(r, "domainID")
 
 		// Check authorization via endpoint
@@ -114,19 +121,21 @@ func makeProxyHandler(proxyEndpoint kitendpoint.Endpoint, transport http.RoundTr
 
 		if _, err := proxyEndpoint(ctx, req); err != nil {
 			encodeError(ctx, err, w)
+
 			return
 		}
 
 		// Proceed to proxy
-		proxy.ServeHTTP(w, r)
+		prxy.ServeHTTP(w, r)
 	}
 }
 
-func decodeListAuditLogsRequest(_ context.Context, r *http.Request) (interface{}, error) {
+func decodeListAuditLogsRequest(_ context.Context, r *http.Request) (any, error) {
 	session, ok := r.Context().Value(mgauthn.SessionKey).(mgauthn.Session)
 	if !ok {
 		return nil, errUnauthorized
 	}
+
 	domainID := chi.URLParam(r, "domainID")
 	query := parseQueryParams(r.URL.Query())
 
@@ -137,20 +146,27 @@ func decodeListAuditLogsRequest(_ context.Context, r *http.Request) (interface{}
 	}, nil
 }
 
-func encodeListAuditLogsResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
-	resp := response.(endpoint.ListAuditLogsResponse)
+func encodeListAuditLogsResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.ListAuditLogsResponse)
+	if !ok {
+		return errors.New("invalid response type")
+	}
+
 	if resp.Err != nil {
 		return resp.Err
 	}
+
 	w.Header().Set("Content-Type", ContentType)
+
 	return json.NewEncoder(w).Encode(resp.Logs)
 }
 
-func decodeExportAuditLogsRequest(_ context.Context, r *http.Request) (interface{}, error) {
+func decodeExportAuditLogsRequest(_ context.Context, r *http.Request) (any, error) {
 	session, ok := r.Context().Value(mgauthn.SessionKey).(mgauthn.Session)
 	if !ok {
 		return nil, errUnauthorized
 	}
+
 	domainID := chi.URLParam(r, "domainID")
 	query := parseQueryParams(r.URL.Query())
 
@@ -161,14 +177,24 @@ func decodeExportAuditLogsRequest(_ context.Context, r *http.Request) (interface
 	}, nil
 }
 
-func encodeExportAuditLogsResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
-	resp := response.(endpoint.ExportAuditLogsResponse)
+func encodeExportAuditLogsResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.ExportAuditLogsResponse)
+	if !ok {
+		return errors.New("invalid response type")
+	}
+
 	if resp.Err != nil {
 		return resp.Err
 	}
+
 	w.Header().Set("Content-Type", resp.ContentType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=audit-logs-%s.json", time.Now().Format("2006-01-02")))
-	w.Write(resp.Content)
+	w.Header().Set("Content-Disposition",
+		fmt.Sprintf("attachment; filename=audit-logs-%s.json", time.Now().Format("2006-01-02")))
+
+	if _, err := w.Write(resp.Content); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -212,14 +238,18 @@ func parseQueryParams(params url.Values) proxy.AuditLogQuery {
 
 func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", ContentType)
-	if err == errUnauthorized {
+
+	if errors.Is(err, errUnauthorized) {
 		w.WriteHeader(http.StatusUnauthorized)
 	} else {
 		w.WriteHeader(http.StatusForbidden) // Default to forbidden for auth errors
 	}
-	json.NewEncoder(w).Encode(map[string]interface{}{
+
+	if err := json.NewEncoder(w).Encode(map[string]any{
 		"error": err.Error(),
-	})
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
-var errUnauthorized = fmt.Errorf("unauthorized")
+var errUnauthorized = errors.New("unauthorized")

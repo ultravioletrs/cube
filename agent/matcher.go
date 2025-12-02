@@ -192,7 +192,7 @@ func matchString(value, pattern string, isRegex bool) bool {
 }
 
 func matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool {
-	var bodyMap map[string]interface{}
+	var bodyMap map[string]any
 
 	err := json.Unmarshal(bodyBytes, &bodyMap)
 	if err != nil {
@@ -208,11 +208,11 @@ func matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool 
 	// Navigate nested fields using dot notation (e.g., "user.profile.name")
 	fieldParts := strings.Split(field, ".")
 
-	var current interface{} = bodyMap
+	var current any = bodyMap
 
 	for _, part := range fieldParts {
 		switch v := current.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			var ok bool
 
 			current, ok = v[part]
@@ -230,7 +230,7 @@ func matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool 
 	return matchString(fieldValue, pattern, isRegex)
 }
 
-// MatcherFactory creates matchers from RouteMatcher configuration.
+// CreateMatcher creates matchers from RouteMatcher configuration.
 func CreateMatcher(rm RouteMatcher) Matcher {
 	switch rm.Condition {
 	case RouteConditionPath:

@@ -17,7 +17,7 @@ import (
 	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 )
 
-// AuditLogQuery represents query parameters for fetching audit logs
+// AuditLogQuery represents query parameters for fetching audit logs.
 type AuditLogQuery struct {
 	StartTime time.Time
 	EndTime   time.Time
@@ -29,11 +29,11 @@ type AuditLogQuery struct {
 
 type Service interface {
 	// ProxyRequest checks if the request is allowed.
-	ProxyRequest(ctx context.Context, session authn.Session, domainID, path string) error
+	ProxyRequest(ctx context.Context, session *authn.Session, path string) error
 	// ListAuditLogs fetches audit logs.
-	ListAuditLogs(ctx context.Context, session authn.Session, domainID string, query AuditLogQuery) (map[string]interface{}, error)
+	ListAuditLogs(ctx context.Context, session *authn.Session, query *AuditLogQuery) (map[string]any, error)
 	// ExportAuditLogs exports audit logs.
-	ExportAuditLogs(ctx context.Context, session authn.Session, domainID string, query AuditLogQuery) ([]byte, string, error)
+	ExportAuditLogs(ctx context.Context, session *authn.Session, query *AuditLogQuery) ([]byte, string, error)
 	// Secure returns the secure connection type.
 	Secure() string
 }
@@ -63,19 +63,20 @@ func New(config *clients.AttestedClientConfig, opensearchURL string) (Service, e
 	}, nil
 }
 
-func (s *service) ProxyRequest(ctx context.Context, session authn.Session, domainID, path string) error {
+func (s *service) ProxyRequest(_ context.Context, _ *authn.Session, _ string) error {
 	return nil
 }
 
-func (s *service) ListAuditLogs(ctx context.Context, session authn.Session, domainID string, query AuditLogQuery) (map[string]interface{}, error) {
+func (s *service) ListAuditLogs(ctx context.Context, _ *authn.Session, query *AuditLogQuery) (map[string]any, error) {
 	searchQuery := s.buildOpenSearchQuery(query)
+
 	resp, err := s.queryOpenSearch(ctx, searchQuery)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
@@ -83,7 +84,9 @@ func (s *service) ListAuditLogs(ctx context.Context, session authn.Session, doma
 	return result, nil
 }
 
-func (s *service) ExportAuditLogs(ctx context.Context, session authn.Session, domainID string, query AuditLogQuery) ([]byte, string, error) {
+func (s *service) ExportAuditLogs(
+	ctx context.Context, _ *authn.Session, query *AuditLogQuery,
+) (body []byte, contentType string, err error) {
 	query.Limit = 10000 // Max export size
 	searchQuery := s.buildOpenSearchQuery(query)
 
@@ -93,12 +96,13 @@ func (s *service) ExportAuditLogs(ctx context.Context, session authn.Session, do
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	contentType := "application/json"
+	contentType = "application/json"
+
 	return body, contentType, nil
 }
 
@@ -106,11 +110,11 @@ func (s *service) Secure() string {
 	return s.secure
 }
 
-func (s *service) buildOpenSearchQuery(query AuditLogQuery) map[string]interface{} {
-	mustClauses := []map[string]interface{}{
+func (s *service) buildOpenSearchQuery(query *AuditLogQuery) map[string]any {
+	mustClauses := []map[string]any{
 		{
-			"range": map[string]interface{}{
-				"timestamp": map[string]interface{}{
+			"range": map[string]any{
+				"timestamp": map[string]any{
 					"gte": query.StartTime.Format(time.RFC3339),
 					"lte": query.EndTime.Format(time.RFC3339),
 				},
@@ -119,28 +123,28 @@ func (s *service) buildOpenSearchQuery(query AuditLogQuery) map[string]interface
 	}
 
 	if query.UserID != "" {
-		mustClauses = append(mustClauses, map[string]interface{}{
-			"term": map[string]interface{}{
+		mustClauses = append(mustClauses, map[string]any{
+			"term": map[string]any{
 				"session.user_id.keyword": query.UserID,
 			},
 		})
 	}
 
 	if query.EventType != "" {
-		mustClauses = append(mustClauses, map[string]interface{}{
-			"term": map[string]interface{}{
+		mustClauses = append(mustClauses, map[string]any{
+			"term": map[string]any{
 				"event_type": query.EventType,
 			},
 		})
 	}
 
-	return map[string]interface{}{
-		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
+	return map[string]any{
+		"query": map[string]any{
+			"bool": map[string]any{
 				"must": mustClauses,
 			},
 		},
-		"sort": []map[string]interface{}{
+		"sort": []map[string]any{
 			{
 				"timestamp": map[string]string{
 					"order": "desc",
@@ -152,13 +156,14 @@ func (s *service) buildOpenSearchQuery(query AuditLogQuery) map[string]interface
 	}
 }
 
-func (s *service) queryOpenSearch(ctx context.Context, query map[string]interface{}) (*http.Response, error) {
+func (s *service) queryOpenSearch(ctx context.Context, query map[string]any) (*http.Response, error) {
 	queryBytes, err := json.Marshal(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal query: %w", err)
 	}
 
-	searchURL := fmt.Sprintf("%s/cube-audit-*/_search", s.opensearchURL)
+	searchURL := s.opensearchURL + "/cube-audit-*/_search"
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, searchURL, bytes.NewReader(queryBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -173,6 +178,7 @@ func (s *service) queryOpenSearch(ctx context.Context, query map[string]interfac
 
 	if resp.StatusCode >= 400 {
 		defer resp.Body.Close()
+
 		return nil, fmt.Errorf("opensearch returned status: %d", resp.StatusCode)
 	}
 

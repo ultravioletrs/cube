@@ -25,22 +25,29 @@ func NewTracingMiddleware(tracer trace.Tracer, svc proxy.Service) proxy.Service 
 	}
 }
 
-func (t *tracingMiddleware) ProxyRequest(ctx context.Context, session authn.Session, domainID, path string) error {
+func (t *tracingMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
 	ctx, span := t.tracer.Start(ctx, "ProxyRequest")
 	defer span.End()
-	return t.svc.ProxyRequest(ctx, session, domainID, path)
+
+	return t.svc.ProxyRequest(ctx, session, path)
 }
 
-func (t *tracingMiddleware) ListAuditLogs(ctx context.Context, session authn.Session, domainID string, query proxy.AuditLogQuery) (map[string]interface{}, error) {
+func (t *tracingMiddleware) ListAuditLogs(
+	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
+) (map[string]any, error) {
 	ctx, span := t.tracer.Start(ctx, "ListAuditLogs")
 	defer span.End()
-	return t.svc.ListAuditLogs(ctx, session, domainID, query)
+
+	return t.svc.ListAuditLogs(ctx, session, query)
 }
 
-func (t *tracingMiddleware) ExportAuditLogs(ctx context.Context, session authn.Session, domainID string, query proxy.AuditLogQuery) ([]byte, string, error) {
+func (t *tracingMiddleware) ExportAuditLogs(
+	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
+) (body []byte, ctType string, err error) {
 	ctx, span := t.tracer.Start(ctx, "ExportAuditLogs")
 	defer span.End()
-	return t.svc.ExportAuditLogs(ctx, session, domainID, query)
+
+	return t.svc.ExportAuditLogs(ctx, session, query)
 }
 
 func (t *tracingMiddleware) Secure() string {

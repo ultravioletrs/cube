@@ -30,16 +30,16 @@ type authMiddleware struct {
 }
 
 // AuthMiddleware adds authorization checks to the service.
-func AuthMiddleware(authz authz.Authorization) func(proxy.Service) proxy.Service {
+func AuthMiddleware(auth authz.Authorization) func(proxy.Service) proxy.Service {
 	return func(next proxy.Service) proxy.Service {
 		return &authMiddleware{
-			authz: authz,
+			authz: auth,
 			next:  next,
 		}
 	}
 }
 
-func (am *authMiddleware) ProxyRequest(ctx context.Context, session authn.Session, domainID, path string) error {
+func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
 	permission := membershipPerm
 
 	// Check for LLM endpoints
@@ -49,32 +49,38 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session authn.Sessio
 		permission = llmCompletionsPerm
 	}
 
-	if err := am.authorize(ctx, session, domainID, permission); err != nil {
+	if err := am.authorize(ctx, session, session.DomainID, permission); err != nil {
 		return err
 	}
 
-	return am.next.ProxyRequest(ctx, session, domainID, path)
+	return am.next.ProxyRequest(ctx, session, path)
 }
 
-func (am *authMiddleware) ListAuditLogs(ctx context.Context, session authn.Session, domainID string, query proxy.AuditLogQuery) (map[string]interface{}, error) {
-	if err := am.authorize(ctx, session, domainID, auditLogReadPerm); err != nil {
+func (am *authMiddleware) ListAuditLogs(
+	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
+) (map[string]any, error) {
+	if err := am.authorize(ctx, session, session.DomainID, auditLogReadPerm); err != nil {
 		return nil, err
 	}
-	return am.next.ListAuditLogs(ctx, session, domainID, query)
+
+	return am.next.ListAuditLogs(ctx, session, query)
 }
 
-func (am *authMiddleware) ExportAuditLogs(ctx context.Context, session authn.Session, domainID string, query proxy.AuditLogQuery) ([]byte, string, error) {
-	if err := am.authorize(ctx, session, domainID, auditLogExportPerm); err != nil {
+func (am *authMiddleware) ExportAuditLogs(
+	ctx context.Context, session *authn.Session, query *proxy.AuditLogQuery,
+) (body []byte, ctType string, err error) {
+	if err := am.authorize(ctx, session, session.DomainID, auditLogExportPerm); err != nil {
 		return nil, "", err
 	}
-	return am.next.ExportAuditLogs(ctx, session, domainID, query)
+
+	return am.next.ExportAuditLogs(ctx, session, query)
 }
 
 func (am *authMiddleware) Secure() string {
 	return am.next.Secure()
 }
 
-func (am *authMiddleware) authorize(ctx context.Context, session authn.Session, domainID, permission string) error {
+func (am *authMiddleware) authorize(ctx context.Context, session *authn.Session, domainID, permission string) error {
 	req := authz.PolicyReq{
 		Domain:      domainID,
 		SubjectType: userType,
