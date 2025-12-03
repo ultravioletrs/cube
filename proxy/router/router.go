@@ -10,12 +10,8 @@ import (
 	"sort"
 )
 
-var (
-	// ErrNoMatchingRoute indicates that no route matched the request.
-	ErrNoMatchingRoute = errors.New("no matching route found")
-	// errRouteNotFound indicates that the specified route was not found.
-	errRouteNotFound = errors.New("route not found")
-)
+// ErrNoMatchingRoute indicates that no route matched the request.
+var ErrNoMatchingRoute = errors.New("no matching route found")
 
 // RouteRule defines a complete routing rule.
 type RouteRule struct {
@@ -38,8 +34,8 @@ func (r RouteRules) Len() int           { return len(r) }
 func (r RouteRules) Less(i, j int) bool { return r[i].Priority > r[j].Priority } // Descending order
 func (r RouteRules) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
 
-// RouterConfig contains the routing configuration.
-type RouterConfig struct {
+// Config contains the routing configuration.
+type Config struct {
 	Routes     []RouteRule `json:"routes"`
 	DefaultURL string      `json:"default_url,omitempty"` // Fallback if no default rule is defined
 }
@@ -49,7 +45,7 @@ type Router struct {
 	defaultURL string
 }
 
-func New(config RouterConfig) *Router {
+func New(config Config) *Router {
 	routes := make(RouteRules, len(config.Routes))
 	copy(routes, config.Routes)
 
@@ -65,7 +61,7 @@ func New(config RouterConfig) *Router {
 	}
 }
 
-func (r *Router) DetermineTarget(req *http.Request) (string, string, error) {
+func (r *Router) DetermineTarget(req *http.Request) (targetURL, stripPrefix string, err error) {
 	for _, route := range r.routes {
 		if route.DefaultRule {
 			continue // Skip default rules in main loop

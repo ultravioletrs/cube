@@ -45,18 +45,18 @@ const (
 )
 
 type config struct {
-	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
-	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"        envDefault:"true"`
-	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
-	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"            envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"    envDefault:"1.0"`
-	OpenSearchURL string  `env:"UV_CUBE_OPENSEARCH_URL"    envDefault:"http://opensearch:9200"`
+	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"     envDefault:"info"`
+	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"    envDefault:"http://ollama:11434"`
+	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"          envDefault:"true"`
+	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID"   envDefault:""`
+	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"              envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"      envDefault:"1.0"`
+	OpenSearchURL string  `env:"UV_CUBE_OPENSEARCH_URL"      envDefault:"http://opensearch:9200"`
 	RouterConfig  string  `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
 }
 
 type fileConfig struct {
-	Router router.RouterConfig `json:"router"`
+	Router router.Config `json:"router"`
 }
 
 func main() {

@@ -83,6 +83,7 @@ func New(config *Config, provider attestation.Provider) (Service, error) {
 func (a *agentService) Proxy() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targetURL := a.config.BackendURL
+
 		target, err := url.Parse(targetURL)
 		if err != nil {
 			log.Printf("Invalid target URL %s: %v", targetURL, err)
