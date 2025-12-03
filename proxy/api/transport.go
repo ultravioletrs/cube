@@ -122,6 +122,7 @@ func makeAuditProxyHandler(
 		// Strip domainID and /audit prefix
 		if domainID := chi.URLParam(req, "domainID"); domainID != "" {
 			prefix := "/" + domainID + "/audit"
+
 			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
 			if req.URL.RawPath != "" {
 				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)

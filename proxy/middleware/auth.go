@@ -42,12 +42,13 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 	permission := membershipPerm
 
 	// Check for audit log endpoints
-	if strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit") {
+	switch {
+	case strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit"):
 		permission = auditLogPerm
-	} else if strings.Contains(path, "/v1/chat/completions") {
+	case strings.Contains(path, "/v1/chat/completions"):
 		// Check for LLM endpoints
 		permission = llmChatCompletionsPerm
-	} else if strings.Contains(path, "/v1/completions") {
+	case strings.Contains(path, "/v1/completions"):
 		permission = llmCompletionsPerm
 	}
 

@@ -160,7 +160,7 @@ func main() {
 		return
 	}
 
-	svc, err := newService(logger, tracer, &agentConfig, cfg.OpenSearchURL)
+	svc, err := newService(logger, tracer, &agentConfig)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -222,9 +222,9 @@ func main() {
 }
 
 func newService(
-	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig, opensearchURL string,
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig,
 ) (proxy.Service, error) {
-	svc, err := proxy.New(agentConfig, opensearchURL)
+	svc, err := proxy.New(agentConfig)
 	if err != nil {
 		return nil, err
 	}

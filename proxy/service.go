@@ -26,7 +26,7 @@ type service struct {
 	secure    string
 }
 
-func New(config *clients.AttestedClientConfig, opensearchURL string) (Service, error) {
+func New(config *clients.AttestedClientConfig) (Service, error) {
 	client, err := httpclient.NewClient(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
