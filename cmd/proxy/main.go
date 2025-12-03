@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -28,6 +29,7 @@ import (
 	"github.com/ultraviolet/cube/proxy"
 	"github.com/ultraviolet/cube/proxy/api"
 	"github.com/ultraviolet/cube/proxy/middleware"
+	"github.com/ultraviolet/cube/proxy/router"
 	"github.com/ultravioletrs/cocos/pkg/clients"
 	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 	"go.opentelemetry.io/otel/trace"
@@ -50,6 +52,11 @@ type config struct {
 	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"            envDefault:"http://localhost:4318/v1/traces"`
 	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"    envDefault:"1.0"`
 	OpenSearchURL string  `env:"UV_CUBE_OPENSEARCH_URL"    envDefault:"http://opensearch:9200"`
+	RouterConfig  string  `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
+}
+
+type fileConfig struct {
+	Router router.RouterConfig `json:"router"`
 }
 
 func main() {
@@ -197,9 +204,30 @@ func main() {
 		return
 	}
 
+	// Initialize Router
+	routerFile, err := os.ReadFile(cfg.RouterConfig)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	var fileCfg fileConfig
+	if err := json.Unmarshal(routerFile, &fileCfg); err != nil {
+		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	rter := router.New(fileCfg.Router)
+
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), agentConfig.URL, cfg.OpenSearchURL,
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter,
 		),
 		logger)
 

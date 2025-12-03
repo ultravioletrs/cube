@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -40,7 +39,7 @@ type Config struct {
 	AgentOSType   string `env:"AGENT_OS_TYPE"               envDefault:"UVC"`
 	Vmpl          uint   `env:"AGENT_VMPL"                  envDefault:"2"`
 	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"        envDefault:"http://am-certs:9010"`
-	TargetConfig  string `env:"UV_CUBE_AGENT_ROUTER_CONFIG" envDefault:"/etc/cube/agent/config.json"`
+	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"    envDefault:"http://localhost:11434"`
 }
 
 func main() {
@@ -111,22 +110,8 @@ func main() {
 		return
 	}
 
-	routerFile, err := os.ReadFile(cfg.TargetConfig)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-
-	var config agent.Config
-	if err := json.Unmarshal(routerFile, &config); err != nil {
-		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
-
-		exitCode = 1
-
-		return
+	config := agent.Config{
+		BackendURL: cfg.TargetURL,
 	}
 
 	svc, err := agent.New(&config, provider)
