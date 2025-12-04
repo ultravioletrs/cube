@@ -1,10 +1,12 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
+
 package middleware
 
 import (
-	"net/http/httputil"
+	"context"
 
+	"github.com/absmach/supermq/pkg/authn"
 	"github.com/ultraviolet/cube/proxy"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -23,13 +25,13 @@ func NewTracingMiddleware(tracer trace.Tracer, svc proxy.Service) proxy.Service 
 	}
 }
 
-// Proxy implements proxy.Service.
-func (t *tracingMiddleware) Proxy() *httputil.ReverseProxy {
-	// todo : add tracing to the proxy transport
-	return t.svc.Proxy()
+func (t *tracingMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
+	ctx, span := t.tracer.Start(ctx, "ProxyRequest")
+	defer span.End()
+
+	return t.svc.ProxyRequest(ctx, session, path)
 }
 
-// Secure implements proxy.Service.
 func (t *tracingMiddleware) Secure() string {
 	return t.svc.Secure()
 }

@@ -82,17 +82,61 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    }
    ```
 
-4. **Verify the installation**
-
-   List available models:
+4. **Create a domain**
+   
+   All API requests require a domain ID in the URL path. You can either get the domain ID from the UI or create a new domain via the API:
+   
    ```bash
-   curl -k https://localhost/proxy/api/tags \
+   curl -sSiX POST http://localhost:9003/domains \
+     -H "Content-Type: application/json" \
+     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+     -d '{
+       "name": "Magistrala",
+       "route": "magistrala",
+       "tags": ["absmach", "IoT"],
+       "metadata": {
+         "region": "EU"
+       }
+     }'
+   ```
+   
+   The response will contain your domain information including the `id`:
+   ```json
+   {
+     "id": "d7f9b3b8-4f7e-4f44-8d47-1a6e5e6f7a2b",
+     "name": "Magistrala",
+     "route": "magistrala",
+     "tags": ["absmach", "IoT"],
+     "metadata": {
+       "region": "EU"
+     },
+     "status": "enabled",
+     "created_by": "c8c3e4f1-56b2-4a22-8e5f-8a77b1f9b2f4",
+     "created_at": "2025-10-29T14:12:01Z",
+     "updated_at": "2025-10-29T14:12:01Z"
+   }
+   ```
+   
+   **Notes:**
+   - `name` and `route` are required fields
+   - `route` must be unique and cannot be changed after creation
+   - `metadata` must be a valid JSON object
+   - The `id` is automatically generated if not provided
+   - Save the `id` value as you'll need it for all subsequent API requests
+
+5. **Verify the installation**
+   
+   List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 4):
+   ```bash
+   curl http://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
    ```
 
-5. **Make your first AI request**
+6. **Make your first AI request**
+   
+   Replace `YOUR_DOMAIN_ID` with your actual domain ID:
    ```bash
-   curl -k https://localhost/proxy/v1/chat/completions \
+   curl http://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
@@ -114,23 +158,25 @@ Cube AI provides OpenAI-compatible endpoints through Traefik's `/proxy` path. Al
 
 Available endpoints:
 
-- `GET /v1/models` - List available models
-- `POST /v1/chat/completions` - Create chat completions
-- `POST /v1/completions` - Create text completions
-- `GET /api/tags` - List Ollama models (Ollama API)
-- `POST /api/generate` - Generate completions (Ollama API)
-- `POST /api/chat` - Chat completions (Ollama API)
+- `GET /{domainID}/v1/models` - List available models
+- `POST /{domainID}/v1/chat/completions` - Create chat completions
+- `POST /{domainID}/v1/completions` - Create text completions
+- `GET /{domainID}/api/tags` - List Ollama models (Ollama API)
+- `POST /{domainID}/api/generate` - Generate completions (Ollama API)
+- `POST /{domainID}/api/chat` - Chat completions (Ollama API)
+
+Replace `{domainID}` with your actual domain ID obtained from step 4 in the Getting Started guide.
 
 **Example:**
 ```bash
 # Using OpenAI-compatible endpoint
-curl -k https://localhost/proxy/v1/chat/completions \
+curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"tinyllama:1.1b","messages":[{"role":"user","content":"Hello"}]}'
 
 # Using Ollama API endpoint
-curl -k https://localhost/proxy/api/tags \
+curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 

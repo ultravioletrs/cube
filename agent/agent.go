@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"sort"
 	"time"
 
 	"github.com/absmach/supermq/pkg/errors"
@@ -28,10 +27,6 @@ var (
 	ErrAttestationType = errors.New("invalid attestation type")
 	// ErrUnauthorized indicates that authentication failed.
 	ErrUnauthorized = errors.New("unauthorized")
-	// ErrNoMatchingRoute indicates that no route matched the request.
-	ErrNoMatchingRoute = errors.New("no matching route found")
-	// errRouteNotFound indicates that the specified route was not found.
-	errRouteNotFound = errors.New("route not found")
 )
 
 type TLSConfig struct {
@@ -45,15 +40,14 @@ type TLSConfig struct {
 }
 
 type Config struct {
-	Router RouterConfig `json:"router"`
-	TLS    TLSConfig    `json:"tls"`
+	BackendURL string    `json:"backend_url"`
+	TLS        TLSConfig `json:"tls"`
 }
 
 type agentService struct {
 	config    *Config
 	provider  attestation.Provider
 	transport *http.Transport
-	routes    RouteRules
 }
 
 type Service interface {
@@ -61,9 +55,6 @@ type Service interface {
 	Attestation(
 		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType,
 	) ([]byte, error)
-	AddRoute(rule *RouteRule) error
-	RemoveRoute(name string) error
-	GetRoutes() []RouteRule
 }
 
 func New(config *Config, provider attestation.Provider) (Service, error) {
@@ -82,32 +73,16 @@ func New(config *Config, provider attestation.Provider) (Service, error) {
 		transport.TLSClientConfig = tlsConfig
 	}
 
-	routes := make(RouteRules, len(config.Router.Routes))
-	copy(routes, config.Router.Routes)
-
-	for i := range routes {
-		routes[i].compiledMatcher = CreateCompositeMatcher(routes[i].Matchers)
-	}
-
-	sort.Sort(routes)
-
 	return &agentService{
 		config:    config,
 		transport: transport,
 		provider:  provider,
-		routes:    routes,
 	}, nil
 }
 
 func (a *agentService) Proxy() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		targetURL, err := a.determineTarget(r)
-		if err != nil {
-			log.Printf("Failed to determine target: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-
-			return
-		}
+		targetURL := a.config.BackendURL
 
 		target, err := url.Parse(targetURL)
 		if err != nil {
@@ -134,56 +109,6 @@ func (a *agentService) Proxy() http.Handler {
 
 		proxy.ServeHTTP(w, r)
 	})
-}
-
-func (a *agentService) AddRoute(rule *RouteRule) error {
-	if rule.Name == "" {
-		return errors.New("route name is required")
-	}
-
-	if rule.TargetURL == "" {
-		return errors.New("target URL is required")
-	}
-
-	if _, err := url.Parse(rule.TargetURL); err != nil {
-		return fmt.Errorf("invalid target URL: %w", err)
-	}
-
-	rule.compiledMatcher = CreateCompositeMatcher(rule.Matchers)
-
-	err := a.RemoveRoute(rule.Name)
-	if err != nil && !errors.Contains(err, errRouteNotFound) {
-		return err
-	}
-
-	insertPos := sort.Search(len(a.routes), func(i int) bool {
-		return a.routes[i].Priority <= rule.Priority
-	})
-
-	a.routes = append(a.routes, RouteRule{})
-	copy(a.routes[insertPos+1:], a.routes[insertPos:])
-	a.routes[insertPos] = *rule
-
-	return nil
-}
-
-func (a *agentService) RemoveRoute(name string) error {
-	for i, route := range a.routes {
-		if route.Name == name {
-			a.routes = append(a.routes[:i], a.routes[i+1:]...)
-
-			return nil
-		}
-	}
-
-	return errRouteNotFound
-}
-
-func (a *agentService) GetRoutes() []RouteRule {
-	routes := make([]RouteRule, len(a.routes))
-	copy(routes, a.routes)
-
-	return routes
 }
 
 func (a *agentService) Attestation(
@@ -246,34 +171,4 @@ func setTLSConfig(config *Config) (*tls.Config, error) {
 	}
 
 	return tlsConfig, nil
-}
-
-func (a *agentService) determineTarget(r *http.Request) (string, error) {
-	for _, route := range a.routes {
-		if route.DefaultRule {
-			continue // Skip default rules in main loop
-		}
-
-		if route.compiledMatcher != nil && route.compiledMatcher.Match(r) {
-			log.Printf("Request matched route: %s -> %s", route.Name, route.TargetURL)
-
-			return route.TargetURL, nil
-		}
-	}
-
-	for _, route := range a.routes {
-		if route.DefaultRule {
-			log.Printf("Request matched default route: %s -> %s", route.Name, route.TargetURL)
-
-			return route.TargetURL, nil
-		}
-	}
-
-	if a.config.Router.DefaultURL != "" {
-		log.Printf("Request using config default URL: %s", a.config.Router.DefaultURL)
-
-		return a.config.Router.DefaultURL, nil
-	}
-
-	return "", ErrNoMatchingRoute
 }

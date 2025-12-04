@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-package agent
+package router
 
 import (
 	"bytes"
@@ -32,32 +32,6 @@ type RouteMatcher struct {
 	Field     string         `json:"field,omitempty"`    // For headers, query params, or body fields
 	Pattern   string         `json:"pattern"`            // Pattern to match (can be regex or exact)
 	IsRegex   bool           `json:"is_regex,omitempty"` // Whether pattern is a regex
-}
-
-// RouteRule defines a complete routing rule.
-type RouteRule struct {
-	Name        string         `json:"name"`
-	TargetURL   string         `json:"target_url"`
-	Matchers    []RouteMatcher `json:"matchers"`     // All matchers must match (AND logic)
-	Priority    int            `json:"priority"`     // Higher priority rules are checked first
-	DefaultRule bool           `json:"default_rule"` // If true, this rule matches when no others do
-
-	// Internal compiled matcher (not serialized)
-	compiledMatcher Matcher `json:"-"`
-}
-
-// RouteRules implements sort.Interface for []RouteRule based on Priority field.
-// Routes are sorted in descending order of priority (higher priority first).
-type RouteRules []RouteRule
-
-func (r RouteRules) Len() int           { return len(r) }
-func (r RouteRules) Less(i, j int) bool { return r[i].Priority > r[j].Priority } // Descending order
-func (r RouteRules) Swap(i, j int)      { r[i], r[j] = r[j], r[i] }
-
-// RouterConfig contains the routing configuration.
-type RouterConfig struct {
-	Routes     []RouteRule `json:"routes"`
-	DefaultURL string      `json:"default_url,omitempty"` // Fallback if no default rule is defined
 }
 
 // Matcher defines the interface for request matching logic.
@@ -192,7 +166,7 @@ func matchString(value, pattern string, isRegex bool) bool {
 }
 
 func matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool {
-	var bodyMap map[string]interface{}
+	var bodyMap map[string]any
 
 	err := json.Unmarshal(bodyBytes, &bodyMap)
 	if err != nil {
@@ -208,11 +182,11 @@ func matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool 
 	// Navigate nested fields using dot notation (e.g., "user.profile.name")
 	fieldParts := strings.Split(field, ".")
 
-	var current interface{} = bodyMap
+	var current any = bodyMap
 
 	for _, part := range fieldParts {
 		switch v := current.(type) {
-		case map[string]interface{}:
+		case map[string]any:
 			var ok bool
 
 			current, ok = v[part]
@@ -230,7 +204,7 @@ func matchBodyField(bodyBytes []byte, field, pattern string, isRegex bool) bool 
 	return matchString(fieldValue, pattern, isRegex)
 }
 
-// MatcherFactory creates matchers from RouteMatcher configuration.
+// CreateMatcher creates matchers from RouteMatcher configuration.
 func CreateMatcher(rm RouteMatcher) Matcher {
 	switch rm.Condition {
 	case RouteConditionPath:

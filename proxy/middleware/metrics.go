@@ -1,11 +1,13 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
+
 package middleware
 
 import (
-	"net/http/httputil"
+	"context"
 	"time"
 
+	"github.com/absmach/supermq/pkg/authn"
 	"github.com/go-kit/kit/metrics"
 	"github.com/ultraviolet/cube/proxy"
 )
@@ -26,18 +28,15 @@ func NewMetricsMiddleware(counter metrics.Counter, latency metrics.Histogram, sv
 	}
 }
 
-// Proxy implements proxy.Service.
-func (m *metricsMiddleware) Proxy() *httputil.ReverseProxy {
-	// todo : add metrics to the proxy transport
+func (m *metricsMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) (err error) {
 	defer func(begin time.Time) {
-		m.counter.With("method", "proxy").Add(1)
-		m.latency.With("method", "proxy").Observe(time.Since(begin).Seconds())
+		m.counter.With("method", "proxy_request").Add(1)
+		m.latency.With("method", "proxy_request").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
-	return m.svc.Proxy()
+	return m.svc.ProxyRequest(ctx, session, path)
 }
 
-// Secure implements proxy.Service.
 func (m *metricsMiddleware) Secure() string {
 	return m.svc.Secure()
 }

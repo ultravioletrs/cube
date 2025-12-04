@@ -1,11 +1,14 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
+
 package middleware
 
 import (
+	"context"
 	"log/slog"
-	"net/http/httputil"
+	"time"
 
+	"github.com/absmach/supermq/pkg/authn"
 	"github.com/ultraviolet/cube/proxy"
 )
 
@@ -23,15 +26,14 @@ func NewLoggingMiddleware(logger *slog.Logger, svc proxy.Service) proxy.Service 
 	}
 }
 
-// Proxy implements proxy.Service.
-func (l *loggingMiddleware) Proxy() *httputil.ReverseProxy {
-	// todo: add logging to the proxy transport
-	l.logger.Info("Proxy initialized", "service", "loggingMiddleware")
+func (l *loggingMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) (err error) {
+	defer func(begin time.Time) {
+		l.logger.Info("ProxyRequest", "path", path, "took", time.Since(begin), "error", err)
+	}(time.Now())
 
-	return l.svc.Proxy()
+	return l.svc.ProxyRequest(ctx, session, path)
 }
 
-// Secure implements proxy.Service.
 func (l *loggingMiddleware) Secure() string {
 	return l.svc.Secure()
 }

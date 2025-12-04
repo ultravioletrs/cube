@@ -5,21 +5,16 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 
 	mglog "github.com/absmach/supermq/logger"
-	smqauthn "github.com/absmach/supermq/pkg/authn"
-	"github.com/absmach/supermq/pkg/authn/authsvc"
-	"github.com/absmach/supermq/pkg/grpcclient"
 	smqserver "github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/agent"
 	"github.com/ultraviolet/cube/agent/api"
-	"github.com/ultraviolet/cube/agent/audit"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
 	"github.com/ultravioletrs/cocos/pkg/attestation/tdx"
@@ -33,19 +28,18 @@ const (
 	svcName        = "agent"
 	defSvcHTTPPort = "8901"
 	envPrefixHTTP  = "UV_CUBE_AGENT_"
-	envPrefixAuth  = "SMQ_AUTH_GRPC_"
 )
 
 type Config struct {
-	LogLevel      string `env:"UV_CUBE_AGENT_LOG_LEVEL"     envDefault:"info"`
-	InstanceID    string `env:"UV_CUBE_AGENT_INSTANCE_ID"   envDefault:""`
-	AgentMaaURL   string `env:"AGENT_MAA_URL"               envDefault:"https://sharedeus2.eus2.attest.azure.net"`
-	AgentOSBuild  string `env:"AGENT_OS_BUILD"              envDefault:"UVC"`
-	AgentOSDistro string `env:"AGENT_OS_DISTRO"             envDefault:"UVC"`
-	AgentOSType   string `env:"AGENT_OS_TYPE"               envDefault:"UVC"`
-	Vmpl          uint   `env:"AGENT_VMPL"                  envDefault:"2"`
-	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"        envDefault:"http://am-certs:9010"`
-	TargetConfig  string `env:"UV_CUBE_AGENT_ROUTER_CONFIG" envDefault:"/etc/cube/agent/config.json"`
+	LogLevel      string `env:"UV_CUBE_AGENT_LOG_LEVEL"   envDefault:"info"`
+	InstanceID    string `env:"UV_CUBE_AGENT_INSTANCE_ID" envDefault:""`
+	AgentMaaURL   string `env:"AGENT_MAA_URL"             envDefault:"https://sharedeus2.eus2.attest.azure.net"`
+	AgentOSBuild  string `env:"AGENT_OS_BUILD"            envDefault:"UVC"`
+	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
+	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
+	Vmpl          uint   `env:"AGENT_VMPL"                envDefault:"2"`
+	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
+	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
 }
 
 func main() {
@@ -72,28 +66,7 @@ func main() {
 		}
 	}
 
-	grpcCfg := grpcclient.Config{}
-	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load auth gRPC client configuration : %s", err))
-
-		exitCode = 1
-
-		return
-	}
-
 	ctx := context.Background()
-
-	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to init auth gRPC client: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-	defer authnClient.Close()
-
-	logger.Info("AuthN  successfully connected to auth gRPC server " + authnClient.Secure())
 
 	httpServerConfig := server.ServerConfig{Config: server.Config{Port: defSvcHTTPPort}}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
@@ -137,22 +110,8 @@ func main() {
 		return
 	}
 
-	routerFile, err := os.ReadFile(cfg.TargetConfig)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-
-	var config agent.Config
-	if err := json.Unmarshal(routerFile, &config); err != nil {
-		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
-
-		exitCode = 1
-
-		return
+	config := agent.Config{
+		BackendURL: cfg.TargetURL,
 	}
 
 	svc, err := agent.New(&config, provider)
@@ -164,23 +123,10 @@ func main() {
 		return
 	}
 
-	auditSvc := audit.NewAuditMiddleware(logger, audit.Config{
-		ComplianceMode:   true,
-		EnablePIIMask:    true,
-		EnableTokens:     true,
-		SensitiveHeaders: []string{},
-	})
-
-	idp := uuid.New()
-
-	authmMiddleware := smqauthn.NewAuthNMiddleware(
-		auth, smqauthn.WithAllowUnverifiedUser(true), smqauthn.WithDomainCheck(false),
-	)
-
 	ctx, cancel := context.WithCancel(ctx)
 	g, ctx := errgroup.WithContext(ctx)
 
-	handler := api.MakeHandler(svc, cfg.InstanceID, auditSvc, authmMiddleware, idp)
+	handler := api.MakeHandler(svc, cfg.InstanceID)
 
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, &httpServerConfig,

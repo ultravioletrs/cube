@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -13,16 +14,24 @@ import (
 	"github.com/absmach/callhome/pkg/client"
 	"github.com/absmach/supermq"
 	mglog "github.com/absmach/supermq/logger"
+	smqauthn "github.com/absmach/supermq/pkg/authn"
+	"github.com/absmach/supermq/pkg/authn/authsvc"
+	authzsvc "github.com/absmach/supermq/pkg/authz/authsvc"
+	domainsgrpc "github.com/absmach/supermq/pkg/domains/grpcclient"
+	"github.com/absmach/supermq/pkg/grpcclient"
 	"github.com/absmach/supermq/pkg/jaeger"
 	"github.com/absmach/supermq/pkg/prometheus"
 	"github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/server/http"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
+	"github.com/ultraviolet/cube/agent/audit"
 	"github.com/ultraviolet/cube/proxy"
 	"github.com/ultraviolet/cube/proxy/api"
 	"github.com/ultraviolet/cube/proxy/middleware"
+	"github.com/ultraviolet/cube/proxy/router"
 	"github.com/ultravioletrs/cocos/pkg/clients"
+	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
@@ -32,15 +41,22 @@ const (
 	envPrefixHTTP  = "UV_CUBE_PROXY_"
 	defSvcHTTPPort = "8900"
 	envPrefixAgent = "UV_CUBE_AGENT_"
+	envPrefixAuth  = "SMQ_AUTH_GRPC_"
 )
 
 type config struct {
-	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"   envDefault:"info"`
-	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"  envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"        envDefault:"true"`
-	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID" envDefault:""`
-	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"            envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"    envDefault:"1.0"`
+	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"     envDefault:"info"`
+	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"    envDefault:"http://ollama:11434"`
+	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"          envDefault:"true"`
+	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID"   envDefault:""`
+	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"              envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"      envDefault:"1.0"`
+	OpenSearchURL string  `env:"UV_CUBE_OPENSEARCH_URL"      envDefault:"http://opensearch:9200"`
+	RouterConfig  string  `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
+}
+
+type fileConfig struct {
+	Router router.Config `json:"router"`
 }
 
 func main() {
@@ -70,6 +86,50 @@ func main() {
 		}
 	}
 
+	// Initialize auth gRPC client
+	grpcCfg := grpcclient.Config{}
+	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
+		logger.Error(fmt.Sprintf("failed to load auth gRPC client configuration : %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to init auth gRPC client: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+	defer authnClient.Close()
+
+	logger.Info("AuthN successfully connected to auth gRPC server " + authnClient.Secure())
+
+	domainsAuthz, _, domainsClient, err := domainsgrpc.NewAuthorization(ctx, grpcCfg)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to init domains gRPC client: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+	defer domainsClient.Close()
+
+	authz, authzClient, err := authzsvc.NewAuthorization(ctx, grpcCfg, domainsAuthz)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to init authz gRPC client: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+	defer authzClient.Close()
+
+	logger.Info("AuthZ successfully connected to auth gRPC server " + authzClient.Secure())
+
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
@@ -98,6 +158,15 @@ func main() {
 		return
 	}
 
+	agentClient, err := httpclient.NewClient(&agentConfig)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to create agent HTTP client: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
 	svc, err := newService(logger, tracer, &agentConfig)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
@@ -107,9 +176,24 @@ func main() {
 		return
 	}
 
+	svc = middleware.AuthMiddleware(authz)(svc)
+
 	logger.Info(fmt.Sprintf(
 		"%s service %s client configured to connect to agent at %s with %s",
 		svcName, svc.Secure(), agentConfig.URL, svc.Secure()))
+
+	auditSvc := audit.NewAuditMiddleware(logger, audit.Config{
+		ComplianceMode:   true,
+		EnablePIIMask:    true,
+		EnableTokens:     true,
+		SensitiveHeaders: []string{},
+	})
+
+	idp := uuid.New()
+
+	authmMiddleware := smqauthn.NewAuthNMiddleware(
+		auth, smqauthn.WithAllowUnverifiedUser(true), smqauthn.WithDomainCheck(false),
+	)
 
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
@@ -120,7 +204,32 @@ func main() {
 		return
 	}
 
-	httpSvr := http.NewServer(ctx, cancel, svcName, httpServerConfig, api.MakeHandler(svc, cfg.InstanceID), logger)
+	// Initialize Router
+	routerFile, err := os.ReadFile(cfg.RouterConfig)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	var fileCfg fileConfig
+	if err := json.Unmarshal(routerFile, &fileCfg); err != nil {
+		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	rter := router.New(fileCfg.Router)
+
+	httpSvr := http.NewServer(
+		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter,
+		),
+		logger)
 
 	if cfg.SendTelemetry {
 		chc := client.New(svcName, supermq.Version, logger, cancel)

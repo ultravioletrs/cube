@@ -1,7 +1,25 @@
 {
   "router": {
-    "default_url": "http://ollama:11434",
-    "routes": []
+    "routes": [
+      {
+        "name": "audit",
+        "target_url": "http://opensearch:9200",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "/audit/.*",
+            "is_regex": true
+          }
+        ],
+        "priority": 10,
+        "strip_prefix": "/audit"
+      },
+      {
+        "name": "agent",
+        "target_url": "http://agent:8901",
+        "default_rule": true
+      }
+    ]
   },
   "tls": {
     "enabled": true,
