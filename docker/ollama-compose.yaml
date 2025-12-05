@@ -26,14 +26,10 @@ services:
     #   - "HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION-11.0.0}"
 
     # # Uncomment the following lines to enable Nvidia GPU support
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: ${OLLAMA_GPU_DRIVER-nvidia}
-    #           count: ${OLLAMA_GPU_COUNT-1}
-    #           capabilities:
-    #             - gpu
+    # runtime: nvidia
+    # environment:
+    #   - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES-all}
+    #   - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES-compute,utility}
 
   pull-tinyllama:
     profiles: ["ollama", "default"]
