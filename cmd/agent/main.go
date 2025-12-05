@@ -114,7 +114,7 @@ func main() {
 		BackendURL: cfg.TargetURL,
 	}
 
-	svc, err := agent.New(&config, provider)
+	svc, err := agent.New(&config, provider, ccPlatform)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent service: %s", err))
 
