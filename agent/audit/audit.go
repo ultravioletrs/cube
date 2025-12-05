@@ -165,9 +165,14 @@ func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 		var requestBody []byte
 
 		if am.shouldCaptureBody(r) {
-			body, err := io.ReadAll(io.LimitReader(r.Body, int64(am.config.MaxBodyCapture)))
+			body, err := io.ReadAll(r.Body)
 			if err == nil {
-				requestBody = body
+				if len(body) > am.config.MaxBodyCapture {
+					requestBody = body[:am.config.MaxBodyCapture]
+				} else {
+					requestBody = body
+				}
+
 				r.Body = io.NopCloser(bytes.NewReader(body))
 			}
 		}
