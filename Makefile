@@ -3,6 +3,7 @@
 
 CUBE_PROXY_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/proxy
 CUBE_AGENT_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/agent
+CUBE_GUARDRAILS_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/guardrails
 CGO_ENABLED ?= 0
 GOOS ?= linux
 GOARCH ?= amd64
@@ -78,7 +79,7 @@ build-agent:
 	$(call compile_service,agent)
 
 .PHONY: docker
-docker: docker-proxy docker-agent
+docker: docker-proxy docker-agent docker-guardrails
 
 .PHONY: docker-proxy
 docker-proxy:
@@ -88,8 +89,17 @@ docker-proxy:
 docker-agent:
 	$(call make_docker,agent,$(CUBE_AGENT_DOCKER_IMAGE_NAME))
 
+.PHONY: docker-guardrails
+docker-guardrails:
+	@echo "Building Nemo Guardrails Docker image..."
+	docker build \
+		--no-cache \
+		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):$(VERSION) \
+		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):latest \
+		-f guardrails/Dockerfile ./guardrails
+
 .PHONY: docker-dev
-docker-dev: docker-proxy-dev docker-agent-dev
+docker-dev: docker-proxy-dev docker-agent-dev docker-guardrails
 
 .PHONY: docker-proxy-dev
 docker-proxy-dev:
@@ -193,7 +203,8 @@ help:
 	@echo "  build              Build all services"
 	@echo "  build-proxy        Build proxy service"
 	@echo "  build-agent        Build agent service"
-	@echo "  docker             Build Docker images"
+	@echo "  docker             Build Docker images (including guardrails)"
+	@echo "  docker-guardrails  Build Nemo Guardrails Docker image"
 	@echo "  docker-dev         Build development Docker images"
 	@echo ""
 	@echo "Configuration Commands:"
@@ -216,6 +227,7 @@ help:
 	@echo "Examples:"
 	@echo "  make up AI_BACKEND=vllm              # Start with vLLM"
 	@echo "  make up-ollama                       # Start with Ollama (pulls models)"
+	@echo "  make up-cube-full                    # Start with guardrails"
 	@echo "  make config-vllm && make up          # Configure and start vLLM"
 
 all: build docker-dev
@@ -230,7 +242,7 @@ lint:
 latest: docker docker-push
 
 .PHONY: docker-push
-docker-push: docker-push-proxy docker-push-agent
+docker-push: docker-push-proxy docker-push-agent docker-push-guardrails
 
 .PHONY: docker-push-proxy
 docker-push-proxy:
@@ -243,5 +255,9 @@ docker-push-agent:
 .PHONY: mocks
 mocks:
 	mockery --config ./.mockery.yml
+
+.PHONY: docker-push-guardrails
+docker-push-guardrails:
+	$(call docker_push,$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME))
 
 .DEFAULT_GOAL := help

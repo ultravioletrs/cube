@@ -63,6 +63,42 @@ services:
     networks:
       - cube-network
     restart: unless-stopped
+  
+  cube-guardrails:
+    container_name: guardrails
+    image: ghcr.io/ultravioletrs/cube/guardrails:latest
+    ports:
+      - "8001:8001"
+    networks:
+      - cube-network
+    restart: unless-stopped
+    environment:
+      - PYTHONPATH=/app
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=8001
+      - UVICORN_LOG_LEVEL=info
+      - TRANSFORMERS_CACHE=/app/cache
+      - HF_HOME=/app/cache
+      - XDG_CACHE_HOME=/app/cache
+    volumes:
+      - ../guardrails/rails:/app/rails:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "logging=guardrails"
+      - "service=guardrails"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "guardrails|{{.Name}}"
+
 
   cube-agent:
     container_name: cube-agent
@@ -78,6 +114,8 @@ services:
       UV_CUBE_AGENT_SERVER_KEY: ${UV_CUBE_AGENT_SERVER_KEY}
       UV_CUBE_AGENT_INSTANCE_ID: ${UV_CUBE_AGENT_INSTANCE_ID}
       UV_CUBE_AGENT_TARGET_URL: ${UV_CUBE_AGENT_TARGET_URL}
+      UV_CUBE_GUARDRAILS_URL: ${UV_CUBE_GUARDRAILS_URL}
+      UV_CUBE_AGENT_USE_GUARDRAILS_BACKEND: ${UV_CUBE_AGENT_USE_GUARDRAILS_BACKEND}
       SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
       SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
       SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
