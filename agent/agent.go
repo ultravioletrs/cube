@@ -40,8 +40,10 @@ type TLSConfig struct {
 }
 
 type Config struct {
-	BackendURL string    `json:"backend_url"`
-	TLS        TLSConfig `json:"tls"`
+	BackendURL           string    `json:"backend_url"`
+	TLS                  TLSConfig `json:"tls"`
+	GuardrailsURL        string    `json:"guardrails_url"`
+	UseGuardrailsBackend bool      `json:"use_guardrails_backend"`
 }
 
 type agentService struct {
@@ -83,6 +85,35 @@ func New(config *Config, provider attestation.Provider) (Service, error) {
 func (a *agentService) Proxy() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targetURL := a.config.BackendURL
+		log.Printf("Proxy Config: UseGuardrailsBackend=%v, GuardrailsURL=%s", a.config.UseGuardrailsBackend, a.config.GuardrailsURL)
+		// If Guardrails Backend is enabled, route everything there
+		if a.config.UseGuardrailsBackend && a.config.GuardrailsURL != "" {
+			target, err := url.Parse(a.config.GuardrailsURL)
+			if err != nil {
+				log.Printf("Invalid guardrails URL %s: %v", a.config.GuardrailsURL, err)
+				http.Error(w, "Bad Gateway", http.StatusBadGateway)
+				return
+			}
+
+			proxy := httputil.NewSingleHostReverseProxy(target)
+			proxy.Transport = a.transport
+
+			originalDirector := proxy.Director
+			proxy.Director = func(req *http.Request) {
+				originalDirector(req)
+				req.URL.Path = "/v1/chat/completions"
+				a.modifyHeaders(req)
+				log.Printf("Agent forwarding to Guardrails Backend %s: %s %s", a.config.GuardrailsURL, req.Method, req.URL.Path)
+			}
+
+			proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+				log.Printf("Proxy error to Guardrails: %v", err)
+				http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			}
+
+			proxy.ServeHTTP(w, r)
+			return
+		}
 
 		target, err := url.Parse(targetURL)
 		if err != nil {
