@@ -34,6 +34,10 @@ var (
 	ErrAttestationType = errors.New("invalid attestation type")
 	// ErrUnauthorized indicates that authentication failed.
 	ErrUnauthorized = errors.New("unauthorized")
+	// ErrAttestationTooSmall indicates that the attestation report is too small.
+	ErrAttestationTooSmall = errors.New("attestation contents too small")
+	// ErrAttestationUnmarshal indicates that the attestation report could not be unmarshaled.
+	ErrAttestationUnmarshal = errors.New("failed to unmarshal the attestation report")
 )
 
 type TLSConfig struct {
@@ -157,6 +161,7 @@ func (a *agentService) Attestation(
 			if a.ccPlatform == attestation.TDX {
 				return a.tdxAttestationToJSON(vTPMQuote)
 			}
+
 			return a.vtpmAttestationToTextProto(vTPMQuote)
 		}
 
@@ -175,8 +180,10 @@ func (a *agentService) modifyHeaders(req *http.Request) {
 
 func (a *agentService) attestationToJSON(report []byte) ([]byte, error) {
 	if len(report) < abi.ReportSize {
-		return nil, errors.Wrap(ErrAttestationFailed, fmt.Errorf("attestation contents too small (0x%x bytes). Want at least 0x%x bytes", len(report), abi.ReportSize))
+		return nil,
+			fmt.Errorf("%w (0x%x bytes). Want at least 0x%x bytes", ErrAttestationTooSmall, len(report), abi.ReportSize)
 	}
+
 	attestationPB, err := abi.ReportCertsToProto(report[:abi.ReportSize])
 	if err != nil {
 		return nil, err
@@ -187,10 +194,12 @@ func (a *agentService) attestationToJSON(report []byte) ([]byte, error) {
 
 func (a *agentService) vtpmAttestationToTextProto(vTPMQuote []byte) ([]byte, error) {
 	var attvTPM tpmAttest.Attestation
+
 	err := proto.Unmarshal(vTPMQuote, &attvTPM)
 	if err != nil {
-		return nil, errors.Wrap(ErrAttestationVTpmFailed, fmt.Errorf("failed to unmarshal the attestation report: %v", err))
+		return nil, fmt.Errorf("%w: %w", ErrAttestationUnmarshal, err)
 	}
+
 	return protojson.Marshal(&attvTPM)
 }
 
@@ -203,7 +212,7 @@ func (a *agentService) tdxAttestationToJSON(vTPMQuote []byte) ([]byte, error) {
 
 	quote, ok := res.(*tdx.QuoteV4)
 	if !ok {
-		return nil, errors.Wrap(ErrAttestationFailed, fmt.Errorf("failed to convert to tdx.QuoteV4"))
+		return nil, errors.Wrap(ErrAttestationFailed, errors.New("failed to convert to tdx.QuoteV4"))
 	}
 
 	return protojson.Marshal(quote)

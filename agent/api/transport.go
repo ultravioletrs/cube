@@ -42,19 +42,22 @@ func decodeAttestationRequest(_ context.Context, r *http.Request) (any, error) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return nil, err
 	}
+
 	return req, nil
 }
 
-func encodeAttestationResponse(_ context.Context, w http.ResponseWriter, response any) error {
+func encodeAttestationResponse(ctx context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.AttestationResponse)
 	if !ok {
 		w.WriteHeader(http.StatusInternalServerError)
+
 		return json.NewEncoder(w).Encode(map[string]string{"error": "invalid response type"})
 	}
 
 	if resp.Err != nil {
-		encodeError(context.Background(), resp.Err, w)
-		return nil
+		encodeError(ctx, resp.Err, w)
+
+		return resp.Err
 	}
 
 	// Check if the report is JSON (starts with '{' or '[') or binary
@@ -66,11 +69,16 @@ func encodeAttestationResponse(_ context.Context, w http.ResponseWriter, respons
 
 	w.WriteHeader(http.StatusOK)
 	_, err := w.Write(resp.Report)
+
 	return err
 }
 
 func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(http.StatusBadRequest)
-	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+
+	err = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
 }

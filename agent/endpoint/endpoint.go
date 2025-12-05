@@ -42,7 +42,7 @@ type AttestationRequest struct {
 
 type AttestationResponse struct {
 	Report []byte `json:"report,omitempty"`
-	Err    error  `json:"error,omitempty"`
+	Err    error  `json:"err,omitempty"`
 }
 
 func (r AttestationResponse) Failed() error {
@@ -50,38 +50,40 @@ func (r AttestationResponse) Failed() error {
 }
 
 func MakeAttestationEndpoint(s agent.Service) endpoint.Endpoint {
-	return func(ctx context.Context, request any) (any, error) {
+	return func(_ context.Context, request any) (any, error) {
 		req, ok := request.(AttestationRequest)
 		if !ok {
-			return AttestationResponse{Err: errInvalidRequestType}, nil
+			return nil, errInvalidRequestType
 		}
 
 		// Parse and validate report data
 		reportDataBytes, err := base64.StdEncoding.DecodeString(req.ReportData)
 		if err != nil || len(reportDataBytes) > quoteprovider.Nonce {
-			return AttestationResponse{Err: errInvalidReportData}, nil
+			return nil, errInvalidReportData
 		}
+
 		var reportData [quoteprovider.Nonce]byte
 		copy(reportData[:], reportDataBytes)
 
 		// Parse and validate nonce
 		nonceBytes, err := base64.StdEncoding.DecodeString(req.Nonce)
 		if err != nil || len(nonceBytes) > vtpm.Nonce {
-			return AttestationResponse{Err: errInvalidNonce}, nil
+			return nil, errInvalidNonce
 		}
+
 		var nonce [vtpm.Nonce]byte
 		copy(nonce[:], nonceBytes)
 
 		// Parse attestation type
 		attType, err := parseAttestationType(req.AttestationType)
 		if err != nil {
-			return AttestationResponse{Err: err}, nil
+			return nil, err
 		}
 
 		// Call service method
 		report, err := s.Attestation(reportData, nonce, attType, req.ToJSON)
 		if err != nil {
-			return AttestationResponse{Err: err}, nil
+			return nil, err
 		}
 
 		return AttestationResponse{Report: report}, nil
