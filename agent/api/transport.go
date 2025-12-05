@@ -4,23 +4,73 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 
 	"github.com/absmach/supermq"
 	"github.com/go-chi/chi/v5"
+	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ultraviolet/cube/agent"
+	"github.com/ultraviolet/cube/agent/endpoint"
 )
 
 const ContentType = "application/json"
 
 func MakeHandler(svc agent.Service, instanceID string) http.Handler {
+	endpoints := endpoint.MakeEndpoints(svc)
 	mux := chi.NewRouter()
 
 	mux.Get("/health", supermq.Health("cube-agent", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
+	mux.Get("/attestation", kithttp.NewServer(
+		endpoints.Attestation,
+		decodeAttestationRequest,
+		encodeAttestationResponse,
+		kithttp.ServerErrorEncoder(encodeError),
+	).ServeHTTP)
+
 	mux.Handle("/*", svc.Proxy())
 
 	return mux
+}
+
+func decodeAttestationRequest(_ context.Context, r *http.Request) (any, error) {
+	var req endpoint.AttestationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+func encodeAttestationResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.AttestationResponse)
+	if !ok {
+		w.WriteHeader(http.StatusInternalServerError)
+		return json.NewEncoder(w).Encode(map[string]string{"error": "invalid response type"})
+	}
+
+	if resp.Err != nil {
+		encodeError(context.Background(), resp.Err, w)
+		return nil
+	}
+
+	// Check if the report is JSON (starts with '{' or '[') or binary
+	if len(resp.Report) > 0 && (resp.Report[0] == '{' || resp.Report[0] == '[') {
+		w.Header().Set("Content-Type", ContentType)
+	} else {
+		w.Header().Set("Content-Type", "application/octet-stream")
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, err := w.Write(resp.Report)
+	return err
+}
+
+func encodeError(_ context.Context, err error, w http.ResponseWriter) {
+	w.Header().Set("Content-Type", ContentType)
+	w.WriteHeader(http.StatusBadRequest)
+	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
 }
