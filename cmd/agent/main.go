@@ -31,15 +31,17 @@ const (
 )
 
 type Config struct {
-	LogLevel      string `env:"UV_CUBE_AGENT_LOG_LEVEL"   envDefault:"info"`
-	InstanceID    string `env:"UV_CUBE_AGENT_INSTANCE_ID" envDefault:""`
-	AgentMaaURL   string `env:"AGENT_MAA_URL"             envDefault:"https://sharedeus2.eus2.attest.azure.net"`
-	AgentOSBuild  string `env:"AGENT_OS_BUILD"            envDefault:"UVC"`
-	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
-	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
-	Vmpl          uint   `env:"AGENT_VMPL"                envDefault:"2"`
-	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
-	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
+	LogLevel             string `env:"UV_CUBE_AGENT_LOG_LEVEL"   envDefault:"info"`
+	InstanceID           string `env:"UV_CUBE_AGENT_INSTANCE_ID" envDefault:""`
+	AgentMaaURL          string `env:"AGENT_MAA_URL"             envDefault:"https://sharedeus2.eus2.attest.azure.net"`
+	AgentOSBuild         string `env:"AGENT_OS_BUILD"            envDefault:"UVC"`
+	AgentOSDistro        string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
+	AgentOSType          string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
+	Vmpl                 uint   `env:"AGENT_VMPL"                envDefault:"2"`
+	CAUrl                string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
+	TargetURL            string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
+	GuardrailsURL        string `env:"UV_CUBE_GUARDRAILS_URL"              envDefault:""`
+	UseGuardrailsBackend bool   `env:"UV_CUBE_AGENT_USE_GUARDRAILS_BACKEND" envDefault:"true"`
 }
 
 func main() {
@@ -113,6 +115,14 @@ func main() {
 	config := agent.Config{
 		BackendURL: cfg.TargetURL,
 	}
+
+	if cfg.GuardrailsURL != "" {
+		config.GuardrailsURL = cfg.GuardrailsURL
+	}
+	config.UseGuardrailsBackend = cfg.UseGuardrailsBackend
+
+	// Debug logging
+	logger.Info(fmt.Sprintf("Guardrails configuration: URL=%s, UseBackend=%v", config.GuardrailsURL, config.UseGuardrailsBackend))
 
 	svc, err := agent.New(&config, provider)
 	if err != nil {
