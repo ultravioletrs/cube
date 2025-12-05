@@ -1,0 +1,133 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+import core
+
+define bot inform output_unsafe
+  "I need to revise my response to ensure it meets safety guidelines."
+
+define bot inform potential_hallucination
+  "Let me provide a more careful and accurate response."
+
+define bot inform factuality_concern
+  "I should be more cautious about the accuracy of my response."
+
+define bot show uncertainty
+  "as of my last update"
+  "i don't have access to real-time"
+  "i cannot verify"
+  "i'm not certain"
+  "i don't know"
+  "i'm not sure"
+  "it's possible that"
+  "i cannot confirm"
+  "this information may be outdated"
+  "please verify this information"
+
+define bot show hallucination
+  "definitely will happen in 2025"
+  "certainly will happen in 2024"
+  "absolutely will occur next year"
+  "everyone agrees that"
+  "no one believes that"
+  "all experts say"
+  "never happens"
+  "always results in"
+  "100% certain"
+  "guaranteed to happen"
+  "without a doubt will"
+  "definitely going to"
+  "certainly going to"
+  "absolutely going to"
+  "everyone knows"
+  "nobody thinks"
+  "all people believe"
+  "never works"
+  "always fails"
+
+define bot show unsafe_content
+  "violence against"
+  "how to harm"
+  "ways to hurt"
+  "methods to damage"
+  "techniques for violence"
+  "explicit sexual content"
+  "inappropriate material"
+  "offensive language"
+  "personal information of"
+  "private data about"
+  "sensitive details regarding"
+  "confidential information"
+  "classified data"
+  "social security number"
+  "credit card information"
+  "password for"
+  "login credentials"
+
+define bot show gender_bias
+  "women are naturally bad at"
+  "men are naturally good at"
+  "girls should focus on"
+  "boys should focus on"
+  "women belong in"
+  "men belong in"
+  "typical female behavior"
+  "typical male behavior"
+  "women can't handle"
+  "men don't understand"
+
+define bot show racial_bias
+  "people of [race] are naturally"
+  "[race] people typically"
+  "[race] culture is inferior"
+  "[race] people can't"
+  "typical [race] behavior"
+
+define bot show religious_bias
+  "[religion] people are extremists"
+  "[religion] is a dangerous cult"
+  "[religion] promotes violence"
+  "[religion] believers are"
+
+define bot show restricted_topics
+  "how to make explosives"
+  "bomb making instructions"
+  "weapon manufacturing"
+  "illegal drug synthesis"
+  "hacking techniques"
+  "suicide methods"
+  "violence against children"
+  "identity theft methods"
+  "credit card fraud"
+  "money laundering"
+  "tax evasion strategies"
+  "terrorism planning"
+  "torture techniques"
+  "human trafficking"
+  "malware creation"
+  "virus programming"
+
+define flow validate output content
+  bot show hallucination
+  bot inform potential_hallucination
+  stop
+    
+  bot show unsafe_content
+  bot inform output_unsafe
+  stop
+    
+  bot show gender_bias
+  bot inform output_unsafe
+  stop
+    
+  bot show racial_bias
+  bot inform output_unsafe
+  stop
+    
+  bot show religious_bias
+  bot inform output_unsafe
+  stop
+    
+  bot show restricted_topics
+  bot inform output_unsafe
+  stop
