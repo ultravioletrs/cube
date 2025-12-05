@@ -172,6 +172,7 @@ func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 				} else {
 					requestBody = body
 				}
+
 				r.Body = io.NopCloser(bytes.NewReader(body))
 			}
 		}
