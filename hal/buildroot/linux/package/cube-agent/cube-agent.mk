@@ -58,6 +58,16 @@ define CUBE_AGENT_INSTALL_CONFIG
 	echo "UV_CUBE_AGENT_PORT=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_PORT))" >> $(TARGET_DIR)/etc/cube/agent.env
 	echo "UV_CUBE_AGENT_INSTANCE_ID=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_INSTANCE_ID))" >> $(TARGET_DIR)/etc/cube/agent.env
 	echo "UV_CUBE_AGENT_TARGET_URL=$(CUBE_AGENT_TARGET_URL)" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "AGENT_OS_BUILD=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_OS_BUILD))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "AGENT_OS_DISTRO=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_OS_DISTRO))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "AGENT_OS_TYPE=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_OS_TYPE))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "AGENT_VMPL=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_VMPL))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_CA_URL=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CA_URL))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_ATTESTED_TLS=$(if $(BR2_PACKAGE_CUBE_AGENT_ATTESTED_TLS),true,false)" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_SERVER_CA_CERTS=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CA_CERTS))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_SERVER_CERT=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CERT))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_SERVER_KEY=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_KEY))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_CLIENT_CA_CERTS=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CLIENT_CA_CERTS))" >> $(TARGET_DIR)/etc/cube/agent.env
 endef
 
 CUBE_AGENT_POST_INSTALL_TARGET_HOOKS += CUBE_AGENT_INSTALL_CONFIG

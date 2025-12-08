@@ -64,6 +64,66 @@ config BR2_PACKAGE_CUBE_AGENT_TARGET_URL
 	help
 	  Custom LLM backend URL (e.g., http://192.168.1.100:8000)
 
+config BR2_PACKAGE_CUBE_AGENT_OS_BUILD
+	string "Agent OS Build"
+	default "UVC"
+	help
+	  Build version of the OS running the agent
+
+config BR2_PACKAGE_CUBE_AGENT_OS_DISTRO
+	string "Agent OS Distro"
+	default "UVC"
+	help
+	  Distribution of the OS running the agent
+
+config BR2_PACKAGE_CUBE_AGENT_OS_TYPE
+	string "Agent OS Type"
+	default "UVC"
+	help
+	  Type of the OS running the agent
+
+config BR2_PACKAGE_CUBE_AGENT_VMPL
+	string "Agent VMPL"
+	default "2"
+	help
+	  VM Privilege Level for the agent (default: 2)
+
+config BR2_PACKAGE_CUBE_AGENT_CA_URL
+	string "Agent CA URL"
+	default ""
+	help
+	  URL of the Certificate Authority
+
+config BR2_PACKAGE_CUBE_AGENT_ATTESTED_TLS
+	bool "Enable Attested TLS"
+	default y
+	help
+	  Enable Attested TLS for the agent server
+
+config BR2_PACKAGE_CUBE_AGENT_SERVER_CA_CERTS
+	string "Server CA Certificates File"
+	default ""
+	help
+	  Path to the server CA certificates file
+
+config BR2_PACKAGE_CUBE_AGENT_SERVER_CERT
+	string "Server Certificate File"
+	default ""
+	help
+	  Path to the server certificate file
+
+config BR2_PACKAGE_CUBE_AGENT_SERVER_KEY
+	string "Server Key File"
+	default ""
+	help
+	  Path to the server key file
+
+config BR2_PACKAGE_CUBE_AGENT_CLIENT_CA_CERTS
+	string "Client CA Certificates File"
+	default ""
+	help
+	  Path to the client CA certificates file
+
 endif
 
 comment "cube-agent needs a toolchain w/ threads"

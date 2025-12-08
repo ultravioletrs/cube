@@ -38,7 +38,7 @@ type Config struct {
 	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
 	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
 	Vmpl          uint   `env:"AGENT_VMPL"                envDefault:"2"`
-	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
+	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:""`
 	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
 }
 

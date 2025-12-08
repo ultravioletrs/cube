@@ -73,6 +73,18 @@ Navigate to **Target packages → Cube AI Services**:
   - Ollama (default)
   - vLLM
   - Custom URL
+- **Agent Environment**:
+  - **OS Build**: (default `UVC`)
+  - **OS Distro**: (default `UVC`)
+  - **OS Type**: (default `UVC`)
+  - **VMPL**: VM Privilege Level (default `2`)
+- **Security & TLS**:
+  - **CA URL**: URL of the Certificate Authority
+  - **Attested TLS**: Enable/Disable (default `Enabled`)
+  - **Server CA Certificates**: Path to file
+  - **Server Certificate**: Path to file
+  - **Server Key**: Path to file
+  - **Client CA Certificates**: Path to file
 
 ##### Ollama Backend (if selected)
 - **Install default models**: Automatically pulls tinyllama:1.1b, starcoder2:3b, nomic-embed-text:v1.5
