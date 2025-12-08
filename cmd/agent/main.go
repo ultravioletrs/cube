@@ -57,6 +57,8 @@ func main() {
 		log.Fatalf("failed to init logger: %s", err.Error())
 	}
 
+	logger.Info("Starting agent service")
+
 	var exitCode int
 	defer mglog.ExitWithError(&exitCode)
 
@@ -143,6 +145,7 @@ func main() {
 	handler := api.MakeHandler(svc, cfg.InstanceID)
 
 	fmt.Println("http cfg", httpServerConfig)
+	logger.Info("http cfg", httpServerConfig)
 
 	var certProvider atls.CertificateProvider
 
