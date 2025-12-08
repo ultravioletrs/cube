@@ -142,6 +142,8 @@ func main() {
 
 	handler := api.MakeHandler(svc, cfg.InstanceID)
 
+	fmt.Println("http cfg", httpServerConfig)
+
 	var certProvider atls.CertificateProvider
 
 	if ccPlatform != attestation.NoCC {
