@@ -165,7 +165,7 @@ func main() {
 	}
 
 	httpSvr := http.NewServer(
-		ctx, cancel, svcName, &httpServerConfig,
+		ctx, cancel, svcName, httpServerConfig,
 		handler, logger, certProvider)
 
 	g.Go(func() error {
