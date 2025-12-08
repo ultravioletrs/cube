@@ -1,0 +1,133 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+name: Deploy Cube Cloud Services
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docker/cloud-compose.yaml"
+      - "docker/supermq-compose.yaml"
+      - "docker/.env"
+      - "docker/config.json"
+      - "docker/fluent-bit.conf"
+      - "docker/parsers.conf"
+      - "docker/opensearch-index-template.json"
+      - ".github/workflows/deploy-cloud.yaml"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+concurrency:
+  group: deploy-cloud-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  DEPLOY_DIR: cube-cloud
+
+jobs:
+  deploy-cloud:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Deploy Cube Cloud Services
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CUBE_SERVER_IP }}
+          port: 49200
+          username: ${{ secrets.CUBE_SERVER_USERNAME }}
+          key: ${{ secrets.CUBE_SERVER_KEY }}
+          script_stop: true
+          command_timeout: 200m
+          script: |
+            set -e
+
+            echo "=== Cube Cloud Deployment Started ==="
+
+            echo "Logging into GitHub Container Registry"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "Changing directory to project"
+            cd ${{ env.DEPLOY_DIR }}
+
+            echo "Pulling latest code from repository"
+            git pull
+
+            echo "Creating required directories"
+            mkdir -p traefik/letsencrypt
+
+            echo "Pulling latest Docker images"
+            cd docker
+            docker compose -f cloud-compose.yaml --profile cloud pull
+
+            echo "Stopping existing services"
+            docker compose -f cloud-compose.yaml --profile cloud down
+
+            echo "Starting cloud services"
+            docker compose -f cloud-compose.yaml --profile cloud up -d
+
+            echo "Waiting for services to start (30 seconds)..."
+            sleep 30
+
+            echo "Checking service status..."
+            docker compose -f cloud-compose.yaml --profile cloud ps
+
+            echo "=== Verifying Critical Services ==="
+            SERVICES="traefik opensearch nats spicedb auth users cube-proxy fluent-bit"
+            ALL_RUNNING=true
+
+            for SERVICE in $SERVICES; do
+              if docker ps --format '{{.Names}}' | grep -q "cube-cloud-$SERVICE"; then
+                echo "✓ Service $SERVICE is running"
+              else
+                echo "✗ Service $SERVICE is not running"
+                ALL_RUNNING=false
+              fi
+            done
+
+            if [ "$ALL_RUNNING" = false ]; then
+              echo "Deployment verification failed!"
+              docker compose -f cloud-compose.yaml --profile cloud logs --tail=50
+              exit 1
+            fi
+
+            echo "✓ All cloud services deployed successfully!"
+
+            echo ""
+            echo "=== Service URLs ==="
+            echo "  - Cube Proxy API: https://109.92.195.153/proxy"
+            echo "  - Traefik Dashboard: http://109.92.195.153:8080"
+            echo "  - Jaeger UI: http://109.92.195.153:16686"
+            echo "  - OpenSearch: http://109.92.195.153:9200"
+
+      - name: System Cleanup
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CUBE_SERVER_IP }}
+          port: 49200
+          username: ${{ secrets.CUBE_SERVER_USERNAME }}
+          key: ${{ secrets.CUBE_SERVER_KEY }}
+          script_stop: false
+          command_timeout: 10m
+          script: |
+            echo "Running system cleanup..."
+            docker system prune -a -f
+            echo "✓ Cleanup completed"
