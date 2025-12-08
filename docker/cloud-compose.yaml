@@ -1,0 +1,610 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+#
+# Cloud Docker Compose Profile
+# This profile includes all SuperMQ services, proxy, and audit logs
+# Excludes: cube-agent, ollama, vllm (these run in CVMs)
+
+volumes:
+  opensearch-data:
+  supermq-users-db-volume:
+  supermq-broker-volume:
+  supermq-spicedb-db-volume:
+  supermq-auth-db-volume:
+  supermq-domains-db-volume:
+  supermq-domains-redis-volume:
+
+networks:
+  cube-cloud-network:
+    driver: bridge
+
+services:
+  # ===== Traefik Reverse Proxy =====
+  traefik:
+    image: traefik:v3.0
+    container_name: cube-cloud-traefik
+    profiles: ["cloud"]
+    ports:
+      - "49210:80"    # HTTP (for ACME challenge and redirect to HTTPS)
+      - "49211:443"   # HTTPS (main application traffic)
+      - "49212:8080"  # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.toml:/etc/traefik/traefik.toml:ro
+      - ./traefik/dynamic.toml:/etc/traefik/dynamic.toml:ro
+      - ./traefik/ssl:/etc/traefik/ssl
+    networks:
+      - cube-cloud-network
+    restart: unless-stopped
+    labels:
+      logging: "traefik"
+      service: "proxy"
+
+  opensearch:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: cube-cloud-opensearch
+    profiles: ["cloud"]
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    networks:
+      - cube-cloud-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: unless-stopped
+
+  opensearch-init:
+    image: curlimages/curl:latest
+    container_name: cube-cloud-opensearch-init
+    profiles: ["cloud"]
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    networks:
+      - cube-cloud-network
+    volumes:
+      - ./opensearch-index-template.json:/tmp/index-template.json:ro
+    command: >
+      sh -c '
+        echo "Creating index template for audit logs...";
+        curl -X PUT "http://opensearch:9200/_index_template/cube-audit-template" -H "Content-Type: application/json" -d @/tmp/index-template.json;
+        echo "";
+        echo "OpenSearch setup complete!";
+        curl -s "http://opensearch:9200/_cat/indices?v";
+      '
+    restart: "no"
+
+  fluent-bit:
+    image: fluent/fluent-bit:2.2
+    container_name: cube-cloud-fluent-bit
+    profiles: ["cloud"]
+    volumes:
+      - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
+      - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+    depends_on:
+      opensearch:
+        condition: service_healthy
+      opensearch-init:
+        condition: service_completed_successfully
+    networks:
+      - cube-cloud-network
+    restart: unless-stopped
+    labels:
+      logging: "fluent-bit"
+      service: "audit"
+
+  nats:
+    image: nats:2.10.9-alpine
+    container_name: cube-cloud-nats
+    profiles: ["cloud"]
+    restart: on-failure
+    command: "--config=/etc/nats/nats.conf"
+    environment:
+      - SMQ_NATS_PORT=${SMQ_NATS_PORT}
+      - SMQ_NATS_HTTP_PORT=${SMQ_NATS_HTTP_PORT}
+      - SMQ_NATS_JETSTREAM_KEY=${SMQ_NATS_JETSTREAM_KEY}
+    volumes:
+      - supermq-broker-volume:/data
+      - ./nats:/etc/nats
+    networks:
+      - cube-cloud-network
+    depends_on:
+      - fluent-bit
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.53.0
+    container_name: cube-cloud-jaeger
+    profiles: ["cloud"]
+    environment:
+      COLLECTOR_OTLP_ENABLED: ${SMQ_JAEGER_COLLECTOR_OTLP_ENABLED}
+    command: --memory.max-traces ${SMQ_JAEGER_MEMORY_MAX_TRACES}
+    networks:
+      - cube-cloud-network
+    restart: unless-stopped
+
+  spicedb-db:
+    image: "postgres:16.2-alpine"
+    container_name: cube-cloud-spicedb-db
+    profiles: ["cloud"]
+    environment:
+      POSTGRES_USER: ${SMQ_SPICEDB_DB_USER}
+      POSTGRES_PASSWORD: ${SMQ_SPICEDB_DB_PASS}
+      POSTGRES_DB: ${SMQ_SPICEDB_DB_NAME}
+    volumes:
+      - supermq-spicedb-db-volume:/var/lib/postgresql/data
+    networks:
+      - cube-cloud-network
+    restart: unless-stopped
+
+  spicedb-migrate:
+    image: "authzed/spicedb:v1.30.0"
+    container_name: cube-cloud-spicedb-migrate
+    profiles: ["cloud"]
+    command: "migrate head"
+    restart: "on-failure"
+    environment:
+      SPICEDB_DATASTORE_ENGINE: ${SMQ_SPICEDB_DATASTORE_ENGINE}
+      SPICEDB_DATASTORE_CONN_URI: "${SMQ_SPICEDB_DATASTORE_ENGINE}://${SMQ_SPICEDB_DB_USER}:${SMQ_SPICEDB_DB_PASS}@spicedb-db:${SMQ_SPICEDB_DB_PORT}/${SMQ_SPICEDB_DB_NAME}?sslmode=disable"
+    depends_on:
+      - spicedb-db
+    networks:
+      - cube-cloud-network
+
+  spicedb:
+    image: "authzed/spicedb:v1.30.0"
+    container_name: cube-cloud-spicedb
+    profiles: ["cloud"]
+    command: "serve"
+    restart: "always"
+    environment:
+      SPICEDB_GRPC_PRESHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
+      SPICEDB_DATASTORE_ENGINE: ${SMQ_SPICEDB_DATASTORE_ENGINE}
+      SPICEDB_DATASTORE_CONN_URI: "${SMQ_SPICEDB_DATASTORE_ENGINE}://${SMQ_SPICEDB_DB_USER}:${SMQ_SPICEDB_DB_PASS}@spicedb-db:${SMQ_SPICEDB_DB_PORT}/${SMQ_SPICEDB_DB_NAME}?sslmode=disable"
+    depends_on:
+      - spicedb-migrate
+    networks:
+      - cube-cloud-network
+
+  auth-db:
+    image: postgres:16.2-alpine
+    container_name: cube-cloud-auth-db
+    profiles: ["cloud"]
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${SMQ_AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${SMQ_AUTH_DB_PASS}
+      POSTGRES_DB: ${SMQ_AUTH_DB_NAME}
+    volumes:
+      - supermq-auth-db-volume:/var/lib/postgresql/data
+    networks:
+      - cube-cloud-network
+
+  auth:
+    image: supermq/auth:${SMQ_RELEASE_TAG:-latest}
+    container_name: cube-cloud-auth
+    profiles: ["cloud"]
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: fluent-bit:24224
+        tag: docker.supermq-auth
+        fluentd-async: "true"
+    depends_on:
+      - auth-db
+      - spicedb
+      - nats
+    expose:
+      - ${SMQ_AUTH_GRPC_PORT}
+    restart: on-failure
+    environment:
+      SMQ_AUTH_LOG_LEVEL: ${SMQ_AUTH_LOG_LEVEL}
+      SMQ_SPICEDB_SCHEMA_FILE: ${SMQ_SPICEDB_SCHEMA_FILE}
+      SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
+      SMQ_SPICEDB_HOST: ${SMQ_SPICEDB_HOST}
+      SMQ_SPICEDB_PORT: ${SMQ_SPICEDB_PORT}
+      SMQ_AUTH_ACCESS_TOKEN_DURATION: ${SMQ_AUTH_ACCESS_TOKEN_DURATION}
+      SMQ_AUTH_REFRESH_TOKEN_DURATION: ${SMQ_AUTH_REFRESH_TOKEN_DURATION}
+      SMQ_AUTH_INVITATION_DURATION: ${SMQ_AUTH_INVITATION_DURATION}
+      SMQ_AUTH_SECRET_KEY: ${SMQ_AUTH_SECRET_KEY}
+      SMQ_AUTH_LOGIN_TOKEN_DURATION: ${SMQ_AUTH_LOGIN_TOKEN_DURATION}
+      SMQ_AUTH_HTTP_HOST: ${SMQ_AUTH_HTTP_HOST}
+      SMQ_AUTH_HTTP_PORT: ${SMQ_AUTH_HTTP_PORT}
+      SMQ_AUTH_HTTP_SERVER_CERT: ${SMQ_AUTH_HTTP_SERVER_CERT}
+      SMQ_AUTH_HTTP_SERVER_KEY: ${SMQ_AUTH_HTTP_SERVER_KEY}
+      SMQ_AUTH_GRPC_HOST: ${SMQ_AUTH_GRPC_HOST}
+      SMQ_AUTH_GRPC_PORT: ${SMQ_AUTH_GRPC_PORT}
+      SMQ_AUTH_GRPC_SERVER_CERT: ${SMQ_AUTH_GRPC_SERVER_CERT:+/auth-grpc-server.crt}
+      SMQ_AUTH_GRPC_SERVER_KEY: ${SMQ_AUTH_GRPC_SERVER_KEY:+/auth-grpc-server.key}
+      SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      SMQ_AUTH_GRPC_CLIENT_CA_CERTS: ${SMQ_AUTH_GRPC_CLIENT_CA_CERTS:+/auth-grpc-client-ca.crt}
+      SMQ_AUTH_DB_HOST: ${SMQ_AUTH_DB_HOST}
+      SMQ_AUTH_DB_PORT: ${SMQ_AUTH_DB_PORT}
+      SMQ_AUTH_DB_USER: ${SMQ_AUTH_DB_USER}
+      SMQ_AUTH_DB_PASS: ${SMQ_AUTH_DB_PASS}
+      SMQ_AUTH_DB_NAME: ${SMQ_AUTH_DB_NAME}
+      SMQ_AUTH_DB_SSL_MODE: ${SMQ_AUTH_DB_SSL_MODE}
+      SMQ_AUTH_DB_SSL_CERT: ${SMQ_AUTH_DB_SSL_CERT}
+      SMQ_AUTH_DB_SSL_KEY: ${SMQ_AUTH_DB_SSL_KEY}
+      SMQ_AUTH_DB_SSL_ROOT_CERT: ${SMQ_AUTH_DB_SSL_ROOT_CERT}
+      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
+      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
+      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
+      SMQ_AUTH_ADAPTER_INSTANCE_ID: ${SMQ_AUTH_ADAPTER_INSTANCE_ID}
+      SMQ_ES_URL: ${SMQ_ES_URL}
+    networks:
+      - cube-cloud-network
+    volumes:
+      - ./spicedb/schema.zed:${SMQ_SPICEDB_SCHEMA_FILE}
+      # Auth gRPC mTLS server certificates
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_SERVER_CERT:-ssl/certs/dummy/server_cert}
+        target: /auth-grpc-server${SMQ_AUTH_GRPC_SERVER_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_SERVER_KEY:-ssl/certs/dummy/server_key}
+        target: /auth-grpc-server${SMQ_AUTH_GRPC_SERVER_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca_certs}
+        target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_CLIENT_CA_CERTS:-ssl/certs/dummy/client_ca_certs}
+        target: /auth-grpc-client-ca${SMQ_AUTH_GRPC_CLIENT_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+    labels:
+      logging: "supermq-auth"
+      service: "auth"
+
+  users-db:
+    image: postgres:16.2-alpine
+    container_name: cube-cloud-users-db
+    profiles: ["cloud"]
+    restart: on-failure
+    command: postgres -c "max_connections=${SMQ_POSTGRES_MAX_CONNECTIONS}"
+    environment:
+      POSTGRES_USER: ${SMQ_USERS_DB_USER}
+      POSTGRES_PASSWORD: ${SMQ_USERS_DB_PASS}
+      POSTGRES_DB: ${SMQ_USERS_DB_NAME}
+      SMQ_POSTGRES_MAX_CONNECTIONS: ${SMQ_POSTGRES_MAX_CONNECTIONS}
+    networks:
+      - cube-cloud-network
+    volumes:
+      - supermq-users-db-volume:/var/lib/postgresql/data
+
+  users:
+    image: supermq/users:${SMQ_RELEASE_TAG:-latest}
+    container_name: cube-cloud-users
+    profiles: ["cloud"]
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: fluent-bit:24224
+        tag: docker.supermq-users
+        fluentd-async: "true"
+    depends_on:
+      - users-db
+      - auth
+      - nats
+    restart: on-failure
+    environment:
+      SMQ_USERS_LOG_LEVEL: ${SMQ_USERS_LOG_LEVEL}
+      SMQ_USERS_SECRET_KEY: ${SMQ_USERS_SECRET_KEY}
+      SMQ_USERS_ADMIN_EMAIL: ${SMQ_USERS_ADMIN_EMAIL}
+      SMQ_USERS_ADMIN_PASSWORD: ${SMQ_USERS_ADMIN_PASSWORD}
+      SMQ_USERS_ADMIN_USERNAME: ${SMQ_USERS_ADMIN_USERNAME}
+      SMQ_USERS_ADMIN_FIRST_NAME: ${SMQ_USERS_ADMIN_FIRST_NAME}
+      SMQ_USERS_ADMIN_LAST_NAME: ${SMQ_USERS_ADMIN_LAST_NAME}
+      SMQ_USERS_PASS_REGEX: ${SMQ_USERS_PASS_REGEX}
+      SMQ_USERS_ACCESS_TOKEN_DURATION: ${SMQ_USERS_ACCESS_TOKEN_DURATION}
+      SMQ_USERS_REFRESH_TOKEN_DURATION: ${SMQ_USERS_REFRESH_TOKEN_DURATION}
+      SMQ_TOKEN_RESET_ENDPOINT: ${SMQ_TOKEN_RESET_ENDPOINT}
+      SMQ_USERS_HTTP_HOST: ${SMQ_USERS_HTTP_HOST}
+      SMQ_USERS_HTTP_PORT: ${SMQ_USERS_HTTP_PORT}
+      SMQ_USERS_HTTP_SERVER_CERT: ${SMQ_USERS_HTTP_SERVER_CERT}
+      SMQ_USERS_HTTP_SERVER_KEY: ${SMQ_USERS_HTTP_SERVER_KEY}
+      SMQ_USERS_DB_HOST: ${SMQ_USERS_DB_HOST}
+      SMQ_USERS_DB_PORT: ${SMQ_USERS_DB_PORT}
+      SMQ_USERS_DB_USER: ${SMQ_USERS_DB_USER}
+      SMQ_USERS_DB_PASS: ${SMQ_USERS_DB_PASS}
+      SMQ_USERS_DB_NAME: ${SMQ_USERS_DB_NAME}
+      SMQ_USERS_DB_SSL_MODE: ${SMQ_USERS_DB_SSL_MODE}
+      SMQ_USERS_DB_SSL_CERT: ${SMQ_USERS_DB_SSL_CERT}
+      SMQ_USERS_DB_SSL_KEY: ${SMQ_USERS_DB_SSL_KEY}
+      SMQ_USERS_DB_SSL_ROOT_CERT: ${SMQ_USERS_DB_SSL_ROOT_CERT}
+      SMQ_USERS_ALLOW_SELF_REGISTER: ${SMQ_USERS_ALLOW_SELF_REGISTER}
+      SMQ_EMAIL_HOST: ${SMQ_EMAIL_HOST}
+      SMQ_EMAIL_PORT: ${SMQ_EMAIL_PORT}
+      SMQ_EMAIL_USERNAME: ${SMQ_EMAIL_USERNAME}
+      SMQ_EMAIL_PASSWORD: ${SMQ_EMAIL_PASSWORD}
+      SMQ_EMAIL_FROM_ADDRESS: ${SMQ_EMAIL_FROM_ADDRESS}
+      SMQ_EMAIL_FROM_NAME: ${SMQ_EMAIL_FROM_NAME}
+      SMQ_EMAIL_TEMPLATE: ${SMQ_EMAIL_TEMPLATE}
+      SMQ_ES_URL: ${SMQ_ES_URL}
+      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
+      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
+      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
+      SMQ_AUTH_GRPC_URL: ${SMQ_AUTH_GRPC_URL}
+      SMQ_AUTH_GRPC_TIMEOUT: ${SMQ_AUTH_GRPC_TIMEOUT}
+      SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
+      SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
+      SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      SMQ_GOOGLE_CLIENT_ID: ${SMQ_GOOGLE_CLIENT_ID}
+      SMQ_GOOGLE_CLIENT_SECRET: ${SMQ_GOOGLE_CLIENT_SECRET}
+      SMQ_GOOGLE_REDIRECT_URL: ${SMQ_GOOGLE_REDIRECT_URL}
+      SMQ_GOOGLE_STATE: ${SMQ_GOOGLE_STATE}
+      SMQ_OAUTH_UI_REDIRECT_URL: ${SMQ_OAUTH_UI_REDIRECT_URL}
+      SMQ_OAUTH_UI_ERROR_URL: ${SMQ_OAUTH_UI_ERROR_URL}
+      SMQ_USERS_DELETE_INTERVAL: ${SMQ_USERS_DELETE_INTERVAL}
+      SMQ_USERS_DELETE_AFTER: ${SMQ_USERS_DELETE_AFTER}
+      SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
+      SMQ_SPICEDB_HOST: ${SMQ_SPICEDB_HOST}
+      SMQ_SPICEDB_PORT: ${SMQ_SPICEDB_PORT}
+      SMQ_PASSWORD_RESET_URL_PREFIX: ${SMQ_PASSWORD_RESET_URL_PREFIX}
+      SMQ_PASSWORD_RESET_EMAIL_TEMPLATE: ${SMQ_PASSWORD_RESET_EMAIL_TEMPLATE}
+      SMQ_VERIFICATION_URL_PREFIX: ${SMQ_VERIFICATION_URL_PREFIX}
+      SMQ_VERIFICATION_EMAIL_TEMPLATE: ${SMQ_VERIFICATION_EMAIL_TEMPLATE}
+      SMQ_ALLOW_UNVERIFIED_USER: ${SMQ_ALLOW_UNVERIFIED_USER}
+    volumes:
+      - ./templates/${SMQ_PASSWORD_RESET_EMAIL_TEMPLATE}:/${SMQ_PASSWORD_RESET_EMAIL_TEMPLATE}
+      - ./templates/${SMQ_VERIFICATION_EMAIL_TEMPLATE}:/${SMQ_VERIFICATION_EMAIL_TEMPLATE}
+      # Auth gRPC client certificates
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+    networks:
+      - cube-cloud-network
+    labels:
+      logging: "supermq-users"
+      service: "users"
+
+  domains-db:
+    image: postgres:16.2-alpine
+    container_name: cube-cloud-domains-db
+    profiles: ["cloud"]
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${SMQ_DOMAINS_DB_USER}
+      POSTGRES_PASSWORD: ${SMQ_DOMAINS_DB_PASS}
+      POSTGRES_DB: ${SMQ_DOMAINS_DB_NAME}
+    networks:
+      - cube-cloud-network
+    volumes:
+      - supermq-domains-db-volume:/var/lib/postgresql/data
+
+  domains-redis:
+    image: redis:7.2.4-alpine
+    container_name: cube-cloud-domains-redis
+    profiles: ["cloud"]
+    restart: on-failure
+    networks:
+      - cube-cloud-network
+    volumes:
+      - supermq-domains-redis-volume:/data
+
+  domains:
+    image: supermq/domains:${SMQ_RELEASE_TAG:-latest}
+    container_name: cube-cloud-domains
+    profiles: ["cloud"]
+    depends_on:
+      - domains-db
+      - domains-redis
+      - spicedb
+      - auth
+    expose:
+      - ${SMQ_DOMAINS_GRPC_PORT}
+    restart: on-failure
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: fluent-bit:24224
+        tag: docker.supermq-domains
+        fluentd-async: "true"
+    environment:
+      SMQ_DOMAINS_LOG_LEVEL: ${SMQ_DOMAINS_LOG_LEVEL}
+      SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
+      SMQ_SPICEDB_HOST: ${SMQ_SPICEDB_HOST}
+      SMQ_SPICEDB_PORT: ${SMQ_SPICEDB_PORT}
+      SMQ_SPICEDB_SCHEMA_FILE: ${SMQ_SPICEDB_SCHEMA_FILE}
+      SMQ_DOMAINS_HTTP_HOST: ${SMQ_DOMAINS_HTTP_HOST}
+      SMQ_DOMAINS_HTTP_PORT: ${SMQ_DOMAINS_HTTP_PORT}
+      SMQ_DOMAINS_HTTP_SERVER_CERT: ${SMQ_DOMAINS_HTTP_SERVER_CERT}
+      SMQ_DOMAINS_HTTP_SERVER_KEY: ${SMQ_DOMAINS_HTTP_SERVER_KEY}
+      SMQ_DOMAINS_GRPC_HOST: ${SMQ_DOMAINS_GRPC_HOST}
+      SMQ_DOMAINS_GRPC_PORT: ${SMQ_DOMAINS_GRPC_PORT}
+      SMQ_DOMAINS_GRPC_SERVER_CERT: ${SMQ_DOMAINS_GRPC_SERVER_CERT:+/auth-grpc-server.crt}
+      SMQ_DOMAINS_GRPC_SERVER_KEY: ${SMQ_DOMAINS_GRPC_SERVER_KEY:+/auth-grpc-server.key}
+      SMQ_DOMAINS_GRPC_SERVER_CA_CERTS: ${SMQ_DOMAINS_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      SMQ_DOMAINS_GRPC_CLIENT_CA_CERTS: ${SMQ_DOMAINS_GRPC_CLIENT_CA_CERTS:+/auth-grpc-client-ca.crt}
+      SMQ_DOMAINS_DB_HOST: ${SMQ_DOMAINS_DB_HOST}
+      SMQ_DOMAINS_DB_PORT: ${SMQ_DOMAINS_DB_PORT}
+      SMQ_DOMAINS_DB_USER: ${SMQ_DOMAINS_DB_USER}
+      SMQ_DOMAINS_DB_PASS: ${SMQ_DOMAINS_DB_PASS}
+      SMQ_DOMAINS_DB_NAME: ${SMQ_DOMAINS_DB_NAME}
+      SMQ_DOMAINS_DB_SSL_MODE: ${SMQ_DOMAINS_DB_SSL_MODE}
+      SMQ_DOMAINS_DB_SSL_CERT: ${SMQ_DOMAINS_DB_SSL_CERT}
+      SMQ_DOMAINS_DB_SSL_KEY: ${SMQ_DOMAINS_DB_SSL_KEY}
+      SMQ_DOMAINS_DB_SSL_ROOT_CERT: ${SMQ_DOMAINS_DB_SSL_ROOT_CERT}
+      SMQ_DOMAINS_INSTANCE_ID: ${SMQ_DOMAINS_INSTANCE_ID}
+      SMQ_ES_URL: ${SMQ_ES_URL}
+      SMQ_DOMAINS_CACHE_URL: ${SMQ_DOMAINS_CACHE_URL}
+      SMQ_DOMAINS_CACHE_KEY_DURATION: ${SMQ_DOMAINS_CACHE_KEY_DURATION}
+      SMQ_AUTH_GRPC_URL: ${SMQ_AUTH_GRPC_URL}
+      SMQ_AUTH_GRPC_TIMEOUT: ${SMQ_AUTH_GRPC_TIMEOUT}
+      SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
+      SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
+      SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      SMQ_GROUPS_GRPC_URL: ${SMQ_GROUPS_GRPC_URL}
+      SMQ_GROUPS_GRPC_TIMEOUT: ${SMQ_GROUPS_GRPC_TIMEOUT}
+      SMQ_GROUPS_GRPC_CLIENT_CERT: ${SMQ_GROUPS_GRPC_CLIENT_CERT:+/groups-grpc-client.crt}
+      SMQ_GROUPS_GRPC_CLIENT_KEY: ${SMQ_GROUPS_GRPC_CLIENT_KEY:+/groups-grpc-client.key}
+      SMQ_GROUPS_GRPC_SERVER_CA_CERTS: ${SMQ_GROUPS_GRPC_SERVER_CA_CERTS:+/groups-grpc-server-ca.crt}
+      SMQ_CHANNELS_URL: ${SMQ_CHANNELS_URL}
+      SMQ_CHANNELS_GRPC_URL: ${SMQ_CHANNELS_GRPC_URL}
+      SMQ_CHANNELS_GRPC_TIMEOUT: ${SMQ_CHANNELS_GRPC_TIMEOUT}
+      SMQ_CHANNELS_GRPC_CLIENT_CERT: ${SMQ_CHANNELS_GRPC_CLIENT_CERT:+/channels-grpc-client.crt}
+      SMQ_CHANNELS_GRPC_CLIENT_KEY: ${SMQ_CHANNELS_GRPC_CLIENT_KEY:+/channels-grpc-client.key}
+      SMQ_CHANNELS_GRPC_SERVER_CA_CERTS: ${SMQ_CHANNELS_GRPC_SERVER_CA_CERTS:+/channels-grpc-server-ca.crt}
+      SMQ_CLIENTS_GRPC_URL: ${SMQ_CLIENTS_GRPC_URL}
+      SMQ_CLIENTS_GRPC_TIMEOUT: ${SMQ_CLIENTS_GRPC_TIMEOUT}
+      SMQ_CLIENTS_GRPC_CLIENT_CERT: ${SMQ_CLIENTS_GRPC_CLIENT_CERT:+/clients-grpc-client.crt}
+      SMQ_CLIENTS_GRPC_CLIENT_KEY: ${SMQ_CLIENTS_GRPC_CLIENT_KEY:+/clients-grpc-client.key}
+      SMQ_CLIENTS_GRPC_R_CA_CERTS: ${SMQ_CLIENTS_GRPC_SERVER_CA_CERTS:+/clients-grpc-server-ca.crt}
+      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
+      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
+      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
+    networks:
+      - cube-cloud-network
+    volumes:
+      - ./spicedb/schema.zed:${SMQ_SPICEDB_SCHEMA_FILE}
+      # Auth gRPC mTLS server certificates
+      - type: bind
+        source: ${SMQ_DOMAINS_GRPC_SERVER_CERT:-ssl/certs/dummy/server_cert}
+        target: /auth-grpc-server${SMQ_DOMAINS_GRPC_SERVER_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_DOMAINS_GRPC_SERVER_KEY:-ssl/certs/dummy/server_key}
+        target: /auth-grpc-server${SMQ_DOMAINS_GRPC_SERVER_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_DOMAINS_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca_certs}
+        target: /auth-grpc-server-ca${SMQ_DOMAINS_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_DOMAINS_GRPC_CLIENT_CA_CERTS:-ssl/certs/dummy/client_ca_certs}
+        target: /auth-grpc-client-ca${SMQ_DOMAINS_GRPC_CLIENT_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+    labels:
+      logging: "supermq-domains"
+      service: "domains"
+
+  ui:
+    image: ghcr.io/ultravioletrs/cube/ui:latest
+    container_name: cube-cloud-ui
+    profiles: ["cloud"]
+    restart: on-failure
+    depends_on:
+      - auth
+      - users
+      - domains
+    networks:
+      - cube-cloud-network
+    environment:
+      PORT: ${UI_PORT}
+      RUNTIME_ENV: ${UV_RUNTIME_ENV}
+      MG_DOMAINS_URL: ${SMQ_DOMAINS_URL}
+      MG_USERS_URL: ${SMQ_USERS_URL}
+      MG_INVITATIONS_URL: ${SMQ_INVITATIONS_URL}
+      MG_AUTH_URL: ${SMQ_AUTH_URL}
+      MG_UI_NAME: ${UV_CUBE_UI_NAME}
+      MG_UI_BASE_PATH: ${UV_CUBE_UI_BASE_PATH}
+      MG_UI_DOCKER_ACCEPT_EULA: ${UV_CUBE_UI_DOCKER_ACCEPT_EULA}
+      NEXT_PUBLIC_SMQ_UI_BASE_PATH: ${UV_CUBE_PUBLIC_BASE_PATH}
+      MG_UI_TYPE: ${MG_UI_TYPE}
+      NEXTAUTH_SECRET: ${UV_CUBE_UI_NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${UV_CUBE_NEXTAUTH_URL}
+      NODE_ENV: ${UV_CUBE_NODE_ENV}
+      OLLAMA_BASE_URL: ${UV_CUBE_UI_LLM_BASE_URL}
+      OLLAMA_DEFAULT_MODEL: ${UV_CUBE_UI_LLM_DEFAULT_MODEL}
+    labels:
+      logging: "cube-ui"
+      service: "ui"
+
+  cube-proxy:
+    container_name: cube-cloud-proxy
+    profiles: ["cloud"]
+    image: ghcr.io/ultravioletrs/cube/proxy:latest
+    restart: on-failure
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: fluent-bit:24224
+        tag: docker.cube-proxy
+        fluentd-async: "true"
+    networks:
+      - cube-cloud-network
+    depends_on:
+      - auth
+      - fluent-bit
+    environment:
+      UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
+      UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
+      UV_CUBE_PROXY_HOST: ${UV_CUBE_PROXY_HOST}
+      UV_CUBE_PROXY_PORT: ${UV_CUBE_PROXY_PORT}
+      UV_CUBE_PROXY_SERVER_CERT: ${UV_CUBE_PROXY_SERVER_CERT}
+      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY}
+      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
+      UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
+      UV_CUBE_PROXY_ROUTER_CONFIG: ${UV_CUBE_PROXY_ROUTER_CONFIG}
+      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
+      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
+      SMQ_AUTH_GRPC_URL: ${SMQ_AUTH_GRPC_URL}
+      SMQ_AUTH_GRPC_TIMEOUT: ${SMQ_AUTH_GRPC_TIMEOUT}
+      SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
+      SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
+      SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+    volumes:
+      - type: bind
+        source: ./config.json
+        target: /etc/cube/proxy/config.json
+        read_only: true
+      # Auth gRPC client certificates
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+    labels:
+      logging: "cube-proxy"
+      service: "proxy"
