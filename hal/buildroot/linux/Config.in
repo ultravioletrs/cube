@@ -1,5 +1,5 @@
 menu "Cube AI Services"
-	source "$BR2_EXTERNAL_CUBE_PATH/package/agent/Config.in"
+	source "$BR2_EXTERNAL_CUBE_PATH/package/cube-agent/Config.in"
 	source "$BR2_EXTERNAL_CUBE_PATH/package/ollama/Config.in"
 	source "$BR2_EXTERNAL_CUBE_PATH/package/vllm/Config.in"
 endmenu

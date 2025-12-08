@@ -68,7 +68,13 @@ func main() {
 
 	ctx := context.Background()
 
-	httpServerConfig := server.ServerConfig{Config: server.Config{Port: defSvcHTTPPort}}
+	httpServerConfig := server.AgentConfig{
+		ServerConfig: server.ServerConfig{
+			Config: server.Config{
+				Port: defSvcHTTPPort,
+			},
+		},
+	}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 

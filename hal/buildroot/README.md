@@ -50,6 +50,64 @@ VEK signed the Attestation Report!
 Measurement from SNP Attestation Report: daa2e216eafd8c6404b72157a130500ab0c0944064c8e1009ebf5e910371caf57a6711654108a01a69baaa1a05759cf0
 ```
 
+## Verifying Cube Agent is Running
+
+The Cube Agent is automatically started on boot. To verify it's running:
+
+### For systemd-based systems
+
+Check the service status:
+
+```bash
+systemctl status cube-agent
+```
+
+View the service logs:
+
+```bash
+journalctl -u cube-agent -f
+```
+
+Restart the service if needed:
+
+```bash
+systemctl restart cube-agent
+```
+
+### For SysV init systems
+
+Check the service status:
+
+```bash
+/etc/init.d/S95agent status
+```
+
+View the process:
+
+```bash
+ps aux | grep cube-agent
+```
+
+Restart the service:
+
+```bash
+/etc/init.d/S95agent restart
+```
+
+### Test the Agent API
+
+The agent runs on port `7001` by default. Test the endpoint:
+
+```bash
+curl http://localhost:7001/health
+```
+
+Check the agent configuration:
+
+```bash
+cat /etc/cube/agent.env
+```
+
 By default the docker images have been pulled from docker registry and the the docker composition has been started. The folder which contains the docker compose file is at `/mnt/docker/cube/docker`. To see the running containers, run the following command:
 
 ```bash

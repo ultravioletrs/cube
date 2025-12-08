@@ -32,6 +32,15 @@ else
 CUBE_AGENT_TARGET_URL = http://localhost:11434
 endif
 
+define CUBE_AGENT_BUILD_CMDS
+	$(MAKE) -C $(@D) build-agent
+endef
+
+define CUBE_AGENT_INSTALL_TARGET_CMDS
+	$(INSTALL) -D -m 0755 $(@D)/build/cube-agent $(TARGET_DIR)/bin
+	$(INSTALL) -d -m 0755 $(TARGET_DIR)/var/lib/cube
+endef
+
 define CUBE_AGENT_INSTALL_INIT_SYSV
 	$(INSTALL) -D -m 0755 $(BR2_EXTERNAL_CUBE_PATH)/package/cube-agent/S95cube-agent \
 		$(TARGET_DIR)/etc/init.d/S95cube-agent
@@ -53,4 +62,4 @@ endef
 
 CUBE_AGENT_POST_INSTALL_TARGET_HOOKS += CUBE_AGENT_INSTALL_CONFIG
 
-$(eval $(golang-package))
+$(eval $(generic-package))
