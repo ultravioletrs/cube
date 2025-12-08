@@ -9,12 +9,14 @@ import (
 	"log"
 	"os"
 
+	"github.com/absmach/certs/sdk"
 	mglog "github.com/absmach/supermq/logger"
 	smqserver "github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
 	"github.com/ultraviolet/cube/agent"
 	"github.com/ultraviolet/cube/agent/api"
+	"github.com/ultravioletrs/cocos/pkg/atls"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
 	"github.com/ultravioletrs/cocos/pkg/attestation/tdx"
@@ -40,6 +42,8 @@ type Config struct {
 	Vmpl          uint   `env:"AGENT_VMPL"                envDefault:"2"`
 	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:""`
 	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
+	CertsToken    string `env:"UV_CUBE_AGENT_CERTS_TOKEN" envDefault:""`
+	CVMId         string `env:"UV_CUBE_AGENT_CVM_ID"      envDefault:""`
 }
 
 func main() {
@@ -134,9 +138,26 @@ func main() {
 
 	handler := api.MakeHandler(svc, cfg.InstanceID)
 
+	var certProvider atls.CertificateProvider
+
+	if ccPlatform != attestation.NoCC {
+		var certsSDK sdk.SDK
+		if cfg.CAUrl != "" {
+			certsSDK = sdk.NewSDK(sdk.Config{
+				CertsURL: cfg.CAUrl,
+			})
+		}
+		certProvider, err = atls.NewProvider(provider, ccPlatform, cfg.CertsToken, cfg.CVMId, certsSDK)
+		if err != nil {
+			logger.Error(fmt.Sprintf("failed to create certificate provider: %s", err))
+			exitCode = 1
+			return
+		}
+	}
+
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, &httpServerConfig,
-		handler, logger, cfg.CAUrl)
+		handler, logger, certProvider)
 
 	g.Go(func() error {
 		return httpSvr.Start()

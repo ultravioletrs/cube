@@ -124,6 +124,18 @@ config BR2_PACKAGE_CUBE_AGENT_CLIENT_CA_CERTS
 	help
 	  Path to the client CA certificates file
 
+config BR2_PACKAGE_CUBE_AGENT_CERTS_TOKEN
+	string "Certs Token"
+	default ""
+	help
+	  Token for accessing the Certs service
+
+config BR2_PACKAGE_CUBE_AGENT_CVM_ID
+	string "CVM ID"
+	default ""
+	help
+	  ID of the Confidential VM
+
 endif
 
 comment "cube-agent needs a toolchain w/ threads"

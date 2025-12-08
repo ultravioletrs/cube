@@ -68,6 +68,8 @@ define CUBE_AGENT_INSTALL_CONFIG
 	echo "UV_CUBE_AGENT_SERVER_CERT=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CERT))" >> $(TARGET_DIR)/etc/cube/agent.env
 	echo "UV_CUBE_AGENT_SERVER_KEY=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_KEY))" >> $(TARGET_DIR)/etc/cube/agent.env
 	echo "UV_CUBE_AGENT_CLIENT_CA_CERTS=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CLIENT_CA_CERTS))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_CERTS_TOKEN=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CERTS_TOKEN))" >> $(TARGET_DIR)/etc/cube/agent.env
+	echo "UV_CUBE_AGENT_CVM_ID=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CVM_ID))" >> $(TARGET_DIR)/etc/cube/agent.env
 endef
 
 CUBE_AGENT_POST_INSTALL_TARGET_HOOKS += CUBE_AGENT_INSTALL_CONFIG
