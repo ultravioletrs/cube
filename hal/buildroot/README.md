@@ -25,6 +25,33 @@ If you want to start a normal VM, you can run:
 sudo bash buildroot/qemu.sh start
 ```
 
+### Manual CVM Deployment
+
+You can also manually deploy the CVM using the following QEMU command:
+
+```bash
+/usr/bin/qemu-system-x86_64 \
+	-enable-kvm \
+	-m 20G -smp cores=16,sockets=1,threads=1 \
+	-cpu host \
+	-object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type": "vsock", "cid":"2","port":"4050"}}' \
+	-machine q35,kernel_irqchip=split,confidential-guest-support=tdx,memory-backend=mem0,hpet=off \
+	-bios /usr/share/ovmf/OVMF.fd \
+	-nographic \
+	-nodefaults \
+	-no-reboot \
+	-serial mon:stdio \
+	-device virtio-net-pci,netdev=nic0_td \
+	-netdev user,id=nic0_td,hostfwd=tcp::7021-:7002 \
+	-kernel /home/sammy/cube-cvm/bzImage \
+	-append "console=ttyS0" \
+	-object memory-backend-memfd,id=mem0,size=20G \
+	-initrd /home/sammy/cube-cvm/rootfs.cpio.gz \
+	-device vhost-vsock-pci,guest-cid=6 \
+	-monitor pty \
+	-monitor unix:monitor,server,nowait
+```
+
 Login to the VM using the following credentials:
 
 - Username: `root`
@@ -50,14 +77,60 @@ VEK signed the Attestation Report!
 Measurement from SNP Attestation Report: daa2e216eafd8c6404b72157a130500ab0c0944064c8e1009ebf5e910371caf57a6711654108a01a69baaa1a05759cf0
 ```
 
-By default the docker images have been pulled from docker registry and the the docker composition has been started. The folder which contains the docker compose file is at `/mnt/docker/cube/docker`. To see the running containers, run the following command:
+## Verifying Cube Agent is Running
+
+The Cube Agent is automatically started on boot. To verify it's running:
+
+### For systemd-based systems
+
+Check the service status:
 
 ```bash
-docker ps -a
+systemctl status cube-agent
 ```
 
-For local development, replace the following IP address entries in `docker/.env` with the IP address of the qemu virtual machine as follows:
+View the service logs:
 
 ```bash
- UV_CUBE_NEXTAUTH_URL=http://<ip-address>:${UI_PORT}
+journalctl -u cube-agent -f
+```
+
+Restart the service if needed:
+
+```bash
+systemctl restart cube-agent
+```
+
+### For SysV init systems
+
+Check the service status:
+
+```bash
+/etc/init.d/S95agent status
+```
+
+View the process:
+
+```bash
+ps aux | grep cube-agent
+```
+
+Restart the service:
+
+```bash
+/etc/init.d/S95agent restart
+```
+
+### Test the Agent API
+
+The agent runs on port `7001` by default. Test the endpoint:
+
+```bash
+curl http://localhost:7001/health
+```
+
+Check the agent configuration:
+
+```bash
+cat /etc/cube/agent.env
 ```

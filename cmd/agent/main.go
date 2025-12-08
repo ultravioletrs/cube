@@ -38,7 +38,7 @@ type Config struct {
 	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
 	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
 	Vmpl          uint   `env:"AGENT_VMPL"                envDefault:"2"`
-	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:"http://am-certs:9010"`
+	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:""`
 	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
 }
 
@@ -68,7 +68,13 @@ func main() {
 
 	ctx := context.Background()
 
-	httpServerConfig := server.ServerConfig{Config: server.Config{Port: defSvcHTTPPort}}
+	httpServerConfig := server.AgentConfig{
+		ServerConfig: server.ServerConfig{
+			Config: server.Config{
+				Port: defSvcHTTPPort,
+			},
+		},
+	}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 
