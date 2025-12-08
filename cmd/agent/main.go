@@ -102,12 +102,16 @@ func main() {
 	switch ccPlatform {
 	case attestation.SNP:
 		provider = vtpm.NewProvider(false, cfg.Vmpl)
+		logger.Info("Started with SNP")
 	case attestation.SNPvTPM:
 		provider = vtpm.NewProvider(true, cfg.Vmpl)
+		logger.Info("Started with SNPvTPM")
 	case attestation.Azure:
 		provider = azure.NewProvider()
+		logger.Info("Started with Azure")
 	case attestation.TDX:
 		provider = tdx.NewProvider()
+		logger.Info("Started with TDX")
 	case attestation.NoCC:
 		logger.Info("TEE device not found")
 
