@@ -18,6 +18,7 @@ import (
 	mgauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/go-chi/chi/v5"
 	kitendpoint "github.com/go-kit/kit/endpoint"
+	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ultravioletrs/cube/agent/audit"
 	"github.com/ultravioletrs/cube/proxy"
@@ -50,6 +51,18 @@ func MakeHandler(
 		// Proxy all requests using the router
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
+
+	mux.Method("POST", "/attestation/policy", kithttp.NewServer(
+		makeUpdateAttestationPolicyEndpoint(svc),
+		decodeUpdateAttestationPolicyRequest,
+		encodeUpdateAttestationPolicyResponse,
+	))
+
+	mux.Method("GET", "/attestation/policy", kithttp.NewServer(
+		makeGetAttestationPolicyEndpoint(svc),
+		decodeGetAttestationPolicyRequest,
+		encodeGetAttestationPolicyResponse,
+	))
 
 	return mux
 }

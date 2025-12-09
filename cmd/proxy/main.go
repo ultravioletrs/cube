@@ -20,6 +20,7 @@ import (
 	domainsgrpc "github.com/absmach/supermq/pkg/domains/grpcclient"
 	"github.com/absmach/supermq/pkg/grpcclient"
 	"github.com/absmach/supermq/pkg/jaeger"
+	"github.com/absmach/supermq/pkg/postgres"
 	"github.com/absmach/supermq/pkg/prometheus"
 	"github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/server/http"
@@ -31,6 +32,7 @@ import (
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/api"
 	"github.com/ultravioletrs/cube/proxy/middleware"
+	ppostgres "github.com/ultravioletrs/cube/proxy/postgres"
 	"github.com/ultravioletrs/cube/proxy/router"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
@@ -42,6 +44,8 @@ const (
 	defSvcHTTPPort = "8900"
 	envPrefixAgent = "UV_CUBE_AGENT_"
 	envPrefixAuth  = "SMQ_AUTH_GRPC_"
+	envPrefixDB    = "UV_CUBE_PROXY_DB_"
+	defDB          = "postgres"
 )
 
 type config struct {
@@ -133,20 +137,33 @@ func main() {
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
+	}
 
+	dbConfig := postgres.Config{Name: defDB}
+	if err := env.ParseWithOptions(&dbConfig, env.Options{Prefix: envPrefixDB}); err != nil {
+		logger.Error(err.Error())
 		exitCode = 1
-
 		return
 	}
 
+	db, err := postgres.Setup(dbConfig, *ppostgres.Migration())
+	if err != nil {
+		logger.Error(fmt.Sprintf("Failed to connect to %s database: %s", svcName, err))
+		exitCode = 1
+		return
+	}
+	defer db.Close()
+
 	defer func() {
-		err := tp.Shutdown(ctx)
-		if err != nil {
-			logger.Error(fmt.Sprintf("error shutting down tracer provider: %v", err))
+		if err := tp.Shutdown(ctx); err != nil {
+			logger.Error(fmt.Sprintf("Error shutting down tracer provider: %v", err))
 		}
 	}()
-
 	tracer := tp.Tracer(svcName)
+
+	database := postgres.NewDatabase(db, dbConfig, tracer)
+
+	repo := ppostgres.NewRepository(database)
 
 	agentConfig := clients.AttestedClientConfig{}
 
@@ -167,7 +184,7 @@ func main() {
 		return
 	}
 
-	svc, err := newService(logger, tracer, &agentConfig)
+	svc, err := newService(logger, tracer, &agentConfig, repo)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -250,9 +267,9 @@ func main() {
 }
 
 func newService(
-	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig,
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig, repo proxy.Repository,
 ) (proxy.Service, error) {
-	svc, err := proxy.New(agentConfig)
+	svc, err := proxy.New(agentConfig, repo)
 	if err != nil {
 		return nil, err
 	}
