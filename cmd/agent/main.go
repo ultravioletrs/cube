@@ -57,8 +57,6 @@ func main() {
 		log.Fatalf("failed to init logger: %s", err.Error())
 	}
 
-	logger.Info("Starting agent service")
-
 	var exitCode int
 	defer mglog.ExitWithError(&exitCode)
 
@@ -104,16 +102,12 @@ func main() {
 	switch ccPlatform {
 	case attestation.SNP:
 		provider = vtpm.NewProvider(false, cfg.Vmpl)
-		logger.Info("Started with SNP")
 	case attestation.SNPvTPM:
 		provider = vtpm.NewProvider(true, cfg.Vmpl)
-		logger.Info("Started with SNPvTPM")
 	case attestation.Azure:
 		provider = azure.NewProvider()
-		logger.Info("Started with Azure")
 	case attestation.TDX:
 		provider = tdx.NewProvider()
-		logger.Info("Started with TDX")
 	case attestation.NoCC:
 		logger.Info("TEE device not found")
 
@@ -143,9 +137,6 @@ func main() {
 	g, ctx := errgroup.WithContext(ctx)
 
 	handler := api.MakeHandler(svc, cfg.InstanceID)
-
-	fmt.Println("http cfg", httpServerConfig)
-	logger.Info("http cfg", httpServerConfig)
 
 	var certProvider atls.CertificateProvider
 
