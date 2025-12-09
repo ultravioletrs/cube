@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
@@ -42,9 +42,13 @@ function start_qemu(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:6193,dns=8.8.8.8 \
-    -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
+    -m $RAM -smp cores=$CPU_CORES,sockets=1,threads=1 \
+    -cpu host \
+    -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type": "vsock", "cid":"2","port":"4050"}}' \
+    -machine q35,kernel_irqchip=split,confidential-guest-support=tdx,memory-backend=mem0,hpet=off \
+    -bios "$OVMF_CODE" \
     -nographic \
+    -nodefaults \
     -no-reboot \
     -kernel $KERNEL_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio,index=0  \
