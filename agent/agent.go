@@ -17,12 +17,10 @@ import (
 	"github.com/google/go-sev-guest/abi"
 	tdxabi "github.com/google/go-tdx-guest/abi"
 	"github.com/google/go-tdx-guest/proto/tdx"
-	tpmAttest "github.com/google/go-tpm-tools/proto/attest"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/quoteprovider"
 	"github.com/ultravioletrs/cocos/pkg/attestation/vtpm"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -146,7 +144,7 @@ func (a *agentService) Attestation(
 		}
 
 		if toJSON {
-			return a.vtpmAttestationToTextProto(vTPMQuote)
+			return a.attestationToJSON(vTPMQuote)
 		}
 
 		return vTPMQuote, nil
@@ -162,7 +160,7 @@ func (a *agentService) Attestation(
 				return a.tdxAttestationToJSON(vTPMQuote)
 			}
 
-			return a.vtpmAttestationToTextProto(vTPMQuote)
+			return a.attestationToJSON(vTPMQuote)
 		}
 
 		return vTPMQuote, nil
@@ -190,17 +188,6 @@ func (a *agentService) attestationToJSON(report []byte) ([]byte, error) {
 	}
 
 	return json.MarshalIndent(attestationPB, "", "\t")
-}
-
-func (a *agentService) vtpmAttestationToTextProto(vTPMQuote []byte) ([]byte, error) {
-	var attvTPM tpmAttest.Attestation
-
-	err := proto.Unmarshal(vTPMQuote, &attvTPM)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrAttestationUnmarshal, err)
-	}
-
-	return protojson.Marshal(&attvTPM)
 }
 
 func (a *agentService) tdxAttestationToJSON(vTPMQuote []byte) ([]byte, error) {
