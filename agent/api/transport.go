@@ -25,7 +25,7 @@ func MakeHandler(svc agent.Service, instanceID string) http.Handler {
 	mux.Get("/health", supermq.Health("cube-agent", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
-	mux.Get("/attestation", kithttp.NewServer(
+	mux.Post("/attestation", kithttp.NewServer(
 		endpoints.Attestation,
 		decodeAttestationRequest,
 		encodeAttestationResponse,
