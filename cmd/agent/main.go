@@ -147,10 +147,13 @@ func main() {
 				CertsURL: cfg.CAUrl,
 			})
 		}
+
 		certProvider, err = atls.NewProvider(provider, ccPlatform, cfg.CertsToken, cfg.CVMId, certsSDK)
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed to create certificate provider: %s", err))
+
 			exitCode = 1
+
 			return
 		}
 	}
