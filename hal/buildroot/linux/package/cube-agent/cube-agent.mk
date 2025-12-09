@@ -64,10 +64,22 @@ define CUBE_AGENT_INSTALL_CONFIG
 	echo "AGENT_VMPL=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_VMPL))" >> $(TARGET_DIR)/etc/cube/agent.env
 	echo "UV_CUBE_AGENT_CA_URL=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CA_URL))" >> $(TARGET_DIR)/etc/cube/agent.env
 	echo "UV_CUBE_AGENT_ATTESTED_TLS=$(if $(BR2_PACKAGE_CUBE_AGENT_ATTESTED_TLS),true,false)" >> $(TARGET_DIR)/etc/cube/agent.env
-	echo "UV_CUBE_AGENT_SERVER_CA_CERTS=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CA_CERTS))" >> $(TARGET_DIR)/etc/cube/agent.env
-	echo "UV_CUBE_AGENT_SERVER_CERT=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CERT))" >> $(TARGET_DIR)/etc/cube/agent.env
-	echo "UV_CUBE_AGENT_SERVER_KEY=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_KEY))" >> $(TARGET_DIR)/etc/cube/agent.env
-	echo "UV_CUBE_AGENT_CLIENT_CA_CERTS=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CLIENT_CA_CERTS))" >> $(TARGET_DIR)/etc/cube/agent.env
+	$(if $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CA_CERTS)), \
+		$(INSTALL) -D -m 0644 $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CA_CERTS)) $(TARGET_DIR)/etc/cube/certs/server_ca.pem && \
+		echo "UV_CUBE_AGENT_SERVER_CA_CERTS=/etc/cube/certs/server_ca.pem" >> $(TARGET_DIR)/etc/cube/agent.env, \
+		echo "UV_CUBE_AGENT_SERVER_CA_CERTS=" >> $(TARGET_DIR)/etc/cube/agent.env)
+	$(if $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CERT)), \
+		$(INSTALL) -D -m 0644 $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_CERT)) $(TARGET_DIR)/etc/cube/certs/server.crt && \
+		echo "UV_CUBE_AGENT_SERVER_CERT=/etc/cube/certs/server.crt" >> $(TARGET_DIR)/etc/cube/agent.env, \
+		echo "UV_CUBE_AGENT_SERVER_CERT=" >> $(TARGET_DIR)/etc/cube/agent.env)
+	$(if $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_KEY)), \
+		$(INSTALL) -D -m 0600 $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_SERVER_KEY)) $(TARGET_DIR)/etc/cube/certs/server.key && \
+		echo "UV_CUBE_AGENT_SERVER_KEY=/etc/cube/certs/server.key" >> $(TARGET_DIR)/etc/cube/agent.env, \
+		echo "UV_CUBE_AGENT_SERVER_KEY=" >> $(TARGET_DIR)/etc/cube/agent.env)
+	$(if $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CLIENT_CA_CERTS)), \
+		$(INSTALL) -D -m 0644 $(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CLIENT_CA_CERTS)) $(TARGET_DIR)/etc/cube/certs/client_ca.pem && \
+		echo "UV_CUBE_AGENT_CLIENT_CA_CERTS=/etc/cube/certs/client_ca.pem" >> $(TARGET_DIR)/etc/cube/agent.env, \
+		echo "UV_CUBE_AGENT_CLIENT_CA_CERTS=" >> $(TARGET_DIR)/etc/cube/agent.env)
 	echo "UV_CUBE_AGENT_CERTS_TOKEN=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CERTS_TOKEN))" >> $(TARGET_DIR)/etc/cube/agent.env
 	echo "UV_CUBE_AGENT_CVM_ID=$(call qstrip,$(BR2_PACKAGE_CUBE_AGENT_CVM_ID))" >> $(TARGET_DIR)/etc/cube/agent.env
 endef
