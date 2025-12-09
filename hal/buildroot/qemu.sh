@@ -6,11 +6,11 @@ VM_NAME="cube-ai-vm"
 RAM="10240M"
 CPU="4"
 CPU_TYPE="EPYC-v4"
-QEMU_AMDSEV_BINARY="/var/cube-ai/bin/qemu-system-x86_64"
-QEMU_OVMF_CODE="/var/cube-ai/OVMF.fd"
-KERNEL_PATH="../../buildroot/output/images/bzImage"
+QEMU_AMDSEV_BINARY="/usr/bin/qemu-system-x86_64"
+QEMU_OVMF_CODE="/usr/share/ovmf/OVMF.fd"
+KERNEL_PATH="/etc/cube/bzImage"
 # INITRD_PATH="../../buildroot/output/images/rootfs.cpio.gz" # Unused for disk boot
-FS_PATH="../../buildroot/output/images/rootfs.ext4"
+FS_PATH="/etc/cube/rootfs.ext4"
 QEMU_APPEND_ARG="root=/dev/vda rw console=ttyS0"
 
 function check(){
