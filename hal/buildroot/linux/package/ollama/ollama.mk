@@ -8,12 +8,19 @@
 ################################################################################
 
 OLLAMA_VERSION = 0.12.3
-OLLAMA_SITE = $(call github,ollama,ollama,v$(OLLAMA_VERSION))
+OLLAMA_SITE = https://github.com/ollama/ollama/releases/download/v$(OLLAMA_VERSION)
 OLLAMA_LICENSE = MIT
 OLLAMA_LICENSE_FILES = LICENSE
 OLLAMA_CPE_ID_VENDOR = ollama
 
-OLLAMA_LDFLAGS = -s -w
+# Set architecture
+ifeq ($(BR2_aarch64),y)
+OLLAMA_ARCH = arm64
+else ifeq ($(BR2_x86_64),y)
+OLLAMA_ARCH = amd64
+endif
+
+OLLAMA_SOURCE = ollama-linux-$(OLLAMA_ARCH).tgz
 
 # GPU support
 ifeq ($(BR2_PACKAGE_OLLAMA_GPU_NVIDIA),y)
@@ -23,6 +30,10 @@ endif
 ifeq ($(BR2_PACKAGE_OLLAMA_GPU_AMD),y)
 OLLAMA_DEPENDENCIES += rocm
 endif
+
+define OLLAMA_INSTALL_TARGET_CMDS
+	cp -dpfr $(@D)/* $(TARGET_DIR)/usr/
+endef
 
 define OLLAMA_INSTALL_INIT_SYSV
 	$(INSTALL) -D -m 0755 $(BR2_EXTERNAL_CUBE_PATH)/package/ollama/S96ollama \
