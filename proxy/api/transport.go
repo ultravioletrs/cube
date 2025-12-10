@@ -48,24 +48,21 @@ func MakeHandler(
 		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)
 
+		r.Get("/attestation/policy", kithttp.NewServer(
+			endpoints.GetAttestationPolicy,
+			decodeGetAttestationPolicyRequest,
+			encodeGetAttestationPolicyResponse,
+		).ServeHTTP)
+
 		// Proxy all requests using the router
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
 
-	mux.Route("/attestation/policy", func(r chi.Router) {
-		r.Use(authn.Middleware())
-		r.Method("POST", "/", kithttp.NewServer(
-			endpoint.MakeUpdateAttestationPolicyEndpoint(svc),
-			decodeUpdateAttestationPolicyRequest,
-			encodeUpdateAttestationPolicyResponse,
-		))
-
-		r.Method("GET", "/", kithttp.NewServer(
-			endpoint.MakeGetAttestationPolicyEndpoint(svc),
-			decodeGetAttestationPolicyRequest,
-			encodeGetAttestationPolicyResponse,
-		))
-	})
+	mux.Post("/attestation/policy", kithttp.NewServer(
+		endpoints.UpdateAttestationPolicy,
+		decodeUpdateAttestationPolicyRequest,
+		encodeUpdateAttestationPolicyResponse,
+	).ServeHTTP)
 
 	return mux
 }
