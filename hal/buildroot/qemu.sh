@@ -83,14 +83,8 @@ function start_cvm(){
     -append "$QEMU_APPEND_ARG"
 }
 
-function start_tdx(){
-    # User-provided command adapted for disk boot
-    echo "Starting QEMU TDX (Disk Boot)..."
-    
-    # Note: Using standard qemu-system-x86_64 or specific binary if needed. 
-    # Assuming standard path or same as SNP for now, but user specified /usr/bin/qemu-system-x86_64 in prompt.
-    
-    /usr/bin/qemu-system-x86_64 \
+function start_tdx(){ 
+    $QEMU_AMDSEV_BINARY \
     -enable-kvm \
     -m 20G -smp cores=16,sockets=1,threads=1 \
     -cpu host \
