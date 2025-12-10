@@ -2,6 +2,7 @@ config BR2_PACKAGE_OLLAMA
 	bool "ollama"
 	depends on BR2_PACKAGE_HOST_GO_TARGET_ARCH_SUPPORTS
 	depends on BR2_PACKAGE_HOST_GO_TARGET_CGO_LINKING_SUPPORTS
+	select BR2_INSTALL_LIBSTDCPP
 	help
 	  Ollama - Get up and running with large language models locally
 
