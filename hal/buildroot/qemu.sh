@@ -42,7 +42,7 @@ function start_qemu(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:6193,dns=8.8.8.8 \
+    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001,hostfwd=tcp::6194-:11434,hostfwd=tcp::6195-:8000,dns=8.8.8.8 \
     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
     -nographic \
     -no-reboot \
@@ -68,7 +68,7 @@ function start_cvm(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:6193,dns=8.8.8.8 \
+    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001,hostfwd=tcp::6194-:11434,hostfwd=tcp::6195-:8000,dns=8.8.8.8 \
     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
     -nographic \
     -no-reboot \
@@ -96,7 +96,7 @@ function start_tdx(){
     -no-reboot \
     -serial mon:stdio \
     -device virtio-net-pci,netdev=nic0_td \
-    -netdev user,id=nic0_td,hostfwd=tcp::7021-:7002 \
+    -netdev user,id=nic0_td,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001,hostfwd=tcp::6194-:11434,hostfwd=tcp::6195-:8000,dns=8.8.8.8 \
     -kernel $KERNEL_PATH \
     -append "$QEMU_APPEND_ARG" \
     -object memory-backend-memfd,id=mem0,size=20G \
