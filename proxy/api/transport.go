@@ -18,6 +18,7 @@ import (
 	mgauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/go-chi/chi/v5"
 	kitendpoint "github.com/go-kit/kit/endpoint"
+	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ultravioletrs/cube/agent/audit"
 	"github.com/ultravioletrs/cube/proxy"
@@ -47,9 +48,21 @@ func MakeHandler(
 		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)
 
+		r.Get("/attestation/policy", kithttp.NewServer(
+			endpoints.GetAttestationPolicy,
+			decodeGetAttestationPolicyRequest,
+			encodeGetAttestationPolicyResponse,
+		).ServeHTTP)
+
 		// Proxy all requests using the router
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
+
+	mux.Post("/attestation/policy", kithttp.NewServer(
+		endpoints.UpdateAttestationPolicy,
+		decodeUpdateAttestationPolicyRequest,
+		encodeUpdateAttestationPolicyResponse,
+	).ServeHTTP)
 
 	return mux
 }

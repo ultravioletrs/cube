@@ -3,6 +3,7 @@
 
 volumes:
   opensearch-data:
+  cube-proxy-db-volume:
 
 services:
   opensearch:
@@ -94,6 +95,21 @@ services:
     depends_on:
       - fluent-bit
 
+  cube-proxy-db:
+    image: postgres:16.1-alpine
+    container_name: cube-proxy-db
+    restart: on-failure
+    ports:
+      - 6004:${UV_CUBE_PROXY_DB_PORT}
+    environment:
+      POSTGRES_USER: ${UV_CUBE_PROXY_DB_USER}
+      POSTGRES_PASSWORD: ${UV_CUBE_PROXY_DB_PASS}
+      POSTGRES_DB: ${UV_CUBE_PROXY_DB_NAME}
+    networks:
+      - cube-network
+    volumes:
+      - cube-proxy-db-volume:/var/lib/postgresql/data
+
   cube-proxy:
     container_name: cube-proxy
     image: ghcr.io/ultravioletrs/cube/proxy:latest
@@ -103,6 +119,7 @@ services:
     depends_on:
       - cube-agent
       - auth
+      - cube-proxy-db
     environment:
       UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
       UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
@@ -120,6 +137,15 @@ services:
       SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
       SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
       SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      UV_CUBE_PROXY_DB_HOST: ${UV_CUBE_PROXY_DB_HOST}
+      UV_CUBE_PROXY_DB_PORT: ${UV_CUBE_PROXY_DB_PORT}
+      UV_CUBE_PROXY_DB_USER: ${UV_CUBE_PROXY_DB_USER}
+      UV_CUBE_PROXY_DB_PASS: ${UV_CUBE_PROXY_DB_PASS}
+      UV_CUBE_PROXY_DB_NAME: ${UV_CUBE_PROXY_DB_NAME}
+      UV_CUBE_PROXY_DB_SSL_MODE: ${UV_CUBE_PROXY_DB_SSL_MODE}
+      UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
+      UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
+      UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
     volumes:
       - type: bind
         source: ./config.json

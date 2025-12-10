@@ -9,6 +9,8 @@ import (
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/authz"
+	svcerr "github.com/absmach/supermq/pkg/errors/service"
+	"github.com/absmach/supermq/pkg/policies"
 	"github.com/ultravioletrs/cube/proxy"
 )
 
@@ -61,6 +63,39 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 
 func (am *authMiddleware) Secure() string {
 	return am.next.Secure()
+}
+
+// GetAttestationPolicy implements proxy.Service.
+// GetAttestationPolicy implements proxy.Service.
+func (am *authMiddleware) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
+	if session.DomainID == "" {
+		return nil, svcerr.ErrAuthorization
+	}
+
+	return am.next.GetAttestationPolicy(ctx, session)
+}
+
+// UpdateAttestationPolicy implements proxy.Service.
+func (am *authMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
+	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+		return err
+	}
+
+	return am.next.UpdateAttestationPolicy(ctx, session, policy)
+}
+
+func (am *authMiddleware) checkSuperAdmin(ctx context.Context, adminID string) error {
+	if err := am.authz.Authorize(ctx, authz.PolicyReq{
+		SubjectType: policies.UserType,
+		Subject:     adminID,
+		Permission:  policies.AdminPermission,
+		ObjectType:  policies.PlatformType,
+		Object:      policies.SuperMQObject,
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (am *authMiddleware) authorize(ctx context.Context, session *authn.Session, domainID, permission string) error {

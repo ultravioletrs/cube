@@ -40,3 +40,14 @@ func (m *metricsMiddleware) ProxyRequest(ctx context.Context, session *authn.Ses
 func (m *metricsMiddleware) Secure() string {
 	return m.svc.Secure()
 }
+
+// GetAttestationPolicy implements proxy.Service.
+// GetAttestationPolicy implements proxy.Service.
+func (m *metricsMiddleware) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
+	return m.svc.GetAttestationPolicy(ctx, session)
+}
+
+// UpdateAttestationPolicy implements proxy.Service.
+func (m *metricsMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
+	return m.svc.UpdateAttestationPolicy(ctx, session, policy)
+}
