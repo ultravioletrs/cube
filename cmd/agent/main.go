@@ -14,8 +14,6 @@ import (
 	smqserver "github.com/absmach/supermq/pkg/server"
 	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
-	"github.com/ultraviolet/cube/agent"
-	"github.com/ultraviolet/cube/agent/api"
 	"github.com/ultravioletrs/cocos/pkg/atls"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
@@ -23,6 +21,8 @@ import (
 	"github.com/ultravioletrs/cocos/pkg/attestation/vtpm"
 	"github.com/ultravioletrs/cocos/pkg/server"
 	"github.com/ultravioletrs/cocos/pkg/server/http"
+	"github.com/ultravioletrs/cube/agent"
+	"github.com/ultravioletrs/cube/agent/api"
 	"golang.org/x/sync/errgroup"
 )
 

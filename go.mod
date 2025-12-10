@@ -1,4 +1,4 @@
-module github.com/ultraviolet/cube
+module github.com/ultravioletrs/cube
 
 go 1.25.3
 

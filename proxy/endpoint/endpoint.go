@@ -9,7 +9,7 @@ import (
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/go-kit/kit/endpoint"
-	"github.com/ultraviolet/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy"
 )
 
 var errInvalidRequestType = errors.New("invalid request type")

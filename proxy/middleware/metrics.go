@@ -9,7 +9,7 @@ import (
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/go-kit/kit/metrics"
-	"github.com/ultraviolet/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy"
 )
 
 var _ proxy.Service = (*metricsMiddleware)(nil)

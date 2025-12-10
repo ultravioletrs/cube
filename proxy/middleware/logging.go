@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/absmach/supermq/pkg/authn"
-	"github.com/ultraviolet/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy"
 )
 
 var _ proxy.Service = (*loggingMiddleware)(nil)
