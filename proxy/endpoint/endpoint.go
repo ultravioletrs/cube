@@ -70,8 +70,13 @@ func (r GetAttestationPolicyResponse) Failed() error {
 
 func MakeGetAttestationPolicyEndpoint(s proxy.Service) endpoint.Endpoint {
 	return func(ctx context.Context, request any) (any, error) {
-		req := request.(GetAttestationPolicyRequest)
+		req, ok := request.(GetAttestationPolicyRequest)
+		if !ok {
+			return GetAttestationPolicyResponse{Err: errInvalidRequestType}, nil
+		}
+
 		policy, err := s.GetAttestationPolicy(ctx, req.Session)
+
 		return GetAttestationPolicyResponse{Policy: policy, Err: err}, nil
 	}
 }
@@ -91,8 +96,13 @@ func (r UpdateAttestationPolicyResponse) Failed() error {
 
 func MakeUpdateAttestationPolicyEndpoint(s proxy.Service) endpoint.Endpoint {
 	return func(ctx context.Context, request any) (any, error) {
-		req := request.(UpdateAttestationPolicyRequest)
+		req, ok := request.(UpdateAttestationPolicyRequest)
+		if !ok {
+			return UpdateAttestationPolicyResponse{Err: errInvalidRequestType}, nil
+		}
+
 		err := s.UpdateAttestationPolicy(ctx, req.Session, req.Policy)
+
 		return UpdateAttestationPolicyResponse{Err: err}, nil
 	}
 }

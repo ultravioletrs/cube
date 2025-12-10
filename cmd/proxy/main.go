@@ -142,14 +142,18 @@ func main() {
 	dbConfig := postgres.Config{Name: defDB}
 	if err := env.ParseWithOptions(&dbConfig, env.Options{Prefix: envPrefixDB}); err != nil {
 		logger.Error(err.Error())
+
 		exitCode = 1
+
 		return
 	}
 
 	db, err := postgres.Setup(dbConfig, *ppostgres.Migration())
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to connect to %s database: %s", svcName, err))
+
 		exitCode = 1
+
 		return
 	}
 	defer db.Close()
@@ -159,6 +163,7 @@ func main() {
 			logger.Error(fmt.Sprintf("Error shutting down tracer provider: %v", err))
 		}
 	}()
+
 	tracer := tp.Tracer(svcName)
 
 	database := postgres.NewDatabase(db, dbConfig, tracer)

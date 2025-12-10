@@ -71,6 +71,7 @@ func (am *authMiddleware) GetAttestationPolicy(ctx context.Context, session *aut
 	if session.DomainID == "" {
 		return nil, svcerr.ErrAuthorization
 	}
+
 	return am.next.GetAttestationPolicy(ctx, session)
 }
 
@@ -93,6 +94,7 @@ func (am *authMiddleware) checkSuperAdmin(ctx context.Context, adminID string) e
 	}); err != nil {
 		return err
 	}
+
 	return nil
 }
 

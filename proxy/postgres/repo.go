@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/absmach/supermq/pkg/postgres"
-	"github.com/ultraviolet/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy"
 )
 
 var _ proxy.Repository = (*repository)(nil)
@@ -23,7 +23,9 @@ func NewRepository(db postgres.Database) proxy.Repository {
 // GetAttestationPolicy implements proxy.Repository.
 func (r *repository) GetAttestationPolicy(ctx context.Context) ([]byte, error) {
 	q := "SELECT policy FROM attestation_policy ORDER BY id DESC LIMIT 1"
+
 	var policy []byte
+
 	row := r.db.QueryRowxContext(ctx, q)
 	if err := row.Scan(&policy); err != nil {
 		return nil, err
@@ -36,5 +38,6 @@ func (r *repository) GetAttestationPolicy(ctx context.Context) ([]byte, error) {
 func (r *repository) UpdateAttestationPolicy(ctx context.Context, policy []byte) error {
 	q := "INSERT INTO attestation_policy (policy) VALUES ($1)"
 	_, err := r.db.ExecContext(ctx, q, policy)
+
 	return err
 }

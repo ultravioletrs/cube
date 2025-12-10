@@ -1,15 +1,21 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
+
 package api
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
 	mgauthn "github.com/absmach/supermq/pkg/authn"
-	"github.com/ultraviolet/cube/proxy/endpoint"
+	"github.com/ultravioletrs/cube/proxy/endpoint"
 )
 
-func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (interface{}, error) {
+var errInvalidRequestType = errors.New("invalid request type")
+
+func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (any, error) {
 	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 	if !ok {
 		return nil, errUnauthorized
@@ -20,14 +26,19 @@ func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (in
 	}, nil
 }
 
-func encodeGetAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
-	resp := response.(endpoint.GetAttestationPolicyResponse)
+func encodeGetAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.GetAttestationPolicyResponse)
+	if !ok {
+		return errInvalidRequestType
+	}
+
 	w.Header().Set("Content-Type", ContentType)
 	_, err := w.Write(resp.Policy)
+
 	return err
 }
 
-func decodeUpdateAttestationPolicyRequest(ctx context.Context, r *http.Request) (interface{}, error) {
+func decodeUpdateAttestationPolicyRequest(ctx context.Context, r *http.Request) (any, error) {
 	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 	if !ok {
 		return nil, errUnauthorized
@@ -37,13 +48,15 @@ func decodeUpdateAttestationPolicyRequest(ctx context.Context, r *http.Request) 
 	if err != nil {
 		return nil, err
 	}
+
 	return endpoint.UpdateAttestationPolicyRequest{
 		Session: &session,
 		Policy:  body,
 	}, nil
 }
 
-func encodeUpdateAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
+func encodeUpdateAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, _ any) error {
 	w.WriteHeader(http.StatusCreated)
+
 	return nil
 }
