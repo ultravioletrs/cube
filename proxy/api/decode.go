@@ -4,37 +4,43 @@ import (
 	"context"
 	"io"
 	"net/http"
+
+	mgauthn "github.com/absmach/supermq/pkg/authn"
+	"github.com/ultraviolet/cube/proxy/endpoint"
 )
 
-type getAttestationPolicyRequest struct{}
+func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (interface{}, error) {
+	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+	if !ok {
+		return nil, errUnauthorized
+	}
 
-type getAttestationPolicyResponse struct {
-	Policy []byte `json:"policy"`
-}
-
-type updateAttestationPolicyRequest struct {
-	Policy []byte `json:"policy"`
-}
-
-type updateAttestationPolicyResponse struct{}
-
-func decodeGetAttestationPolicyRequest(_ context.Context, _ *http.Request) (interface{}, error) {
-	return getAttestationPolicyRequest{}, nil
+	return endpoint.GetAttestationPolicyRequest{
+		Session: &session,
+	}, nil
 }
 
 func encodeGetAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {
-	resp := response.(getAttestationPolicyResponse)
+	resp := response.(endpoint.GetAttestationPolicyResponse)
 	w.Header().Set("Content-Type", ContentType)
 	_, err := w.Write(resp.Policy)
 	return err
 }
 
-func decodeUpdateAttestationPolicyRequest(_ context.Context, r *http.Request) (interface{}, error) {
+func decodeUpdateAttestationPolicyRequest(ctx context.Context, r *http.Request) (interface{}, error) {
+	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+	if !ok {
+		return nil, errUnauthorized
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
 	}
-	return updateAttestationPolicyRequest{Policy: body}, nil
+	return endpoint.UpdateAttestationPolicyRequest{
+		Session: &session,
+		Policy:  body,
+	}, nil
 }
 
 func encodeUpdateAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, response interface{}) error {

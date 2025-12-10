@@ -43,11 +43,11 @@ func (s *service) Secure() string {
 }
 
 // GetAttestationPolicy implements Service.
-func (s *service) GetAttestationPolicy(ctx context.Context) ([]byte, error) {
+func (s *service) GetAttestationPolicy(ctx context.Context, _ *authn.Session) ([]byte, error) {
 	return s.repo.GetAttestationPolicy(ctx)
 }
 
 // UpdateAttestationPolicy implements Service.
-func (s *service) UpdateAttestationPolicy(ctx context.Context, policy []byte) error {
+func (s *service) UpdateAttestationPolicy(ctx context.Context, _ *authn.Session, policy []byte) error {
 	return s.repo.UpdateAttestationPolicy(ctx, policy)
 }

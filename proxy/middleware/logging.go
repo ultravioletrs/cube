@@ -39,11 +39,12 @@ func (l *loggingMiddleware) Secure() string {
 }
 
 // GetAttestationPolicy implements proxy.Service.
-func (l *loggingMiddleware) GetAttestationPolicy(ctx context.Context) ([]byte, error) {
-	return l.svc.GetAttestationPolicy(ctx)
+// GetAttestationPolicy implements proxy.Service.
+func (l *loggingMiddleware) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
+	return l.svc.GetAttestationPolicy(ctx, session)
 }
 
 // UpdateAttestationPolicy implements proxy.Service.
-func (l *loggingMiddleware) UpdateAttestationPolicy(ctx context.Context, policy []byte) error {
-	return l.svc.UpdateAttestationPolicy(ctx, policy)
+func (l *loggingMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
+	return l.svc.UpdateAttestationPolicy(ctx, session, policy)
 }

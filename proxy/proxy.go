@@ -5,14 +5,15 @@ package proxy
 
 import (
 	"context"
-	"net/http/httputil"
+
+	"github.com/absmach/supermq/pkg/authn"
 )
 
 type Service interface {
-	Proxy() *httputil.ReverseProxy
+	ProxyRequest(ctx context.Context, session *authn.Session, path string) error
 	Secure() string
-	UpdateAttestationPolicy(ctx context.Context, policy []byte) error
-	GetAttestationPolicy(ctx context.Context) ([]byte, error)
+	UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error
+	GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error)
 }
 
 type Repository interface {

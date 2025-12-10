@@ -52,17 +52,20 @@ func MakeHandler(
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
 
-	mux.Method("POST", "/attestation/policy", kithttp.NewServer(
-		makeUpdateAttestationPolicyEndpoint(svc),
-		decodeUpdateAttestationPolicyRequest,
-		encodeUpdateAttestationPolicyResponse,
-	))
+	mux.Route("/attestation/policy", func(r chi.Router) {
+		r.Use(authn.Middleware())
+		r.Method("POST", "/", kithttp.NewServer(
+			endpoint.MakeUpdateAttestationPolicyEndpoint(svc),
+			decodeUpdateAttestationPolicyRequest,
+			encodeUpdateAttestationPolicyResponse,
+		))
 
-	mux.Method("GET", "/attestation/policy", kithttp.NewServer(
-		makeGetAttestationPolicyEndpoint(svc),
-		decodeGetAttestationPolicyRequest,
-		encodeGetAttestationPolicyResponse,
-	))
+		r.Method("GET", "/", kithttp.NewServer(
+			endpoint.MakeGetAttestationPolicyEndpoint(svc),
+			decodeGetAttestationPolicyRequest,
+			encodeGetAttestationPolicyResponse,
+		))
+	})
 
 	return mux
 }

@@ -15,12 +15,16 @@ import (
 var errInvalidRequestType = errors.New("invalid request type")
 
 type Endpoints struct {
-	ProxyRequest endpoint.Endpoint
+	ProxyRequest            endpoint.Endpoint
+	GetAttestationPolicy    endpoint.Endpoint
+	UpdateAttestationPolicy endpoint.Endpoint
 }
 
 func MakeEndpoints(s proxy.Service) Endpoints {
 	return Endpoints{
-		ProxyRequest: MakeProxyRequestEndpoint(s),
+		ProxyRequest:            MakeProxyRequestEndpoint(s),
+		GetAttestationPolicy:    MakeGetAttestationPolicyEndpoint(s),
+		UpdateAttestationPolicy: MakeUpdateAttestationPolicyEndpoint(s),
 	}
 }
 
@@ -48,5 +52,47 @@ func MakeProxyRequestEndpoint(s proxy.Service) endpoint.Endpoint {
 		err := s.ProxyRequest(ctx, &req.Session, req.Path)
 
 		return ProxyRequestResponse{Err: err}, nil
+	}
+}
+
+type GetAttestationPolicyRequest struct {
+	Session *authn.Session
+}
+
+type GetAttestationPolicyResponse struct {
+	Policy []byte
+	Err    error
+}
+
+func (r GetAttestationPolicyResponse) Failed() error {
+	return r.Err
+}
+
+func MakeGetAttestationPolicyEndpoint(s proxy.Service) endpoint.Endpoint {
+	return func(ctx context.Context, request any) (any, error) {
+		req := request.(GetAttestationPolicyRequest)
+		policy, err := s.GetAttestationPolicy(ctx, req.Session)
+		return GetAttestationPolicyResponse{Policy: policy, Err: err}, nil
+	}
+}
+
+type UpdateAttestationPolicyRequest struct {
+	Session *authn.Session
+	Policy  []byte
+}
+
+type UpdateAttestationPolicyResponse struct {
+	Err error
+}
+
+func (r UpdateAttestationPolicyResponse) Failed() error {
+	return r.Err
+}
+
+func MakeUpdateAttestationPolicyEndpoint(s proxy.Service) endpoint.Endpoint {
+	return func(ctx context.Context, request any) (any, error) {
+		req := request.(UpdateAttestationPolicyRequest)
+		err := s.UpdateAttestationPolicy(ctx, req.Session, req.Policy)
+		return UpdateAttestationPolicyResponse{Err: err}, nil
 	}
 }
