@@ -3,6 +3,7 @@
 
 # Architecture
 BR2_x86_64=y
+BR2_INSTALL_LIBSTDCPP=y
 
 # System
 BR2_TARGET_GENERIC_HOSTNAME="cube"
