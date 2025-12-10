@@ -10,10 +10,10 @@ import (
 	"fmt"
 
 	"github.com/go-kit/kit/endpoint"
-	"github.com/ultraviolet/cube/agent"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/quoteprovider"
 	"github.com/ultravioletrs/cocos/pkg/attestation/vtpm"
+	"github.com/ultravioletrs/cube/agent"
 )
 
 var (

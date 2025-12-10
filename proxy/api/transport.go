@@ -19,10 +19,10 @@ import (
 	"github.com/go-chi/chi/v5"
 	kitendpoint "github.com/go-kit/kit/endpoint"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/ultraviolet/cube/agent/audit"
-	"github.com/ultraviolet/cube/proxy"
-	"github.com/ultraviolet/cube/proxy/endpoint"
-	"github.com/ultraviolet/cube/proxy/router"
+	"github.com/ultravioletrs/cube/agent/audit"
+	"github.com/ultravioletrs/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy/endpoint"
+	"github.com/ultravioletrs/cube/proxy/router"
 )
 
 const ContentType = "application/json"

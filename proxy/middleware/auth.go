@@ -9,7 +9,7 @@ import (
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/authz"
-	"github.com/ultraviolet/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/absmach/supermq/pkg/authn"
-	"github.com/ultraviolet/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy"
 	"go.opentelemetry.io/otel/trace"
 )
 
