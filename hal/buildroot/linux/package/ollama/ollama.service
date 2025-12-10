@@ -12,6 +12,7 @@ Environment="OLLAMA_HOST=0.0.0.0:11434"
 Environment="OLLAMA_MODELS=/var/lib/ollama/models"
 ExecStart=/usr/bin/ollama serve
 ExecStartPost=/usr/libexec/ollama/pull-models.sh
+TimeoutStartSec=0
 Restart=always
 RestartSec=3
 StandardOutput=journal

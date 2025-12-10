@@ -9,23 +9,18 @@ CPU_TYPE="EPYC-v4"
 QEMU_AMDSEV_BINARY="/var/cube-ai/bin/qemu-system-x86_64"
 QEMU_OVMF_CODE="/var/cube-ai/OVMF.fd"
 KERNEL_PATH="../../buildroot/output/images/bzImage"
-INITRD_PATH="../../buildroot/output/images/rootfs.cpio.gz"
-FS_PATH="./rootfs.img"
+# INITRD_PATH="../../buildroot/output/images/rootfs.cpio.gz" # Unused for disk boot
+FS_PATH="../../buildroot/output/images/rootfs.ext4"
 QEMU_APPEND_ARG="root=/dev/vda rw console=ttyS0"
 
 function check(){
-    if [ ! -f "./rootfs.img" ]; then
-    echo "rootfs.ext2 file not found. Please create it and try again."
+    if [ ! -f "$FS_PATH" ]; then
+    echo "rootfs.ext4 file not found. Please build it (make) and try again."
         exit 1
     fi
 
-    if [ ! -f "../../buildroot/output/images/bzImage" ]; then
+    if [ ! -f "$KERNEL_PATH" ]; then
         echo "bzImage file not found. Please build it and try again."
-        exit 1
-    fi
-
-    if [ ! -f "../../buildroot/output/images/rootfs.cpio.gz" ]; then
-        echo "rootfs.cpio.gz file not found. Please build it and try again."
         exit 1
     fi
 }
@@ -38,7 +33,7 @@ function start_qemu(){
 
     check
 
-    echo "Starting QEMU VM..."
+    echo "Starting QEMU VM (Disk Boot)..."
 
     qemu-system-x86_64 \
     -name $VM_NAME \
@@ -52,20 +47,19 @@ function start_qemu(){
     -nographic \
     -no-reboot \
     -kernel $KERNEL_PATH \
-    -initrd $INITRD_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio,index=0  \
     -append "$QEMU_APPEND_ARG"
 }
 
 function start_cvm(){
     if ! command -v $QEMU_AMDSEV_BINARY &> /dev/null; then
-        echo "qemu-system-x86_64 is not installed. Please install it and try again."
+        echo "QEMU binary not found at $QEMU_AMDSEV_BINARY"
         exit 1
     fi
 
     check
 
-    echo "Starting QEMU VM..."
+    echo "Starting QEMU CVM (SEV-SNP Disk Boot)..."
 
     $QEMU_AMDSEV_BINARY \
     -name $VM_NAME \
@@ -79,7 +73,6 @@ function start_cvm(){
     -nographic \
     -no-reboot \
     -kernel $KERNEL_PATH \
-    -initrd $INITRD_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio \
     -drive if=pflash,format=raw,unit=0,file=$QEMU_OVMF_CODE,readonly=on \
     -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198 \
@@ -88,6 +81,35 @@ function start_cvm(){
     -machine memory-backend=ram1,kvm-type=protected \
     -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1,discard=none,kernel-hashes=on \
     -append "$QEMU_APPEND_ARG"
+}
+
+function start_tdx(){
+    # User-provided command adapted for disk boot
+    echo "Starting QEMU TDX (Disk Boot)..."
+    
+    # Note: Using standard qemu-system-x86_64 or specific binary if needed. 
+    # Assuming standard path or same as SNP for now, but user specified /usr/bin/qemu-system-x86_64 in prompt.
+    
+    /usr/bin/qemu-system-x86_64 \
+    -enable-kvm \
+    -m 20G -smp cores=16,sockets=1,threads=1 \
+    -cpu host \
+    -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type": "vsock", "cid":"2","port":"4050"}}' \
+    -machine q35,kernel_irqchip=split,confidential-guest-support=tdx,memory-backend=mem0,hpet=off \
+    -bios /usr/share/ovmf/OVMF.fd \
+    -nographic \
+    -nodefaults \
+    -no-reboot \
+    -serial mon:stdio \
+    -device virtio-net-pci,netdev=nic0_td \
+    -netdev user,id=nic0_td,hostfwd=tcp::7021-:7002 \
+    -kernel $KERNEL_PATH \
+    -append "$QEMU_APPEND_ARG" \
+    -object memory-backend-memfd,id=mem0,size=20G \
+    -drive file=$FS_PATH,format=raw,if=virtio \
+    -device vhost-vsock-pci,guest-cid=6 \
+    -monitor pty \
+    -monitor unix:monitor,server,nowait
 }
 
 function generate_snp_expected_measurement(){
@@ -103,7 +125,6 @@ function generate_snp_expected_measurement(){
     --vcpu-type=$CPU_TYPE \
     --ovmf=$QEMU_OVMF_CODE \
     --kernel=$KERNEL_PATH \
-    --initrd=$INITRD_PATH \
     --append="$QEMU_APPEND_ARG"
 }
 
@@ -131,6 +152,9 @@ if [ $# -gt 0 ]; then
             ;;
         "start_cvm")
             start_cvm
+            ;;
+        "start_tdx")
+            start_tdx
             ;;
         "measure")
             generate_snp_expected_measurement

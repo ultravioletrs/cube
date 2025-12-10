@@ -48,14 +48,25 @@ endef
 define OLLAMA_INSTALL_MODEL_SCRIPT
 	$(INSTALL) -d -m 0755 $(TARGET_DIR)/usr/libexec/ollama
 	echo '#!/bin/sh' > $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo 'pull_model() {' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '  retries=0' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '  while [ $$retries -lt 20 ]; do' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '    if ollama pull "$$1"; then' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '      return 0' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '    fi' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '    sleep 5' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '    retries=$$((retries + 1))' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '  done' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '  return 1' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
+	echo '}' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
 	echo 'sleep 10' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
 	$(if $(BR2_PACKAGE_OLLAMA_MODELS), \
-		echo 'ollama pull tinyllama:1.1b' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh && \
-		echo 'ollama pull starcoder2:3b' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh && \
-		echo 'ollama pull nomic-embed-text:v1.5' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh)
+		echo 'pull_model tinyllama:1.1b' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh && \
+		echo 'pull_model starcoder2:3b' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh && \
+		echo 'pull_model nomic-embed-text:v1.5' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh)
 	$(if $(call qstrip,$(BR2_PACKAGE_OLLAMA_CUSTOM_MODELS)), \
 		$(foreach model,$(call qstrip,$(BR2_PACKAGE_OLLAMA_CUSTOM_MODELS)), \
-			echo 'ollama pull $(model)' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh;))
+			echo 'pull_model $(model)' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh;))
 	chmod +x $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
 endef
 

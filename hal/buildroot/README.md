@@ -44,9 +44,9 @@ You can also manually deploy the CVM using the following QEMU command:
 	-device virtio-net-pci,netdev=nic0_td \
 	-netdev user,id=nic0_td,hostfwd=tcp::7021-:7002 \
 	-kernel /home/sammy/cube-cvm/bzImage \
-	-append "console=ttyS0" \
+	-append "root=/dev/vda rw console=ttyS0" \
 	-object memory-backend-memfd,id=mem0,size=20G \
-	-initrd /home/sammy/cube-cvm/rootfs.cpio.gz \
+	-drive file=/home/sammy/cube-cvm/rootfs.ext4,format=raw,if=virtio \
 	-device vhost-vsock-pci,guest-cid=6 \
 	-monitor pty \
 	-monitor unix:monitor,server,nowait
