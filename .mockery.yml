@@ -1,0 +1,13 @@
+pkgname: mocks
+template: testify
+template-data:
+  boilerplate-file: ./boilerplate.txt
+  unroll-variadic: true
+packages:
+  github.com/ultravioletrs/cube/proxy:
+    interfaces:
+      Service:
+        config:
+          dir: '{{.InterfaceDir}}/mocks'
+          structname: '{{.InterfaceName}}'
+          filename: "{{.InterfaceName | lower}}.go"

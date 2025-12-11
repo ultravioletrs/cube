@@ -72,7 +72,7 @@ func makeProxyHandler(
 	proxyEndpoint kitendpoint.Endpoint, transport http.RoundTripper, rter *router.Router,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), "method", r.Method)
+		ctx := context.WithValue(r.Context(), proxy.MethodContextKey, r.Method)
 
 		session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 		if !ok {

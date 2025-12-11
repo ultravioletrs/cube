@@ -34,16 +34,6 @@ const (
 	auditLogPerm           = "audit_log_permission"
 )
 
-var (
-	superAdminPaths = []string{
-		"/api/pull",
-		"/api/push",
-		"/api/create",
-		"/api/copy",
-		"/api/delete",
-	}
-)
-
 type authMiddleware struct {
 	authz authz.Authorization
 	next  proxy.Service
@@ -60,6 +50,14 @@ func AuthMiddleware(auth authz.Authorization) func(proxy.Service) proxy.Service 
 }
 
 func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
+	superAdminPaths := []string{
+		"/api/pull",
+		"/api/push",
+		"/api/create",
+		"/api/copy",
+		"/api/delete",
+	}
+
 	permission := membershipPerm
 
 	// Check for audit log endpoints
@@ -73,9 +71,11 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 		permission = llmCompletionsPerm
 	case strings.Contains(path, "/v1/embeddings") || strings.Contains(path, "/api/embeddings"):
 		permission = llmEmbeddingsPerm
-	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") || strings.Contains(path, "/api/show"):
+	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") ||
+		strings.Contains(path, "/api/show"):
 		permission = llmReadPerm
-	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") || strings.Contains(path, "/api/system"):
+	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") ||
+		strings.Contains(path, "/api/system"):
 		permission = llmReadPerm
 	case strings.Contains(path, "/v1/audio/transcriptions"):
 		permission = llmTranscriptionPerm
@@ -100,7 +100,7 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 	}
 
 	// OpenAI/vLLM delete model check
-	if strings.Contains(path, "/v1/models/") && ctx.Value("method") == "DELETE" {
+	if strings.Contains(path, "/v1/models/") && ctx.Value(proxy.MethodContextKey) == "DELETE" {
 		return am.checkSuperAdmin(ctx, session.UserID)
 	}
 

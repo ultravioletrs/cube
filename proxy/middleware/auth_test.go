@@ -1,4 +1,7 @@
-package middleware
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
+
+package middleware_test
 
 import (
 	"context"
@@ -6,44 +9,17 @@ import (
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/authz"
+	authzmocks "github.com/absmach/supermq/pkg/authz/mocks"
 	"github.com/absmach/supermq/pkg/policies"
+	"github.com/stretchr/testify/mock"
+	"github.com/ultravioletrs/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy/middleware"
+	"github.com/ultravioletrs/cube/proxy/mocks"
 )
 
-type mockAuthz struct {
-	authorizeFunc func(ctx context.Context, req authz.PolicyReq) error
-}
-
-func (m *mockAuthz) Authorize(ctx context.Context, req authz.PolicyReq) error {
-	if m.authorizeFunc != nil {
-		return m.authorizeFunc(ctx, req)
-	}
-	return nil
-}
-
-func (m *mockAuthz) AuthorizePAT(ctx context.Context, req authz.PatReq) error {
-	return nil
-}
-
-type mockService struct {
-	proxyRequestFunc func(ctx context.Context, session *authn.Session, path string) error
-}
-
-func (m *mockService) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
-	if m.proxyRequestFunc != nil {
-		return m.proxyRequestFunc(ctx, session, path)
-	}
-	return nil
-}
-
-func (m *mockService) Secure() string { return "" }
-func (m *mockService) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
-	return nil
-}
-func (m *mockService) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
-	return nil, nil
-}
-
 func TestAuthMiddleware_ProxyRequest(t *testing.T) {
+	t.Parallel()
+
 	cases := []struct {
 		name               string
 		path               string
@@ -55,61 +31,61 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 			name:               "Membership Permission (Default)",
 			path:               "/random/path",
 			method:             "GET",
-			expectedPermission: membershipPerm,
+			expectedPermission: "membership",
 		},
 		{
 			name:               "Audit Log Permission",
 			path:               "/audit/logs",
 			method:             "GET",
-			expectedPermission: auditLogPerm,
+			expectedPermission: "audit_log_permission",
 		},
 		{
 			name:               "LLM Chat Completions",
 			path:               "/v1/chat/completions",
 			method:             "POST",
-			expectedPermission: llmChatCompletionsPerm,
+			expectedPermission: "llm_chat_completions_permission",
 		},
 		{
 			name:               "LLM Chat (Ollama)",
 			path:               "/api/chat",
 			method:             "POST",
-			expectedPermission: llmChatCompletionsPerm,
+			expectedPermission: "llm_chat_completions_permission",
 		},
 		{
 			name:               "LLM Completions",
 			path:               "/v1/completions",
 			method:             "POST",
-			expectedPermission: llmCompletionsPerm,
+			expectedPermission: "llm_completions_permission",
 		},
 		{
 			name:               "LLM Generate (Ollama)",
 			path:               "/api/generate",
 			method:             "POST",
-			expectedPermission: llmCompletionsPerm,
+			expectedPermission: "llm_completions_permission",
 		},
 		{
 			name:               "LLM Embeddings (OpenAI)",
 			path:               "/v1/embeddings",
 			method:             "POST",
-			expectedPermission: llmEmbeddingsPerm,
+			expectedPermission: "llm_embeddings_permission",
 		},
 		{
 			name:               "LLM Embeddings (Ollama)",
 			path:               "/api/embeddings",
 			method:             "POST",
-			expectedPermission: llmEmbeddingsPerm,
+			expectedPermission: "llm_embeddings_permission",
 		},
 		{
 			name:               "LLM Read Models (OpenAI)",
 			path:               "/v1/models",
 			method:             "GET",
-			expectedPermission: llmReadPerm,
+			expectedPermission: "llm_read_permission",
 		},
 		{
 			name:               "LLM Tags (Ollama)",
 			path:               "/api/tags",
 			method:             "GET",
-			expectedPermission: llmReadPerm,
+			expectedPermission: "llm_read_permission",
 		},
 		{
 			name:              "SuperAdmin Pull",
@@ -133,120 +109,115 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 			name:               "Regular Read Model (OpenAI)",
 			path:               "/v1/models/some-model",
 			method:             "GET",
-			expectedPermission: llmReadPerm,
+			expectedPermission: "llm_read_permission",
 		},
 		{
 			name:               "Transcription",
 			path:               "/v1/audio/transcriptions",
 			method:             "POST",
-			expectedPermission: llmTranscriptionPerm,
+			expectedPermission: "llm_transcription_permission",
 		},
 		{
 			name:               "Translation",
 			path:               "/v1/audio/translations",
 			method:             "POST",
-			expectedPermission: llmTranslationPerm,
+			expectedPermission: "llm_translation_permission",
 		},
 		{
 			name:               "Tokenizer (Utility)",
 			path:               "/tokenize",
 			method:             "POST",
-			expectedPermission: llmUtilityPerm,
+			expectedPermission: "llm_utility_permission",
 		},
 		{
 			name:               "Pooling",
 			path:               "/pooling",
 			method:             "POST",
-			expectedPermission: llmPoolingPerm,
+			expectedPermission: "llm_pooling_permission",
 		},
 		{
 			name:               "Classification",
 			path:               "/classify",
 			method:             "POST",
-			expectedPermission: llmClassificationPerm,
+			expectedPermission: "llm_classification_permission",
 		},
 		{
 			name:               "Scoring",
 			path:               "/score",
 			method:             "POST",
-			expectedPermission: llmScoringPerm,
+			expectedPermission: "llm_scoring_permission",
 		},
 		{
 			name:               "Rerank",
 			path:               "/rerank",
 			method:             "POST",
-			expectedPermission: llmRerankPerm,
+			expectedPermission: "llm_rerank_permission",
 		},
 		{
 			name:               "Ollama PS",
 			path:               "/api/ps",
 			method:             "GET",
-			expectedPermission: llmReadPerm,
+			expectedPermission: "llm_read_permission",
 		},
 		{
 			name:               "Ollama Version",
 			path:               "/api/version",
 			method:             "GET",
-			expectedPermission: llmReadPerm,
+			expectedPermission: "llm_read_permission",
 		},
 		{
 			name:               "Ollama System",
 			path:               "/api/system",
 			method:             "GET",
-			expectedPermission: llmReadPerm,
+			expectedPermission: "llm_read_permission",
 		},
 		{
 			name:               "Root Path (Health Check)",
 			path:               "/",
 			method:             "GET",
-			expectedPermission: "", // Should bypass auth, so no authorize call expected. But wait, if unauthorized bypassed, my mock won't receive call.
-			// However, my mock setup expects authorizeFunc to be called.
-			// If I bypass authorize(), I need to handle that in the test expectation.
-			// I'll assume for this test case that authorizeFunc is NOT called.
+			expectedPermission: "",
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			svc := &mockService{
-				proxyRequestFunc: func(ctx context.Context, session *authn.Session, path string) error {
-					return nil
-				},
-			}
+			t.Parallel()
 
-			auth := &mockAuthz{
-				authorizeFunc: func(ctx context.Context, req authz.PolicyReq) error {
-					if tc.isSuperAdminCheck {
-						if req.Permission != policies.AdminPermission {
-							t.Errorf("expected permission %s, got %s", policies.AdminPermission, req.Permission)
-						}
-						// In checkSuperAdmin:
-						// SubjectType: policies.UserType,
-						// ObjectType:  policies.PlatformType,
-						// Object:      policies.SuperMQObject,
-						if req.ObjectType != policies.PlatformType {
-							t.Errorf("expected object type %s, got %s", policies.PlatformType, req.ObjectType)
-						}
-						return nil
+			svc := new(mocks.Service)
+			svc.On("ProxyRequest", mock.Anything, mock.Anything, tc.path).Return(nil)
+
+			auth := new(authzmocks.Authorization)
+			auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
+				if tc.isSuperAdminCheck {
+					if req.Permission != policies.AdminPermission {
+						return false
 					}
 
-					if req.Permission != tc.expectedPermission {
-						t.Errorf("expected permission %s, got %s", tc.expectedPermission, req.Permission)
+					if req.ObjectType != policies.PlatformType {
+						return false
 					}
-					if req.ObjectType != domainType {
-						t.Errorf("expected object type %s, got %s", domainType, req.ObjectType)
-					}
-					return nil
-				},
-			}
 
-			middleware := AuthMiddleware(auth)(svc)
+					return true
+				}
+
+				if req.Permission != tc.expectedPermission {
+					return false
+				}
+
+				if req.ObjectType != "domain" {
+					return false
+				}
+
+				return true
+			})).Return(nil)
+
+			authMiddleware := middleware.AuthMiddleware(auth)(svc)
 
 			// Inject method into context manually as the transport would
-			ctx := context.WithValue(context.Background(), "method", tc.method)
+			ctx := context.WithValue(context.Background(), proxy.MethodContextKey, tc.method)
 			session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
 
-			err := middleware.ProxyRequest(ctx, session, tc.path)
+			err := authMiddleware.ProxyRequest(ctx, session, tc.path)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
