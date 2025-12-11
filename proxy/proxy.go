@@ -9,6 +9,10 @@ import (
 	"github.com/absmach/supermq/pkg/authn"
 )
 
+type ContextKey string
+
+const MethodContextKey ContextKey = "method"
+
 type Service interface {
 	ProxyRequest(ctx context.Context, session *authn.Session, path string) error
 	Secure() string

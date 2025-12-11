@@ -67,11 +67,12 @@ func MakeHandler(
 	return mux
 }
 
+// makeProxyHandler creates a http.HandlerFunc that proxies requests.
 func makeProxyHandler(
 	proxyEndpoint kitendpoint.Endpoint, transport http.RoundTripper, rter *router.Router,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
+		ctx := context.WithValue(r.Context(), proxy.MethodContextKey, r.Method)
 
 		session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 		if !ok {

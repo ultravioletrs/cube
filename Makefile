@@ -240,4 +240,8 @@ docker-push-proxy:
 docker-push-agent:
 	$(call docker_push,$(CUBE_AGENT_DOCKER_IMAGE_NAME))
 
+.PHONY: mocks
+mocks:
+	mockery --config ./.mockery.yml
+
 .DEFAULT_GOAL := help
