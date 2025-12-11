@@ -1,0 +1,12 @@
+[Unit]
+Description=Configure mTLS environment for cube-agent
+After=local-fs.target
+Before=cube-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/configure-mtls.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

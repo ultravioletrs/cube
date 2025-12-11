@@ -101,7 +101,6 @@ function start_tdx(){
     -append "$QEMU_APPEND_ARG" \
     -object memory-backend-memfd,id=mem0,size=20G \
     -drive file=$FS_PATH,format=raw,if=virtio \
-    -virtfs local,path=/etc/cube/certs,mount_tag=hostcerts,security_model=none,id=hostcerts \
     -device vhost-vsock-pci,guest-cid=6 \
     -monitor pty \
     -monitor unix:monitor,server,nowait
