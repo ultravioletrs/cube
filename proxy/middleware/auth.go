@@ -22,7 +22,26 @@ const (
 	membershipPerm         = "membership"
 	llmChatCompletionsPerm = "llm_chat_completions_permission"
 	llmCompletionsPerm     = "llm_completions_permission"
+	llmEmbeddingsPerm      = "llm_embeddings_permission"
+	llmReadPerm            = "llm_read_permission"
+	llmTranscriptionPerm   = "llm_transcription_permission"
+	llmTranslationPerm     = "llm_translation_permission"
+	llmUtilityPerm         = "llm_utility_permission"
+	llmPoolingPerm         = "llm_pooling_permission"
+	llmClassificationPerm  = "llm_classification_permission"
+	llmScoringPerm         = "llm_scoring_permission"
+	llmRerankPerm          = "llm_rerank_permission"
 	auditLogPerm           = "audit_log_permission"
+)
+
+var (
+	superAdminPaths = []string{
+		"/api/pull",
+		"/api/push",
+		"/api/create",
+		"/api/copy",
+		"/api/delete",
+	}
 )
 
 type authMiddleware struct {
@@ -47,11 +66,47 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 	switch {
 	case strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit"):
 		permission = auditLogPerm
-	case strings.Contains(path, "/v1/chat/completions"):
+	case strings.Contains(path, "/v1/chat/completions") || strings.Contains(path, "/api/chat"):
 		// Check for LLM endpoints
 		permission = llmChatCompletionsPerm
-	case strings.Contains(path, "/v1/completions"):
+	case strings.Contains(path, "/v1/completions") || strings.Contains(path, "/api/generate"):
 		permission = llmCompletionsPerm
+	case strings.Contains(path, "/v1/embeddings") || strings.Contains(path, "/api/embeddings"):
+		permission = llmEmbeddingsPerm
+	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") || strings.Contains(path, "/api/show"):
+		permission = llmReadPerm
+	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") || strings.Contains(path, "/api/system"):
+		permission = llmReadPerm
+	case strings.Contains(path, "/v1/audio/transcriptions"):
+		permission = llmTranscriptionPerm
+	case strings.Contains(path, "/v1/audio/translations"):
+		permission = llmTranslationPerm
+	case strings.Contains(path, "/tokenize") || strings.Contains(path, "/detokenize"):
+		permission = llmUtilityPerm
+	case strings.Contains(path, "/pooling"):
+		permission = llmPoolingPerm
+	case strings.Contains(path, "/classify"):
+		permission = llmClassificationPerm
+	case strings.Contains(path, "/score"):
+		permission = llmScoringPerm
+	case strings.Contains(path, "/rerank"):
+		permission = llmRerankPerm
+	}
+
+	for _, p := range superAdminPaths {
+		if strings.Contains(path, p) {
+			return am.checkSuperAdmin(ctx, session.UserID)
+		}
+	}
+
+	// OpenAI/vLLM delete model check
+	if strings.Contains(path, "/v1/models/") && ctx.Value("method") == "DELETE" {
+		return am.checkSuperAdmin(ctx, session.UserID)
+	}
+
+	// Health check / Connection check - if session is valid (which it is if we are here), allow root path
+	if path == "/" {
+		return am.next.ProxyRequest(ctx, session, path)
 	}
 
 	if err := am.authorize(ctx, session, session.DomainID, permission); err != nil {

@@ -37,6 +37,14 @@ definition domain {
 	relation llm_delete: role#member | team#member
 	relation llm_chat_completions: role#member | team#member
 	relation llm_completions: role#member | team#member
+	relation llm_embeddings: role#member | team#member
+	relation llm_transcription: role#member | team#member
+	relation llm_translation: role#member | team#member
+	relation llm_utility: role#member | team#member
+	relation llm_pooling: role#member | team#member
+	relation llm_classification: role#member | team#member
+	relation llm_scoring: role#member | team#member
+	relation llm_rerank: role#member | team#member
 
 	relation llm_manage_role: role#member | team#member
 	relation llm_add_role_users: role#member | team#member
@@ -64,7 +72,9 @@ definition domain {
 
 	permission membership = read + update + enable + disable + delete +
 	manage_role + add_role_users + remove_role_users + view_role_users +
-	llm_create + llm_update + llm_read + llm_delete + llm_chat_completions + llm_completions +
+	manage_role + add_role_users + remove_role_users + view_role_users +
+	llm_create + llm_update + llm_read + llm_delete + llm_chat_completions + llm_completions + llm_embeddings +
+	llm_transcription + llm_translation + llm_utility + llm_pooling + llm_classification + llm_scoring + llm_rerank +
 	llm_manage_role + llm_add_role_users + llm_remove_role_users + llm_view_role_users +
 	audit_log_read + audit_log_export +
 	audit_log_manage_role + audit_log_add_role_users + audit_log_remove_role_users + audit_log_view_role_users + organization->admin
@@ -76,7 +86,16 @@ definition domain {
 	permission llm_read_permission = llm_read + team->llm_read + organization->admin
 	permission llm_delete_permission = llm_delete + team->llm_delete + organization->admin
 	permission llm_chat_completions_permission = llm_chat_completions + team->llm_chat_completions + organization->admin
+	permission llm_chat_completions_permission = llm_chat_completions + team->llm_chat_completions + organization->admin
 	permission llm_completions_permission = llm_completions + team->llm_completions + organization->admin
+	permission llm_embeddings_permission = llm_embeddings + team->llm_embeddings + organization->admin
+	permission llm_transcription_permission = llm_transcription + team->llm_transcription + organization->admin
+	permission llm_translation_permission = llm_translation + team->llm_translation + organization->admin
+	permission llm_utility_permission = llm_utility + team->llm_utility + organization->admin
+	permission llm_pooling_permission = llm_pooling + team->llm_pooling + organization->admin
+	permission llm_classification_permission = llm_classification + team->llm_classification + organization->admin
+	permission llm_scoring_permission = llm_scoring + team->llm_scoring + organization->admin
+	permission llm_rerank_permission = llm_rerank + team->llm_rerank + organization->admin
 
 	permission llm_manage_role_permission = llm_manage_role + team->llm_manage_role + organization->admin
 	permission llm_add_role_users_permission = llm_add_role_users + team->llm_add_role_users + organization->admin
@@ -145,6 +164,14 @@ definition team {
 	relation llm_delete: role#member | team#member
 	relation llm_chat_completions: role#member | team#member
 	relation llm_completions: role#member | team#member
+	relation llm_embeddings: role#member | team#member
+	relation llm_transcription: role#member | team#member
+	relation llm_translation: role#member | team#member
+	relation llm_utility: role#member | team#member
+	relation llm_pooling: role#member | team#member
+	relation llm_classification: role#member | team#member
+	relation llm_scoring: role#member | team#member
+	relation llm_rerank: role#member | team#member
 
 	relation llm_manage_role: role#member | team#member
 	relation llm_add_role_users: role#member | team#member
