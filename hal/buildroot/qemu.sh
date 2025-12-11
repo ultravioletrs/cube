@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
@@ -6,11 +6,11 @@ VM_NAME="cube-ai-vm"
 RAM="10240M"
 CPU="4"
 CPU_TYPE="EPYC-v4"
-QEMU_AMDSEV_BINARY="/var/cube-ai/bin/qemu-system-x86_64"
-QEMU_OVMF_CODE="/var/cube-ai/OVMF.fd"
-KERNEL_PATH="../../buildroot/output/images/bzImage"
+QEMU_AMDSEV_BINARY="/usr/bin/qemu-system-x86_64"
+QEMU_OVMF_CODE="/usr/share/ovmf/OVMF.fd"
+KERNEL_PATH="/etc/cube/bzImage"
 # INITRD_PATH="../../buildroot/output/images/rootfs.cpio.gz" # Unused for disk boot
-FS_PATH="../../buildroot/output/images/rootfs.ext4"
+FS_PATH="/etc/cube/rootfs.ext4"
 QEMU_APPEND_ARG="root=/dev/vda rw console=ttyS0"
 
 function check(){
@@ -42,9 +42,13 @@ function start_qemu(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:6193,dns=8.8.8.8 \
-    -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
+    -m $RAM -smp cores=$CPU_CORES,sockets=1,threads=1 \
+    -cpu host \
+    -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type": "vsock", "cid":"2","port":"4050"}}' \
+    -machine q35,kernel_irqchip=split,confidential-guest-support=tdx,memory-backend=mem0,hpet=off \
+    -bios "$OVMF_CODE" \
     -nographic \
+    -nodefaults \
     -no-reboot \
     -kernel $KERNEL_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio,index=0  \
