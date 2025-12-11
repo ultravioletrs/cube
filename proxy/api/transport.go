@@ -44,6 +44,37 @@ func MakeHandler(
 	mux.Get("/health", supermq.Health("cube-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
+	// Route management endpoints (public, requires authentication)
+	mux.Post("/api/routes", authn.Middleware()(kithttp.NewServer(
+		endpoints.CreateRoute,
+		decodeCreateRouteRequest,
+		encodeCreateRouteResponse,
+	)).ServeHTTP)
+
+	mux.Get("/api/routes", authn.Middleware()(kithttp.NewServer(
+		endpoints.ListRoutes,
+		decodeListRoutesRequest,
+		encodeListRoutesResponse,
+	)).ServeHTTP)
+
+	mux.Get("/api/routes/{name}", authn.Middleware()(kithttp.NewServer(
+		endpoints.GetRoute,
+		decodeGetRouteRequest,
+		encodeGetRouteResponse,
+	)).ServeHTTP)
+
+	mux.Put("/api/routes/{name}", authn.Middleware()(kithttp.NewServer(
+		endpoints.UpdateRoute,
+		decodeUpdateRouteRequest,
+		encodeUpdateRouteResponse,
+	)).ServeHTTP)
+
+	mux.Delete("/api/routes/{name}", authn.Middleware()(kithttp.NewServer(
+		endpoints.DeleteRoute,
+		decodeDeleteRouteRequest,
+		encodeDeleteRouteResponse,
+	)).ServeHTTP)
+
 	mux.Route("/{domainID}", func(r chi.Router) {
 		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)

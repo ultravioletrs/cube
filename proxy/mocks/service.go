@@ -12,6 +12,7 @@ import (
 
 	"github.com/absmach/supermq/pkg/authn"
 	mock "github.com/stretchr/testify/mock"
+	"github.com/ultravioletrs/cube/proxy/router"
 )
 
 // NewService creates a new instance of Service. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -277,4 +278,122 @@ func (_c *Service_UpdateAttestationPolicy_Call) Return(err error) *Service_Updat
 func (_c *Service_UpdateAttestationPolicy_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, policy []byte) error) *Service_UpdateAttestationPolicy_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+// CreateRoute provides a mock function with given fields: ctx, session, route
+func (_m *Service) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+	ret := _m.Called(ctx, session, route)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateRoute")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+		r0 = rf(ctx, session, route)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UpdateRoute provides a mock function with given fields: ctx, session, route
+func (_m *Service) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+	ret := _m.Called(ctx, session, route)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateRoute")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+		r0 = rf(ctx, session, route)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// DeleteRoute provides a mock function with given fields: ctx, session, name
+func (_m *Service) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
+	ret := _m.Called(ctx, session, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteRoute")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, string) error); ok {
+		r0 = rf(ctx, session, name)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// GetRoute provides a mock function with given fields: ctx, session, name
+func (_m *Service) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+	ret := _m.Called(ctx, session, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetRoute")
+	}
+
+	var r0 *router.RouteRule
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, string) (*router.RouteRule, error)); ok {
+		return rf(ctx, session, name)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, string) *router.RouteRule); ok {
+		r0 = rf(ctx, session, name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*router.RouteRule)
+		}
+	}
+
+	if len(ret) > 1 {
+		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session, string) error); ok {
+			r1 = rf(ctx, session, name)
+		} else {
+			r1 = ret.Error(1)
+		}
+	}
+
+	return r0, r1
+}
+
+// ListRoutes provides a mock function with given fields: ctx, session
+func (_m *Service) ListRoutes(ctx context.Context, session *authn.Session) ([]router.RouteRule, error) {
+	ret := _m.Called(ctx, session)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListRoutes")
+	}
+
+	var r0 []router.RouteRule
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session) ([]router.RouteRule, error)); ok {
+		return rf(ctx, session)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session) []router.RouteRule); ok {
+		r0 = rf(ctx, session)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]router.RouteRule)
+		}
+	}
+
+	if len(ret) > 1 {
+		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session) error); ok {
+			r1 = rf(ctx, session)
+		} else {
+			r1 = ret.Error(1)
+		}
+	}
+
+	return r0, r1
 }

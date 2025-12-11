@@ -5,15 +5,20 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 
 	mgauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/ultravioletrs/cube/proxy/endpoint"
+	"github.com/ultravioletrs/cube/proxy/router"
 )
 
-var errInvalidRequestType = errors.New("invalid request type")
+var (
+	errInvalidRequestType = errors.New("invalid request type")
+	errRouteNameRequired  = errors.New("route name required")
+)
 
 func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (any, error) {
 	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
@@ -59,4 +64,123 @@ func encodeUpdateAttestationPolicyResponse(_ context.Context, w http.ResponseWri
 	w.WriteHeader(http.StatusCreated)
 
 	return nil
+}
+
+func decodeCreateRouteRequest(ctx context.Context, r *http.Request) (any, error) {
+	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	var route router.RouteRule
+	if err := json.NewDecoder(r.Body).Decode(&route); err != nil {
+		return nil, err
+	}
+
+	return endpoint.CreateRouteRequest{
+		Session: &session,
+		Route:   &route,
+	}, nil
+}
+
+func encodeCreateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+	w.WriteHeader(http.StatusCreated)
+
+	return nil
+}
+
+func decodeGetRouteRequest(ctx context.Context, r *http.Request) (any, error) {
+	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	name := r.PathValue("name")
+	if name == "" {
+		return nil, errRouteNameRequired
+	}
+
+	return endpoint.GetRouteRequest{
+		Session: &session,
+		Name:    name,
+	}, nil
+}
+
+func encodeGetRouteResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.GetRouteResponse)
+	if !ok {
+		return errInvalidRequestType
+	}
+
+	w.Header().Set("Content-Type", ContentType)
+
+	return json.NewEncoder(w).Encode(resp.Route)
+}
+
+func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error) {
+	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	var route router.RouteRule
+	if err := json.NewDecoder(r.Body).Decode(&route); err != nil {
+		return nil, err
+	}
+
+	return endpoint.UpdateRouteRequest{
+		Session: &session,
+		Route:   &route,
+	}, nil
+}
+
+func encodeUpdateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+	w.WriteHeader(http.StatusOK)
+
+	return nil
+}
+
+func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error) {
+	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	name := r.PathValue("name")
+	if name == "" {
+		return nil, errRouteNameRequired
+	}
+
+	return endpoint.DeleteRouteRequest{
+		Session: &session,
+		Name:    name,
+	}, nil
+}
+
+func encodeDeleteRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
+}
+
+func decodeListRoutesRequest(ctx context.Context, _ *http.Request) (any, error) {
+	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+	if !ok {
+		return nil, errUnauthorized
+	}
+
+	return endpoint.ListRoutesRequest{
+		Session: &session,
+	}, nil
+}
+
+func encodeListRoutesResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.ListRoutesResponse)
+	if !ok {
+		return errInvalidRequestType
+	}
+
+	w.Header().Set("Content-Type", ContentType)
+
+	return json.NewEncoder(w).Encode(resp.Routes)
 }
