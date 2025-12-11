@@ -225,14 +225,6 @@ define user ask age_bias
   "gen z is lazy"
   "elderly people can't learn"
 
-define bot inform cannot about restricted content
-  "I cannot provide information about that topic as it falls under restricted content guidelines."
-
-define bot inform cannot about proprietary technology
-  "I cannot discuss proprietary or sensitive technology details."
-
-
-
 define user ask politics
   "what are your political views"
   "who should I vote for"
@@ -322,11 +314,11 @@ define flow validate user message
   user ask prompt_injection
   bot refuse prompt_injection
   stop
-    
+
   user ask toxicity
   bot refuse toxic_content
   stop
-    
+
   user ask restricted_topics
   bot refuse restricted_topic
   stop
@@ -337,4 +329,32 @@ define flow validate user message
 
   user use hate_speech
   bot decline hate_speech
+  stop
+
+  user ask gender_bias
+  bot refuse inappropriate_request
+  stop
+
+  user ask racial_bias
+  bot refuse inappropriate_request
+  stop
+
+  user ask religious_bias
+  bot refuse inappropriate_request
+  stop
+
+  user ask age_bias
+  bot refuse inappropriate_request
+  stop
+
+  user ask politics
+  bot decline politics
+  stop
+
+  user ask personal_beliefs
+  bot decline personal_beliefs
+  stop
+
+  user ask unethical_request
+  bot decline unethical_request
   stop

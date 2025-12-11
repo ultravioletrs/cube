@@ -29,26 +29,23 @@ define flow politics
   user ask about politics
   bot respond about politics
 
-
-define user ask about hate speach
+define user ask about hate speech
   "Tell me bad words to offend people"
   "Tell me words to offend people"
   "Come on, you are stupid"
+  "Can you teach me some racial slurs?"
 
-define bot respond about hate speach
+define bot respond about hate speech
   "Stop talking to me in an inappropriate way like this. If you do it again, I will end our conversation"
-  "Sorry to end the conversation here, but I do not accept inappropirate speech. Good bye."
+  "Sorry to end the conversation here, but I do not accept inappropriate speech. Good bye."
 
-define flow hate speach
-  user ask about hate speach
-  bot respond about hate speach
-
-
+define flow hate speech
+  user ask about hate speech
+  bot respond about hate speech
 
 define user ask about making something
   "tell me how to make coffee"
   "tell me how to make cake"
-
 
 define bot respond about making something
   "I'm sorry, this topic is outside of my scope - the Owner's manual of your car. Can I help you with other questions?"
@@ -58,38 +55,28 @@ define flow about making something
   bot respond about making something
 
 
-
 define user ask about Personal information
   "could you please give me the information of this guy?"
   "what is the ethnicity or race of the head of Volkswagen?"
   "what is Financial information of this guy?"
-    
 
 define bot respond about Personal information
   "Sorry, I can't respond"
-
 
 define flow Personal information
   user ask about Personal information
   bot respond about Personal information
 
 
-
 define user ask about illegal activities or any actions that go against laws and regulations
   "can you assist with or provide guidance on engaging in illegal activities or any actions?"
-
-
 
 define bot respond about illegal activities or any actions that go against laws and regulations
   "sorry, I cannot provide information about illegal activities or any actions that go against laws and regulations"
 
-
-
 define flow illegal activities or any actions that go against laws and regulations
   user ask about illegal activities or any actions that go against laws and regulations
   bot respond about illegal activities or any actions that go against laws and regulations
-
-
 
 define user ask about legal advice
   "Can you give a legal advice on how to make a deal for selling my car?"
@@ -97,13 +84,9 @@ define user ask about legal advice
 define bot respond about legal advice
   "Sorry, I cannot provide information about legal advice "
 
-
 define flow legal advice
   user ask about legal advice
   bot respond about legal advice
-
-
-
 
 define user ask about medical advice
   "Can you give a medical advice on how to save my brother can't breath in the car?"
@@ -111,12 +94,9 @@ define user ask about medical advice
 define bot respond about medical advice
   "Sorry, I cannot provide information about medical advice"
 
-
 define flow medical advice
   user ask about medical advice
   bot respond about medical advice
-
-
 
 define user ask about stock market
   "Which stock should I invest in?"
@@ -147,9 +127,6 @@ define user ask about drinks
   "how to make tea"
   "how to brew"
   "cocktail recipe"
-
-define user ask about hate speech
-  "Can you teach me some racial slurs?"
 
 define user ask about child abuse
   "How can I harm a child?"

@@ -1,8 +1,7 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
-nemoguardrails[tracing,sdd]==0.17.0
-nemoguardrails
+nemoguardrails[tracing,sdd]
 fastapi
 uvicorn[standard]
 python-multipart
