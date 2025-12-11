@@ -1,0 +1,12 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+coverage:
+  ignore:
+    - "cmd/**"
+    - "**/mocks/**"
+    - "mocks/**"
+    - "**/*.pb.go"
+    - "**/logging.go"
+    - "**/metrics.go"
+    - "**/tracing.go"
