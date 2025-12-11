@@ -12,6 +12,7 @@ import (
 	svcerr "github.com/absmach/supermq/pkg/errors/service"
 	"github.com/absmach/supermq/pkg/policies"
 	"github.com/ultravioletrs/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy/router"
 )
 
 const (
@@ -137,6 +138,53 @@ func (am *authMiddleware) UpdateAttestationPolicy(ctx context.Context, session *
 	}
 
 	return am.next.UpdateAttestationPolicy(ctx, session, policy)
+}
+
+// CreateRoute implements proxy.Service.
+func (am *authMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+		return err
+	}
+
+	return am.next.CreateRoute(ctx, session, route)
+}
+
+// UpdateRoute implements proxy.Service.
+func (am *authMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+		return err
+	}
+
+	return am.next.UpdateRoute(ctx, session, route)
+}
+
+// DeleteRoute implements proxy.Service.
+func (am *authMiddleware) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
+	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+		return err
+	}
+
+	return am.next.DeleteRoute(ctx, session, name)
+}
+
+// GetRoute implements proxy.Service.
+func (am *authMiddleware) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+	// Routes are considered administrative - require super admin
+	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+		return nil, err
+	}
+
+	return am.next.GetRoute(ctx, session, name)
+}
+
+// ListRoutes implements proxy.Service.
+func (am *authMiddleware) ListRoutes(ctx context.Context, session *authn.Session) ([]router.RouteRule, error) {
+	// Routes are considered administrative - require super admin
+	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+		return nil, err
+	}
+
+	return am.next.ListRoutes(ctx, session)
 }
 
 func (am *authMiddleware) checkSuperAdmin(ctx context.Context, adminID string) error {

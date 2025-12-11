@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"sync"
 )
 
 // ErrNoMatchingRoute indicates that no route matched the request.
@@ -41,6 +42,7 @@ type Config struct {
 }
 
 type Router struct {
+	mu         sync.RWMutex
 	routes     RouteRules
 	defaultURL string
 }
@@ -61,7 +63,30 @@ func New(config Config) *Router {
 	}
 }
 
+// UpdateRoutes atomically replaces the current routes with new ones.
+// This allows runtime modification of routes without restart.
+func (r *Router) UpdateRoutes(newRoutes []RouteRule) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	routes := make(RouteRules, len(newRoutes))
+	copy(routes, newRoutes)
+
+	// Compile matchers for all routes
+	for i := range routes {
+		routes[i].compiledMatcher = CreateCompositeMatcher(routes[i].Matchers)
+	}
+
+	// Sort by priority (descending)
+	sort.Sort(routes)
+
+	r.routes = routes
+}
+
 func (r *Router) DetermineTarget(req *http.Request) (targetURL, stripPrefix string, err error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	for _, route := range r.routes {
 		if route.DefaultRule {
 			continue // Skip default rules in main loop

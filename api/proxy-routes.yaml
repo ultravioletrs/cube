@@ -1,0 +1,317 @@
+openapi: 3.0.0
+info:
+  title: Cube Proxy - Route Management API
+  description: API for managing dynamic routing rules in the Cube proxy service
+  version: 1.0.0
+  contact:
+    name: Ultraviolet
+    url: https://github.com/ultravioletrs/cube
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+paths:
+  /api/routes:
+    post:
+      summary: Create a new routing rule
+      operationId: createRoute
+      tags:
+        - Routes
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteRule'
+      responses:
+        '201':
+          description: Route created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteRule'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    get:
+      summary: List all routing rules
+      operationId: listRoutes
+      tags:
+        - Routes
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of routing rules
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  routes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RouteRule'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/routes/{name}:
+    get:
+      summary: Get a specific routing rule
+      operationId: getRoute
+      tags:
+        - Routes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The name of the routing rule
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteRule'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      summary: Update a routing rule
+      operationId: updateRoute
+      tags:
+        - Routes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The name of the routing rule
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteRule'
+      responses:
+        '200':
+          description: Route updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteRule'
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    delete:
+      summary: Delete a routing rule
+      operationId: deleteRoute
+      tags:
+        - Routes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          description: The name of the routing rule
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Route deleted successfully
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Route not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    RouteRule:
+      type: object
+      required:
+        - name
+        - target_url
+      properties:
+        name:
+          type: string
+          description: Unique identifier for the routing rule
+          example: "backend-api"
+        target_url:
+          type: string
+          description: The target URL to route requests to
+          example: "http://backend:8000"
+        matchers:
+          type: array
+          description: List of matchers that must all match for this rule to apply
+          items:
+            $ref: '#/components/schemas/RouteMatcher'
+        priority:
+          type: integer
+          description: Priority level - higher values are checked first
+          example: 100
+        default_rule:
+          type: boolean
+          description: Whether this rule is the default fallback rule
+          example: false
+        strip_prefix:
+          type: string
+          description: Optional prefix to strip from the request path
+          example: "/api"
+
+    RouteMatcher:
+      type: object
+      description: Matcher criteria for routing rules
+      properties:
+        type:
+          type: string
+          description: Type of matcher
+          enum:
+            - path
+            - method
+            - header
+            - query
+        path:
+          type: string
+          description: Path pattern to match (when type is 'path')
+        method:
+          type: string
+          description: HTTP method to match (when type is 'method')
+          enum:
+            - GET
+            - POST
+            - PUT
+            - DELETE
+            - PATCH
+            - HEAD
+            - OPTIONS
+        header:
+          type: object
+          description: Header matching criteria (when type is 'header')
+          properties:
+            name:
+              type: string
+              description: Header name
+            value:
+              type: string
+              description: Header value pattern
+        query:
+          type: object
+          description: Query parameter matching criteria (when type is 'query')
+          properties:
+            name:
+              type: string
+              description: Query parameter name
+            value:
+              type: string
+              description: Query parameter value pattern
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token authentication
+
+tags:
+  - name: Routes
+    description: Routing rule management endpoints
