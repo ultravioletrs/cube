@@ -49,6 +49,8 @@ function start_qemu(){
     -no-reboot \
     -kernel $KERNEL_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio,index=0  \
+    -fsdev local,id=cert_fs,path=$CERTS_PATH,security_model=mapped \
+    -device virtio-9p-pci,fsdev=cert_fs,mount_tag=certs_share \
     -append "$QEMU_APPEND_ARG"
 }
 
