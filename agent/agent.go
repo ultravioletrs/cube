@@ -49,8 +49,10 @@ type TLSConfig struct {
 }
 
 type Config struct {
-	BackendURL string    `json:"backend_url"`
-	TLS        TLSConfig `json:"tls"`
+	BackendURL           string    `json:"backend_url"`
+	TLS                  TLSConfig `json:"tls"`
+	GuardrailsURL        string    `json:"guardrails_url"`
+	UseGuardrailsBackend bool      `json:"use_guardrails_backend"`
 }
 
 type agentService struct {
@@ -94,12 +96,51 @@ func New(config *Config, provider attestation.Provider, ccPlatform attestation.P
 func (a *agentService) Proxy() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targetURL := a.config.BackendURL
+		path := r.URL.Path
 
+		// Check if this is a chat request that should go through guardrails
+		isChatRequest := a.isChatRequest(r)
+
+		log.Printf("Agent received: %s %s (isChatRequest=%v, guardrailsEnabled=%v)",
+			r.Method, path, isChatRequest, a.config.UseGuardrailsBackend)
+
+		// Route only chat requests through guardrails if enabled
+		if a.config.UseGuardrailsBackend && a.config.GuardrailsURL != "" && isChatRequest {
+			target, err := url.Parse(a.config.GuardrailsURL)
+			if err != nil {
+				log.Printf("Invalid guardrails URL %s: %v", a.config.GuardrailsURL, err)
+				http.Error(w, "Bad Gateway", http.StatusBadGateway)
+				return
+			}
+
+			proxy := httputil.NewSingleHostReverseProxy(target)
+			proxy.Transport = a.transport
+
+			originalDirector := proxy.Director
+			proxy.Director = func(req *http.Request) {
+				originalDirector(req)
+				// Map Ollama /api/chat to OpenAI-compatible /v1/chat/completions
+				if req.URL.Path == "/api/chat" || req.URL.Path == "/api/generate" {
+					req.URL.Path = "/v1/chat/completions"
+				}
+				a.modifyHeaders(req)
+				log.Printf("Agent forwarding to Guardrails: %s %s", req.Method, req.URL.Path)
+			}
+
+			proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+				log.Printf("Proxy error to Guardrails: %v", err)
+				http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			}
+
+			proxy.ServeHTTP(w, r)
+			return
+		}
+
+		// Forward non-chat requests (tags, models, etc.) directly to backend
 		target, err := url.Parse(targetURL)
 		if err != nil {
 			log.Printf("Invalid target URL %s: %v", targetURL, err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-
 			return
 		}
 
@@ -110,7 +151,7 @@ func (a *agentService) Proxy() http.Handler {
 		proxy.Director = func(req *http.Request) {
 			originalDirector(req)
 			a.modifyHeaders(req)
-			log.Printf("Agent forwarding to %s: %s %s", targetURL, req.Method, req.URL.Path)
+			log.Printf("Agent forwarding to Backend: %s %s", req.Method, req.URL.Path)
 		}
 
 		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
@@ -120,6 +161,30 @@ func (a *agentService) Proxy() http.Handler {
 
 		proxy.ServeHTTP(w, r)
 	})
+}
+
+// isChatRequest determines if the request is a chat/completion request
+// that should be routed through guardrails.
+func (a *agentService) isChatRequest(r *http.Request) bool {
+	// Only POST requests can be chat requests
+	if r.Method != http.MethodPost {
+		return false
+	}
+
+	path := r.URL.Path
+
+	// Ollama chat endpoint (used by UI)
+	if path == "/api/chat" || path == "/api/generate" {
+		return true
+	}
+
+	// OpenAI-compatible endpoints
+	if path == "/v1/chat/completions" || path == "/chat/completions" ||
+		path == "/v1/completions" || path == "/completions" {
+		return true
+	}
+
+	return false
 }
 
 func (a *agentService) Attestation(

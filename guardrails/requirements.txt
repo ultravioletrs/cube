@@ -1,0 +1,13 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+nemoguardrails[tracing,sdd]
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+langchain-openai
+pandas
+presidio-analyzer
+presidio-anonymizer
+aiofiles
