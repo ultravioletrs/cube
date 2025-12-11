@@ -15,7 +15,10 @@ import (
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
-var errInvalidRequestType = errors.New("invalid request type")
+var (
+	errInvalidRequestType = errors.New("invalid request type")
+	errRouteNameRequired  = errors.New("route name required")
+)
 
 func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (any, error) {
 	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
@@ -82,6 +85,7 @@ func decodeCreateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 
 func encodeCreateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
 	w.WriteHeader(http.StatusCreated)
+
 	return nil
 }
 
@@ -93,7 +97,7 @@ func decodeGetRouteRequest(ctx context.Context, r *http.Request) (any, error) {
 
 	name := r.PathValue("name")
 	if name == "" {
-		return nil, errors.New("route name required")
+		return nil, errRouteNameRequired
 	}
 
 	return endpoint.GetRouteRequest{
@@ -109,6 +113,7 @@ func encodeGetRouteResponse(_ context.Context, w http.ResponseWriter, response a
 	}
 
 	w.Header().Set("Content-Type", ContentType)
+
 	return json.NewEncoder(w).Encode(resp.Route)
 }
 
@@ -131,6 +136,7 @@ func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 
 func encodeUpdateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
 	w.WriteHeader(http.StatusOK)
+
 	return nil
 }
 
@@ -142,7 +148,7 @@ func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error)
 
 	name := r.PathValue("name")
 	if name == "" {
-		return nil, errors.New("route name required")
+		return nil, errRouteNameRequired
 	}
 
 	return endpoint.DeleteRouteRequest{
@@ -153,6 +159,7 @@ func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error)
 
 func encodeDeleteRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
 	w.WriteHeader(http.StatusNoContent)
+
 	return nil
 }
 
@@ -174,5 +181,6 @@ func encodeListRoutesResponse(_ context.Context, w http.ResponseWriter, response
 	}
 
 	w.Header().Set("Content-Type", ContentType)
+
 	return json.NewEncoder(w).Encode(resp.Routes)
 }

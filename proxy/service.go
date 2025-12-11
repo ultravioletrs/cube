@@ -122,5 +122,6 @@ func (s *service) refreshRoutes(ctx context.Context) error {
 	}
 
 	s.router.UpdateRoutes(routes)
+
 	return nil
 }

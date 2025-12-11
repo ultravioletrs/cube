@@ -53,20 +53,26 @@ func (m *metricsMiddleware) UpdateAttestationPolicy(ctx context.Context, session
 }
 
 // CreateRoute implements proxy.Service.
-func (m *metricsMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (err error) {
+func (m *metricsMiddleware) CreateRoute(
+	ctx context.Context, session *authn.Session, route *router.RouteRule,
+) (err error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "create_route").Add(1)
 		m.latency.With("method", "create_route").Observe(time.Since(begin).Seconds())
 	}(time.Now())
+
 	return m.svc.CreateRoute(ctx, session, route)
 }
 
 // UpdateRoute implements proxy.Service.
-func (m *metricsMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (err error) {
+func (m *metricsMiddleware) UpdateRoute(
+	ctx context.Context, session *authn.Session, route *router.RouteRule,
+) (err error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "update_route").Add(1)
 		m.latency.With("method", "update_route").Observe(time.Since(begin).Seconds())
 	}(time.Now())
+
 	return m.svc.UpdateRoute(ctx, session, route)
 }
 
@@ -76,11 +82,14 @@ func (m *metricsMiddleware) DeleteRoute(ctx context.Context, session *authn.Sess
 		m.counter.With("method", "delete_route").Add(1)
 		m.latency.With("method", "delete_route").Observe(time.Since(begin).Seconds())
 	}(time.Now())
+
 	return m.svc.DeleteRoute(ctx, session, name)
 }
 
 // GetRoute implements proxy.Service.
-func (m *metricsMiddleware) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+func (m *metricsMiddleware) GetRoute(
+	ctx context.Context, session *authn.Session, name string,
+) (*router.RouteRule, error) {
 	return m.svc.GetRoute(ctx, session, name)
 }
 

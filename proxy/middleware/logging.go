@@ -65,7 +65,9 @@ func (l *loggingMiddleware) DeleteRoute(ctx context.Context, session *authn.Sess
 }
 
 // GetRoute implements proxy.Service.
-func (l *loggingMiddleware) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+func (l *loggingMiddleware) GetRoute(
+	ctx context.Context, session *authn.Session, name string,
+) (*router.RouteRule, error) {
 	return l.svc.GetRoute(ctx, session, name)
 }
 

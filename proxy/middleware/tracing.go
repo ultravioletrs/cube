@@ -51,6 +51,7 @@ func (t *tracingMiddleware) UpdateAttestationPolicy(ctx context.Context, session
 func (t *tracingMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
 	ctx, span := t.tracer.Start(ctx, "CreateRoute")
 	defer span.End()
+
 	return t.svc.CreateRoute(ctx, session, route)
 }
 
@@ -58,6 +59,7 @@ func (t *tracingMiddleware) CreateRoute(ctx context.Context, session *authn.Sess
 func (t *tracingMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
 	ctx, span := t.tracer.Start(ctx, "UpdateRoute")
 	defer span.End()
+
 	return t.svc.UpdateRoute(ctx, session, route)
 }
 
@@ -65,13 +67,17 @@ func (t *tracingMiddleware) UpdateRoute(ctx context.Context, session *authn.Sess
 func (t *tracingMiddleware) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
 	ctx, span := t.tracer.Start(ctx, "DeleteRoute")
 	defer span.End()
+
 	return t.svc.DeleteRoute(ctx, session, name)
 }
 
 // GetRoute implements proxy.Service.
-func (t *tracingMiddleware) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+func (t *tracingMiddleware) GetRoute(
+	ctx context.Context, session *authn.Session, name string,
+) (*router.RouteRule, error) {
 	ctx, span := t.tracer.Start(ctx, "GetRoute")
 	defer span.End()
+
 	return t.svc.GetRoute(ctx, session, name)
 }
 
@@ -79,5 +85,6 @@ func (t *tracingMiddleware) GetRoute(ctx context.Context, session *authn.Session
 func (t *tracingMiddleware) ListRoutes(ctx context.Context, session *authn.Session) ([]router.RouteRule, error) {
 	ctx, span := t.tracer.Start(ctx, "ListRoutes")
 	defer span.End()
+
 	return t.svc.ListRoutes(ctx, session)
 }

@@ -61,6 +61,7 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) e
 	}
 
 	_, err = r.db.ExecContext(ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule)
+
 	return err
 }
 
@@ -76,6 +77,7 @@ func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRu
 	)
 
 	row := r.db.QueryRowxContext(ctx, q, name)
+
 	err := row.Scan(&id, &route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, nil, nil)
 	if err != nil {
 		return nil, err
@@ -104,6 +106,7 @@ func (r *repository) UpdateRoute(ctx context.Context, route *router.RouteRule) e
 	}
 
 	_, err = r.db.ExecContext(ctx, q, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.Name)
+
 	return err
 }
 
@@ -111,6 +114,7 @@ func (r *repository) UpdateRoute(ctx context.Context, route *router.RouteRule) e
 func (r *repository) DeleteRoute(ctx context.Context, name string) error {
 	q := "DELETE FROM routes WHERE name = $1"
 	_, err := r.db.ExecContext(ctx, q, name)
+
 	return err
 }
 

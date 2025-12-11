@@ -216,7 +216,7 @@ func main() {
 		// Continue even if loading fails - file config is already loaded
 	}
 
-	svc, err := newServiceWithRouter(logger, tracer, &agentConfig, repo, rter)
+	svc, err := newService(logger, tracer, &agentConfig, repo, rter)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -277,25 +277,10 @@ func main() {
 	}
 }
 
-func newService(
-	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig, repo proxy.Repository,
-) (proxy.Service, error) {
-	svc, err := proxy.New(agentConfig, repo)
-	if err != nil {
-		return nil, err
-	}
-
-	svc = middleware.NewLoggingMiddleware(logger, svc)
-	svc = middleware.NewTracingMiddleware(tracer, svc)
-	counter, latency := prometheus.MakeMetrics(svcName, "api")
-	svc = middleware.NewMetricsMiddleware(counter, latency, svc)
-
-	return svc, nil
-}
-
 // newServiceWithRouter creates a service with router integration for dynamic route management.
-func newServiceWithRouter(
-	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig, repo proxy.Repository, rter *router.Router,
+func newService(
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig,
+	repo proxy.Repository, rter *router.Router,
 ) (proxy.Service, error) {
 	svc, err := proxy.NewWithRouter(agentConfig, repo, rter)
 	if err != nil {

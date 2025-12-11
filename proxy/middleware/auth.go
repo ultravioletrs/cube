@@ -168,7 +168,9 @@ func (am *authMiddleware) DeleteRoute(ctx context.Context, session *authn.Sessio
 }
 
 // GetRoute implements proxy.Service.
-func (am *authMiddleware) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+func (am *authMiddleware) GetRoute(
+	ctx context.Context, session *authn.Session, name string,
+) (*router.RouteRule, error) {
 	// Routes are considered administrative - require super admin
 	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
 		return nil, err
