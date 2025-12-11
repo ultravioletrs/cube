@@ -1,0 +1,47 @@
+# Traefik Configuration for Cube Cloud Deployment
+# Based on prism project blueprint
+
+# Global Configuration
+[global]
+  checkNewVersion = false
+  sendAnonymousUsage = false
+
+# Entry Points
+[entryPoints]
+  [entryPoints.web]
+    address = ":80"
+    [entryPoints.web.http.redirections.entryPoint]
+      to = "websecure"
+      scheme = "https"
+      permanent = true
+
+  [entryPoints.websecure]
+    address = ":443"
+    [entryPoints.websecure.http.tls]
+      certResolver = "letsEncrypt"
+
+# API and Dashboard
+[api]
+  dashboard = true
+  insecure = true
+
+# Docker Provider
+[providers.docker]
+  exposedByDefault = false
+  network = "cube-cloud-network"
+
+# File Provider for Dynamic Configuration
+[providers.file]
+  filename = "/etc/traefik/dynamic.toml"
+  watch = true
+
+# Certificates Resolvers
+[certificatesResolvers.letsEncrypt.acme]
+  email = "admin@ultraviolet.rs"
+  storage = "/etc/traefik/ssl/certs/acme.json"
+  [certificatesResolvers.letsEncrypt.acme.httpChallenge]
+    entryPoint = "web"
+
+# Logging
+[log]
+  level = "DEBUG"

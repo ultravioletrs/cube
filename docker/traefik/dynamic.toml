@@ -1,0 +1,32 @@
+# Dynamic Traefik Configuration for Cube Services
+# Defines HTTP routers and services for UI and Proxy
+
+# HTTP Routers - HTTPS (Production)
+[http.routers.cube-ui]
+  rule = "Host(`__CUBE_DOMAIN__`)"
+  entrypoints = ["websecure"]
+  service = "cube-ui"
+  priority = 1
+  [http.routers.cube-ui.tls]
+    certResolver = "letsEncrypt"
+    [[http.routers.cube-ui.tls.domains]]
+      main = "__CUBE_DOMAIN__"
+
+[http.routers.cube-proxy]
+  rule = "Host(`__CUBE_DOMAIN__`) && PathPrefix(`/proxy`)"
+  entrypoints = ["websecure"]
+  service = "cube-proxy"
+  priority = 2
+  [http.routers.cube-proxy.tls]
+    certResolver = "letsEncrypt"
+
+# HTTP Services
+[http.services.cube-ui]
+  [http.services.cube-ui.loadBalancer]
+    [[http.services.cube-ui.loadBalancer.servers]]
+      url = "http://ui:6193"
+
+[http.services.cube-proxy]
+  [http.services.cube-proxy.loadBalancer]
+    [[http.services.cube-proxy.loadBalancer.servers]]
+      url = "http://proxy:8900"

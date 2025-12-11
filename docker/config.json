@@ -2,6 +2,20 @@
   "router": {
     "routes": [
       {
+        "name": "attestation",
+        "target_url": "${UV_CUBE_AGENT_URL}",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "/attestation/.*",
+            "is_regex": true
+          }
+        ],
+        "priority": 15,
+        "strip_prefix": "",
+        "auth_required": true
+      },
+      {
         "name": "audit",
         "target_url": "http://opensearch:9200",
         "matchers": [
