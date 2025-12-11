@@ -1,0 +1,94 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/cd.yaml"
+      - "**.go"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/cd.yaml"
+      - "**.go"
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.x
+          cache-dependency-path: "go.sum"
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.4.0
+          args: --config ./.golangci.yaml
+
+      - name: Build
+        run: make all
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    strategy:
+      matrix:
+        module: [agent, proxy]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.x
+          cache-dependency-path: "go.sum"
+
+      - name: Create coverage directory
+        run: mkdir -p coverage
+
+      - name: Run tests for ${{ matrix.module }}
+        run: |
+          GOTOOLCHAIN=go1.25.0+auto go test -v --race -covermode=atomic -coverprofile coverage/${{ matrix.module }}.out ./${{ matrix.module }}/...
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.module }}
+          path: coverage/${{ matrix.module }}.out
+          retention-days: 1
+
+  upload-coverage:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          path: coverage/
+          merge-multiple: true
+
+      - name: Upload results to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/*.out
+          codecov_yml_path: codecov.yml
+          verbose: true
