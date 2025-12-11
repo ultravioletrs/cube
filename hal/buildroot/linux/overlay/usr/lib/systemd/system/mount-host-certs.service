@@ -1,11 +1,11 @@
 [Unit]
-Description=Configure mTLS environment for cube-agent
+Description=Mount host certificates via 9p and configure mTLS
 After=local-fs.target
 Before=cube-agent.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/configure-mtls.sh
+ExecStart=/usr/local/bin/mount-host-certs.sh
 RemainAfterExit=yes
 
 [Install]
