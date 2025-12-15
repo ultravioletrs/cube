@@ -128,7 +128,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    
    List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 4):
    ```bash
-   curl http://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
+   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
    ```
 
@@ -136,7 +136,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    
    Replace `YOUR_DOMAIN_ID` with your actual domain ID:
    ```bash
-   curl http://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
+   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
