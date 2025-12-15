@@ -38,10 +38,14 @@ ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /app
 
 # Copy application files
-COPY --chown=guardrails:guardrails . .
+COPY --chown=guardrails:guardrails main.py .
+COPY --chown=guardrails:guardrails src ./src
 
-# Copy rails configuration
+# Copy rails configuration (for legacy mode)
 COPY --chown=guardrails:guardrails rails /app/rails
+
+# Create logs directory for tracing
+RUN mkdir -p /app/logs && chown -R guardrails:guardrails /app/logs
 
 # Set permissions
 RUN chown -R guardrails:guardrails /app

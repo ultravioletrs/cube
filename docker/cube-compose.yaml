@@ -4,6 +4,7 @@
 volumes:
   opensearch-data:
   cube-proxy-db-volume:
+  cube-guardrails-db-volume:
 
 services:
   opensearch:
@@ -64,6 +65,19 @@ services:
       - cube-network
     restart: unless-stopped
   
+  cube-guardrails-db:
+    image: postgres:16.2-alpine
+    container_name: cube-guardrails-db
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${UV_GUARDRAILS_DB_USER}
+      POSTGRES_PASSWORD: ${UV_GUARDRAILS_DB_PASS}
+      POSTGRES_DB: ${UV_GUARDRAILS_DB_NAME}
+    networks:
+      - cube-network
+    volumes:
+      - cube-guardrails-db-volume:/var/lib/postgresql/data
+
   cube-guardrails:
     container_name: guardrails
     image: ghcr.io/ultravioletrs/cube/guardrails:latest
@@ -72,6 +86,9 @@ services:
     networks:
       - cube-network
     restart: unless-stopped
+    depends_on:
+      cube-guardrails-db:
+        condition: service_healthy
     environment:
       - PYTHONPATH=/app
       - UVICORN_HOST=0.0.0.0
@@ -80,6 +97,12 @@ services:
       - TRANSFORMERS_CACHE=/app/cache
       - HF_HOME=/app/cache
       - XDG_CACHE_HOME=/app/cache
+      - UV_GUARDRAILS_USE_DATABASE=${UV_GUARDRAILS_USE_DATABASE}
+      - UV_GUARDRAILS_DB_HOST=${UV_GUARDRAILS_DB_HOST}
+      - UV_GUARDRAILS_DB_PORT=${UV_GUARDRAILS_DB_PORT}
+      - UV_GUARDRAILS_DB_USER=${UV_GUARDRAILS_DB_USER}
+      - UV_GUARDRAILS_DB_PASS=${UV_GUARDRAILS_DB_PASS}
+      - UV_GUARDRAILS_DB_NAME=${UV_GUARDRAILS_DB_NAME}
     volumes:
       - ../guardrails/rails:/app/rails:ro
     healthcheck:
