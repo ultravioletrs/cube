@@ -189,7 +189,34 @@ func main() {
 		return
 	}
 
-	svc, err := newService(logger, tracer, &agentConfig, repo)
+	// Initialize Router from file config
+	routerFile, err := os.ReadFile(cfg.RouterConfig)
+	if err != nil {
+		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	var fileCfg fileConfig
+	if err := json.Unmarshal(routerFile, &fileCfg); err != nil {
+		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
+
+		exitCode = 1
+
+		return
+	}
+
+	rter := router.New(fileCfg.Router)
+
+	// Load routes from database and update in-memory router
+	if err := loadDatabaseRoutes(ctx, repo, rter); err != nil {
+		logger.Error(fmt.Sprintf("failed to load routes from database: %s", err))
+		// Continue even if loading fails - file config is already loaded
+	}
+
+	svc, err := newService(logger, tracer, &agentConfig, repo, rter)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 
@@ -226,27 +253,6 @@ func main() {
 		return
 	}
 
-	// Initialize Router
-	routerFile, err := os.ReadFile(cfg.RouterConfig)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-
-	var fileCfg fileConfig
-	if err := json.Unmarshal(routerFile, &fileCfg); err != nil {
-		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-
-	rter := router.New(fileCfg.Router)
-
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
 			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter,
@@ -271,10 +277,12 @@ func main() {
 	}
 }
 
+// newServiceWithRouter creates a service with router integration for dynamic route management.
 func newService(
-	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig, repo proxy.Repository,
+	logger *slog.Logger, tracer trace.Tracer, agentConfig *clients.AttestedClientConfig,
+	repo proxy.Repository, rter *router.Router,
 ) (proxy.Service, error) {
-	svc, err := proxy.New(agentConfig, repo)
+	svc, err := proxy.NewWithRouter(agentConfig, repo, rter)
 	if err != nil {
 		return nil, err
 	}
@@ -285,4 +293,18 @@ func newService(
 	svc = middleware.NewMetricsMiddleware(counter, latency, svc)
 
 	return svc, nil
+}
+
+// loadDatabaseRoutes loads routes from the database and updates the in-memory router.
+func loadDatabaseRoutes(ctx context.Context, repo proxy.Repository, rter *router.Router) error {
+	routes, err := repo.ListRoutes(ctx)
+	if err != nil {
+		return err
+	}
+
+	if len(routes) > 0 {
+		rter.UpdateRoutes(routes)
+	}
+
+	return nil
 }

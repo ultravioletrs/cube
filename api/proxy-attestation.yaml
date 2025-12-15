@@ -1,0 +1,144 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+openapi: 3.0.0
+info:
+  title: Cube Proxy - Attestation Policy API
+  description: API for managing attestation policies in the Cube proxy service
+  version: 1.0.0
+  contact:
+    name: Ultraviolet
+    url: https://github.com/ultravioletrs/cube
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+paths:
+  /attestation/policy:
+    post:
+      summary: Update attestation policy
+      description: Updates the global attestation policy for all domains
+      operationId: updateAttestationPolicy
+      tags:
+        - Attestation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        description: The attestation policy document
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: Binary attestation policy data
+          application/json:
+            schema:
+              type: object
+              description: JSON attestation policy document
+      responses:
+        '200':
+          description: Policy updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatePolicyResponse'
+        '400':
+          description: Invalid policy document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /{domainID}/attestation/policy:
+    get:
+      summary: Get attestation policy for a domain
+      description: Retrieves the attestation policy for a specific domain
+      operationId: getAttestationPolicy
+      tags:
+        - Attestation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: domainID
+          in: path
+          required: true
+          description: The domain identifier
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Attestation policy
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+                description: Binary attestation policy data
+            application/json:
+              schema:
+                type: object
+                description: JSON attestation policy document
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Domain not found or policy not available
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    UpdatePolicyResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          description: Confirmation message
+          example: "Policy updated successfully"
+
+    Error:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer token authentication
+
+tags:
+  - name: Attestation
+    description: Attestation policy management endpoints

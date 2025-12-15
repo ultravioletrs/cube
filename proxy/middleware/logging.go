@@ -10,6 +10,7 @@ import (
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/ultravioletrs/cube/proxy"
+	"github.com/ultravioletrs/cube/proxy/router"
 )
 
 var _ proxy.Service = (*loggingMiddleware)(nil)
@@ -39,7 +40,6 @@ func (l *loggingMiddleware) Secure() string {
 }
 
 // GetAttestationPolicy implements proxy.Service.
-// GetAttestationPolicy implements proxy.Service.
 func (l *loggingMiddleware) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
 	return l.svc.GetAttestationPolicy(ctx, session)
 }
@@ -47,4 +47,31 @@ func (l *loggingMiddleware) GetAttestationPolicy(ctx context.Context, session *a
 // UpdateAttestationPolicy implements proxy.Service.
 func (l *loggingMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
 	return l.svc.UpdateAttestationPolicy(ctx, session, policy)
+}
+
+// CreateRoute implements proxy.Service.
+func (l *loggingMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+	return l.svc.CreateRoute(ctx, session, route)
+}
+
+// UpdateRoute implements proxy.Service.
+func (l *loggingMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+	return l.svc.UpdateRoute(ctx, session, route)
+}
+
+// DeleteRoute implements proxy.Service.
+func (l *loggingMiddleware) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
+	return l.svc.DeleteRoute(ctx, session, name)
+}
+
+// GetRoute implements proxy.Service.
+func (l *loggingMiddleware) GetRoute(
+	ctx context.Context, session *authn.Session, name string,
+) (*router.RouteRule, error) {
+	return l.svc.GetRoute(ctx, session, name)
+}
+
+// ListRoutes implements proxy.Service.
+func (l *loggingMiddleware) ListRoutes(ctx context.Context, session *authn.Session) ([]router.RouteRule, error) {
+	return l.svc.ListRoutes(ctx, session)
 }

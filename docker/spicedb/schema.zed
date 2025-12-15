@@ -86,7 +86,6 @@ definition domain {
 	permission llm_read_permission = llm_read + team->llm_read + organization->admin
 	permission llm_delete_permission = llm_delete + team->llm_delete + organization->admin
 	permission llm_chat_completions_permission = llm_chat_completions + team->llm_chat_completions + organization->admin
-	permission llm_chat_completions_permission = llm_chat_completions + team->llm_chat_completions + organization->admin
 	permission llm_completions_permission = llm_completions + team->llm_completions + organization->admin
 	permission llm_embeddings_permission = llm_embeddings + team->llm_embeddings + organization->admin
 	permission llm_transcription_permission = llm_transcription + team->llm_transcription + organization->admin
