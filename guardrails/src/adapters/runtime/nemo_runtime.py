@@ -50,27 +50,62 @@ class NemoRuntime(GuardrailRuntime):
             )
 
             try:
-                # Parse config YAML to dict and merge prompts into it
+                # Parse config YAML to dict
                 config_dict = yaml.safe_load(materialized.config_yaml) or {}
 
+                logger.info(f"Config YAML loaded, keys: {list(config_dict.keys())}")
+                logger.info(
+                    f"Prompts YAML provided: {bool(materialized.prompts_yaml)}, "
+                    f"length: {len(materialized.prompts_yaml) if materialized.prompts_yaml else 0}"
+                )
+
                 # Merge prompts into the config dict if provided
-                # Prompts are typically under the "prompts" key in the config
+                # RailsConfig.from_content() requires all YAML content merged into
+                # a single yaml_content string, so we merge prompts into config_dict
+                # and regenerate the combined yaml_content
                 if materialized.prompts_yaml:
                     prompts_dict = yaml.safe_load(materialized.prompts_yaml) or {}
+                    logger.info(f"Prompts dict keys: {list(prompts_dict.keys()) if prompts_dict else 'None'}")
                     if prompts_dict:
-                        # Merge prompts into config
+                        # Merge prompts into config dict
                         for key, value in prompts_dict.items():
                             if key in config_dict and isinstance(config_dict[key], list):
                                 # Extend lists (e.g., prompts list)
                                 config_dict[key].extend(value)
                             else:
                                 config_dict[key] = value
+                        logger.info(f"Merged prompts, config now has keys: {list(config_dict.keys())}")
+                        if "prompts" in config_dict:
+                            prompt_tasks = [p.get("task") for p in config_dict.get("prompts", [])]
+                            logger.info(f"Prompt tasks in merged config: {prompt_tasks}")
+                else:
+                    logger.warning("No prompts_yaml provided in materialized guardrail!")
+                    # Check if the config requires prompts (e.g., self check flows)
+                    rails_config = config_dict.get("rails", {})
+                    input_flows = rails_config.get("input", {}).get("flows", [])
+                    output_flows = rails_config.get("output", {}).get("flows", [])
+                    all_flows = input_flows + output_flows
+
+                    requires_prompts = any(
+                        "self check" in flow.lower() for flow in all_flows
+                    )
+                    if requires_prompts:
+                        logger.error(
+                            "Configuration uses self-check flows but no prompts_yaml provided! "
+                            "Please include prompts_yaml with self_check_input and/or "
+                            "self_check_output templates when creating the config."
+                        )
+
+                # Convert merged config dict back to YAML for from_content()
+                merged_yaml_content = yaml.dump(config_dict, default_flow_style=False)
+
+                logger.debug(f"Merged YAML content:\n{merged_yaml_content}")
 
                 # Load configuration from content (no temp files needed)
+                # Pass the merged yaml_content containing both config and prompts
                 rails_config = RailsConfig.from_content(
-                    yaml_content=materialized.config_yaml,
+                    yaml_content=merged_yaml_content,
                     colang_content=materialized.colang if materialized.colang else None,
-                    config=config_dict,
                 )
 
                 new_rails = LLMRails(rails_config)

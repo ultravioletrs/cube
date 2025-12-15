@@ -77,7 +77,8 @@ services:
       - cube-network
     volumes:
       - cube-guardrails-db-volume:/var/lib/postgresql/data
-
+    ports:
+      - "7070:5432"
   cube-guardrails:
     container_name: guardrails
     image: ghcr.io/ultravioletrs/cube/guardrails:latest
@@ -87,8 +88,7 @@ services:
       - cube-network
     restart: unless-stopped
     depends_on:
-      cube-guardrails-db:
-        condition: service_healthy
+      - cube-guardrails-db
     environment:
       - PYTHONPATH=/app
       - UVICORN_HOST=0.0.0.0
