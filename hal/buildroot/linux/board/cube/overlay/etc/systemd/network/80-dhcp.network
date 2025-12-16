@@ -1,0 +1,8 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+[Match]
+Name=e*
+
+[Network]
+DHCP=yes
