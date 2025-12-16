@@ -14,3 +14,15 @@ fi
 
 # Set up systemd-resolved
 ln -sf ../run/systemd/resolve/stub-resolv.conf ${TARGET_DIR}/etc/resolv.conf
+
+# Create the mount points for 9p shares
+mkdir -p ${TARGET_DIR}/etc/cube/certs
+
+# Ensure /etc/fstab exists
+if [ ! -f "${TARGET_DIR}/etc/fstab" ]; then
+    touch "${TARGET_DIR}/etc/fstab"
+fi
+
+# Add the 9p certificate mount entry to /etc/fstab
+grep -q "certs_share /etc/cube/certs" ${TARGET_DIR}/etc/fstab || \
+echo "certs_share /etc/cube/certs 9p trans=virtio,version=9p2000.L,cache=mmap 0 0" >> "${TARGET_DIR}/etc/fstab"
