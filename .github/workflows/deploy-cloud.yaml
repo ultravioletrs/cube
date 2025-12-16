@@ -82,17 +82,24 @@ jobs:
 
             echo "Creating required directories and setting up SSL"
             cd docker
+            echo "Entered docker"
             mkdir -p traefik/ssl/certs
+            echo "Created traefik/ssl/certs directory"
 
             # Initialize acme.json if it doesn't exist
-            if [ ! -f "traefik/ssl/certs/acme.json" ]; then
+            # if [ ! -f "traefik/ssl/certs/acme.json" ]; then
+              echo "Creating acme.json for Traefik SSL"
               echo '{}' > traefik/ssl/certs/acme.json
+              echo "Setting permissions for acme.json"
               chmod 600 traefik/ssl/certs/acme.json
+              echo "  ✓ Created acme.json with correct permissions"
               echo "  ✓ Created acme.json"
-            else
-              chmod 600 traefik/ssl/certs/acme.json
-              echo "  ✓ acme.json already exists"
-            fi
+            # else
+            #   echo "acme.json already exists, setting permissions"
+            #   chmod 600 traefik/ssl/certs/acme.json
+            #   echo "  ✓ Set permissions for existing acme.json"
+            #   echo "  ✓ acme.json already exists"
+            # fi
 
             echo "Updating environment variables and configuration with secrets"
             # Replace placeholder with actual public URL from secrets
