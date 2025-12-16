@@ -44,8 +44,6 @@ type Config struct {
 	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
 	CertsToken    string `env:"UV_CUBE_AGENT_CERTS_TOKEN" envDefault:""`
 	CVMId         string `env:"UV_CUBE_AGENT_CVM_ID"      envDefault:""`
-	GuardrailsURL        string `env:"UV_CUBE_GUARDRAILS_URL"              envDefault:""`
-	UseGuardrailsBackend bool   `env:"UV_CUBE_AGENT_USE_GUARDRAILS_BACKEND" envDefault:"true"`
 }
 
 func main() {
@@ -125,14 +123,6 @@ func main() {
 	config := agent.Config{
 		BackendURL: cfg.TargetURL,
 	}
-
-	if cfg.GuardrailsURL != "" {
-		config.GuardrailsURL = cfg.GuardrailsURL
-	}
-	config.UseGuardrailsBackend = cfg.UseGuardrailsBackend
-
-	// Debug logging
-	logger.Info(fmt.Sprintf("Guardrails configuration: URL=%s, UseBackend=%v", config.GuardrailsURL, config.UseGuardrailsBackend))
 
 	svc, err := agent.New(&config, provider, ccPlatform)
 	if err != nil {

@@ -49,14 +49,17 @@ const (
 )
 
 type config struct {
-	LogLevel      string  `env:"UV_CUBE_PROXY_LOG_LEVEL"     envDefault:"info"`
-	TargetURL     string  `env:"UV_CUBE_PROXY_TARGET_URL"    envDefault:"http://ollama:11434"`
-	SendTelemetry bool    `env:"SMQ_SEND_TELEMETRY"          envDefault:"true"`
-	InstanceID    string  `env:"UV_CUBE_PROXY_INSTANCE_ID"   envDefault:""`
-	JaegerURL     url.URL `env:"SMQ_JAEGER_URL"              envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio    float64 `env:"SMQ_JAEGER_TRACE_RATIO"      envDefault:"1.0"`
-	OpenSearchURL string  `env:"UV_CUBE_OPENSEARCH_URL"      envDefault:"http://opensearch:9200"`
-	RouterConfig  string  `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
+	LogLevel          string  `env:"UV_CUBE_PROXY_LOG_LEVEL"       envDefault:"info"`
+	TargetURL         string  `env:"UV_CUBE_PROXY_TARGET_URL"      envDefault:"http://ollama:11434"`
+	SendTelemetry     bool    `env:"SMQ_SEND_TELEMETRY"            envDefault:"true"`
+	InstanceID        string  `env:"UV_CUBE_PROXY_INSTANCE_ID"     envDefault:""`
+	JaegerURL         url.URL `env:"SMQ_JAEGER_URL"                envDefault:"http://localhost:4318/v1/traces"`
+	TraceRatio        float64 `env:"SMQ_JAEGER_TRACE_RATIO"        envDefault:"1.0"`
+	OpenSearchURL     string  `env:"UV_CUBE_OPENSEARCH_URL"        envDefault:"http://opensearch:9200"`
+	RouterConfig      string  `env:"UV_CUBE_PROXY_ROUTER_CONFIG"   envDefault:"docker/config.json"`
+	GuardrailsEnabled bool    `env:"UV_CUBE_GUARDRAILS_ENABLED"    envDefault:"true"`
+	GuardrailsURL     string  `env:"UV_CUBE_GUARDRAILS_URL"        envDefault:"http://guardrails:8001"`
+	AgentURL          string  `env:"UV_CUBE_AGENT_URL"             envDefault:"http://cube-agent:8901"`
 }
 
 type fileConfig struct {
@@ -253,9 +256,23 @@ func main() {
 		return
 	}
 
+	// Configure guardrails sidecar
+	guardrailsCfg := api.GuardrailsConfig{
+		Enabled:  cfg.GuardrailsEnabled,
+		URL:      cfg.GuardrailsURL,
+		AgentURL: cfg.AgentURL,
+	}
+
+	logger.Info(fmt.Sprintf("Guardrails config enabled: %s, guardrails url %s, agenturl %s", guardrailsCfg.URL, guardrailsCfg.AgentURL))
+
+	logger.Info("This is new here.....")
+	if guardrailsCfg.Enabled {
+		logger.Info(fmt.Sprintf("Guardrails enabled: %s -> %s", guardrailsCfg.URL, guardrailsCfg.AgentURL))
+	}
+
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter,
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter, guardrailsCfg,
 		),
 		logger)
 
