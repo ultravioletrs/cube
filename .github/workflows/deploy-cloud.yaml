@@ -4,6 +4,13 @@
 name: Deploy Cube Cloud Services
 
 on:
+  workflow_run:
+    workflows: ["Create and publish Cube Proxy Docker image"]
+    types:
+      - completed
+    branches:
+      - main
+
   push:
     branches:
       - main

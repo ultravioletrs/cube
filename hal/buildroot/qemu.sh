@@ -78,7 +78,6 @@ function start_cvm(){
     -kernel $KERNEL_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio \
     -drive if=pflash,format=raw,unit=0,file=$QEMU_OVMF_CODE,readonly=on \
-    -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198 \
     -object memory-backend-memfd-private,id=ram1,size=$RAM,share=true \
     -machine memory-encryption=sev0 \
     -machine memory-backend=ram1,kvm-type=protected \
@@ -91,7 +90,7 @@ function start_tdx(){
     -enable-kvm \
     -m 20G -smp cores=16,sockets=1,threads=1 \
     -cpu host \
-    -object '{"qom-type":"tdx-guest","id":"tdx","quote-generation-socket":{"type": "vsock", "cid":"2","port":"4050"}}' \
+    -object '{"qom-type":"tdx-guest","id":"tdx"}' \
     -machine q35,kernel_irqchip=split,confidential-guest-support=tdx,memory-backend=mem0,hpet=off \
     -bios /usr/share/ovmf/OVMF.fd \
     -nographic \
@@ -105,10 +104,7 @@ function start_tdx(){
     -object memory-backend-memfd,id=mem0,size=20G \
     -drive file=$FS_PATH,format=raw,if=virtio \
     -fsdev local,id=cert_fs,path=$CERTS_PATH,security_model=mapped \
-    -device virtio-9p-pci,fsdev=cert_fs,mount_tag=certs_share \
-    -device vhost-vsock-pci,guest-cid=42 \
-    -monitor pty \
-    -monitor unix:monitor,server,nowait
+    -device virtio-9p-pci,fsdev=cert_fs,mount_tag=certs_share
 }
 
 function generate_snp_expected_measurement(){
