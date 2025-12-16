@@ -15,6 +15,7 @@ class GuardrailConfig:
     """
 
     id: UUID
+    domain_id: UUID
     name: str
     description: Optional[str]
     config_yaml: str
@@ -24,6 +25,8 @@ class GuardrailConfig:
     updated_at: datetime
 
     def __post_init__(self):
+        if not self.domain_id:
+            raise ValueError("domain_id cannot be empty")
         if not self.name:
             raise ValueError("Config name cannot be empty")
         if not self.config_yaml:

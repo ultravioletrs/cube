@@ -49,13 +49,15 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # ==================== Config CRUD ====================
 
 
-@router.post("/configs", response_model=ConfigResponse, tags=["configs"])
+@router.post("/{domain_id}/configs", response_model=ConfigResponse, tags=["configs"])
 async def create_config(
+    domain_id: UUID,
     data: ConfigCreate,
     uc: CreateConfig = Depends(get_create_config),
 ) -> ConfigResponse:
-    """Create a new guardrail configuration."""
+    """Create a new guardrail configuration for a domain."""
     config = await uc.execute(
+        domain_id=domain_id,
         name=data.name,
         config_yaml=data.config_yaml,
         prompts_yaml=data.prompts_yaml,
@@ -64,6 +66,7 @@ async def create_config(
     )
     return ConfigResponse(
         id=config.id,
+        domain_id=config.domain_id,
         name=config.name,
         description=config.description,
         config_yaml=config.config_yaml,
@@ -74,17 +77,19 @@ async def create_config(
     )
 
 
-@router.get("/configs", response_model=List[ConfigResponse], tags=["configs"])
+@router.get("/{domain_id}/configs", response_model=List[ConfigResponse], tags=["configs"])
 async def list_configs(
+    domain_id: UUID,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     uc: ListConfigs = Depends(get_list_configs),
 ) -> List[ConfigResponse]:
-    """List all guardrail configurations."""
-    configs = await uc.execute(offset=offset, limit=limit)
+    """List all guardrail configurations for a domain."""
+    configs = await uc.execute(domain_id=domain_id, offset=offset, limit=limit)
     return [
         ConfigResponse(
             id=c.id,
+            domain_id=c.domain_id,
             name=c.name,
             description=c.description,
             config_yaml=c.config_yaml,
@@ -97,8 +102,9 @@ async def list_configs(
     ]
 
 
-@router.get("/configs/{config_id}", response_model=ConfigResponse, tags=["configs"])
+@router.get("/{domain_id}/configs/{config_id}", response_model=ConfigResponse, tags=["configs"])
 async def get_config(
+    domain_id: UUID,
     config_id: UUID,
     uc: GetConfig = Depends(get_get_config),
 ) -> ConfigResponse:
@@ -106,6 +112,7 @@ async def get_config(
     config = await uc.execute(config_id)
     return ConfigResponse(
         id=config.id,
+        domain_id=config.domain_id,
         name=config.name,
         description=config.description,
         config_yaml=config.config_yaml,
@@ -116,8 +123,9 @@ async def get_config(
     )
 
 
-@router.put("/configs/{config_id}", response_model=ConfigResponse, tags=["configs"])
+@router.put("/{domain_id}/configs/{config_id}", response_model=ConfigResponse, tags=["configs"])
 async def update_config(
+    domain_id: UUID,
     config_id: UUID,
     data: ConfigUpdate,
     uc: UpdateConfig = Depends(get_update_config),
@@ -133,6 +141,7 @@ async def update_config(
     )
     return ConfigResponse(
         id=config.id,
+        domain_id=config.domain_id,
         name=config.name,
         description=config.description,
         config_yaml=config.config_yaml,
@@ -143,8 +152,9 @@ async def update_config(
     )
 
 
-@router.delete("/configs/{config_id}", tags=["configs"])
+@router.delete("/{domain_id}/configs/{config_id}", tags=["configs"])
 async def delete_config(
+    domain_id: UUID,
     config_id: UUID,
     uc: DeleteConfig = Depends(get_delete_config),
 ) -> dict:
@@ -157,11 +167,12 @@ async def delete_config(
 
 
 @router.post(
-    "/configs/{config_id}/versions",
+    "/{domain_id}/configs/{config_id}/versions",
     response_model=VersionResponse,
     tags=["versions"],
 )
 async def create_version(
+    domain_id: UUID,
     config_id: UUID,
     data: VersionCreate,
     uc: CreateVersion = Depends(get_create_version),
@@ -184,11 +195,12 @@ async def create_version(
 
 
 @router.get(
-    "/configs/{config_id}/versions",
+    "/{domain_id}/configs/{config_id}/versions",
     response_model=List[VersionResponse],
     tags=["versions"],
 )
 async def list_versions(
+    domain_id: UUID,
     config_id: UUID,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -213,8 +225,9 @@ async def list_versions(
 # ==================== Activation ====================
 
 
-@router.post("/versions/{version_id}/activate", response_model=ActivateResponse)
+@router.post("/{domain_id}/versions/{version_id}/activate", response_model=ActivateResponse)
 async def activate_version(
+    domain_id: UUID,
     version_id: UUID,
     uc: ActivateVersion = Depends(get_activate_version),
 ) -> ActivateResponse:
@@ -236,8 +249,8 @@ async def activate_version(
     )
 
 
-@router.post("/reload", response_model=ReloadResponse)
-async def reload_runtime() -> ReloadResponse:
+@router.post("/{domain_id}/reload", response_model=ReloadResponse)
+async def reload_runtime(domain_id: UUID) -> ReloadResponse:
     """Reload the runtime with the active configuration."""
     runtime = get_runtime()
     loader = get_load_active_guardrail()

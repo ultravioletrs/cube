@@ -33,9 +33,9 @@ class GuardrailRepository(ABC):
 
     @abstractmethod
     async def list_configs(
-        self, offset: int = 0, limit: int = 100
+        self, domain_id: "UUID", offset: int = 0, limit: int = 100
     ) -> List[GuardrailConfig]:
-        """List all guardrail configurations with pagination."""
+        """List all guardrail configurations for a domain with pagination."""
         pass
 
     @abstractmethod

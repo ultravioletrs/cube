@@ -20,6 +20,7 @@ class CreateConfig:
 
     async def execute(
         self,
+        domain_id: str,
         name: str,
         config_yaml: str,
         prompts_yaml: str = "",
@@ -31,6 +32,7 @@ class CreateConfig:
         Create a new guardrail configuration.
 
         Args:
+            domain_id: Domain ID for the configuration
             name: Unique name for the configuration
             config_yaml: YAML content for config.yml
             prompts_yaml: YAML content for prompts.yml
@@ -57,6 +59,7 @@ class CreateConfig:
         now = datetime.now(timezone.utc)
         config = GuardrailConfig(
             id=config_id or uuid4(),
+            domain_id=domain_id,
             name=name,
             description=description,
             config_yaml=config_yaml,

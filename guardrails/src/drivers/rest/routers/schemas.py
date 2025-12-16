@@ -35,6 +35,7 @@ class ConfigResponse(BaseModel):
     """Schema for guardrail configuration response."""
 
     id: UUID
+    domain_id: UUID
     name: str
     description: Optional[str]
     config_yaml: str
