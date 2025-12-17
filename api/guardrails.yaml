@@ -17,40 +17,7 @@ servers:
     description: Production server
 
 paths:
-  /chat/completions:
-    post:
-      summary: Process chat completion through guardrails
-      description: Process a chat completion request through the NeMo Guardrails runtime
-      operationId: chatCompletion
-      tags:
-        - Chat
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ChatRequest'
-      responses:
-        '200':
-          description: Chat completion response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChatCompletionResponse'
-        '503':
-          description: Guardrails runtime not ready
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /health:
+  /guardrails/health:
     get:
       summary: Health check
       description: Health check endpoint for container monitoring
@@ -65,7 +32,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
 
-  /:
+  /guardrails:
     get:
       summary: Root endpoint
       description: Root endpoint with service information
@@ -80,7 +47,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RootResponse'
 
-  /admin/{domain_id}/configs:
+  /guardrails/{domain_id}/configs:
     post:
       summary: Create a new guardrail configuration
       description: Create a new guardrail configuration for a domain
@@ -141,7 +108,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /admin/{domain_id}/configs/{config_id}:
+  /guardrails/{domain_id}/configs/{config_id}:
     get:
       summary: Get a guardrail configuration
       description: Get a guardrail configuration by ID
@@ -230,7 +197,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /admin/{domain_id}/configs/{config_id}/versions:
+  /guardrails/{domain_id}/configs/{config_id}/versions:
     post:
       summary: Create a new version
       description: Create a new version for a configuration
@@ -293,7 +260,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /admin/{domain_id}/versions/{version_id}/activate:
+  /guardrails/{domain_id}/versions/{version_id}/activate:
     post:
       summary: Activate a version
       description: Activate a guardrail version and reload the runtime
@@ -329,7 +296,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /admin/{domain_id}/reload:
+  /guardrails/{domain_id}/reload:
     post:
       summary: Reload the runtime
       description: Reload the runtime with the active configuration
@@ -509,12 +476,12 @@ components:
           items:
             type: string
           example:
-            - /v1/chat/completions
-            - /health
-            - /docs
-            - /admin/configs
-            - /admin/versions/{version_id}/activate
-            - /admin/reload
+            - /guardrails/guardrails/chat/completions
+            - /guardrails/health
+            - /guardrails
+            - /guardrails/configs
+            - /guardrails/versions/{version_id}/activate
+            - /guardrails/reload
 
     ConfigCreate:
       type: object
@@ -691,8 +658,6 @@ components:
           description: Error message
 
 tags:
-  - name: Chat
-    description: Chat completion endpoints with guardrails
   - name: Health
     description: Health check and service information endpoints
   - name: Configs

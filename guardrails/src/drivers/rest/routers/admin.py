@@ -43,7 +43,7 @@ from src.use_cases import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
 
 # ==================== Config CRUD ====================

@@ -14,15 +14,11 @@ from src.drivers.rest.routers.schemas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
 
-@router.post("/chat/completions", tags=["chat"])
+@router.post("/guardrails/chat/completions", tags=["chat"])
 async def chat_completion(req: ChatRequest) -> Dict[str, Any]:
-    """
-    Process a chat completion request through guardrails.
-    Maintains backwards compatibility with existing API.
-    """
     runtime = get_runtime()
 
     if not runtime.is_ready():
@@ -109,11 +105,11 @@ async def root() -> Dict[str, Any]:
         "runtime_ready": runtime.is_ready(),
         "current_revision": runtime.get_current_revision(),
         "endpoints": [
-            "/chat/completions",
-            "/health",
-            "/docs",
-            "/admin/configs",
-            "/admin/versions/{version_id}/activate",
-            "/admin/reload",
+            "/guardrails/guardrails/chat/completions",
+            "/guardrails/health",
+            "/guardrails",
+            "/guardrails/configs",
+            "/guardrails/versions/{version_id}/activate",
+            "/guardrails/reload",
         ],
     }

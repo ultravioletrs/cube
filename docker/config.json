@@ -20,7 +20,7 @@
         "matchers": [
           {
             "condition": "path",
-            "pattern": "/admin/.*",
+            "pattern": "/guardrails/.*",
             "is_regex": true
           }
         ],
