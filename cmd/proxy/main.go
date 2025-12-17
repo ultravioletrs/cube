@@ -16,6 +16,7 @@ import (
 	mglog "github.com/absmach/supermq/logger"
 	smqauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/authn/authsvc"
+	"github.com/absmach/supermq/pkg/authz"
 	authzsvc "github.com/absmach/supermq/pkg/authz/authsvc"
 	domainsgrpc "github.com/absmach/supermq/pkg/domains/grpcclient"
 	"github.com/absmach/supermq/pkg/grpcclient"
@@ -93,49 +94,15 @@ func main() {
 		}
 	}
 
-	// Initialize auth gRPC client
-	grpcCfg := grpcclient.Config{}
-	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load auth gRPC client configuration : %s", err))
-
-		exitCode = 1
-
-		return
-	}
-
-	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
+	auth, authzz, closeAuth, err := initAuthClients(ctx, logger)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to init auth gRPC client: %s", err))
+		logger.Error(err.Error())
 
 		exitCode = 1
 
 		return
 	}
-	defer authnClient.Close()
-
-	logger.Info("AuthN successfully connected to auth gRPC server " + authnClient.Secure())
-
-	domainsAuthz, _, domainsClient, err := domainsgrpc.NewAuthorization(ctx, grpcCfg)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to init domains gRPC client: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-	defer domainsClient.Close()
-
-	authz, authzClient, err := authzsvc.NewAuthorization(ctx, grpcCfg, domainsAuthz)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to init authz gRPC client: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-	defer authzClient.Close()
-
-	logger.Info("AuthZ successfully connected to auth gRPC server " + authzClient.Secure())
+	defer closeAuth()
 
 	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
 	if err != nil {
@@ -192,31 +159,18 @@ func main() {
 		return
 	}
 
-	// Initialize Router from file config
-	routerFile, err := os.ReadFile(cfg.RouterConfig)
+	rter, err := initRouter(cfg.RouterConfig)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to read router config file: %s", err))
+		logger.Error(err.Error())
 
 		exitCode = 1
 
 		return
 	}
-
-	var fileCfg fileConfig
-	if err := json.Unmarshal(routerFile, &fileCfg); err != nil {
-		logger.Error(fmt.Sprintf("failed to parse router config file: %s", err))
-
-		exitCode = 1
-
-		return
-	}
-
-	rter := router.New(fileCfg.Router)
 
 	// Load routes from database and update in-memory router
 	if err := loadDatabaseRoutes(ctx, repo, rter); err != nil {
 		logger.Error(fmt.Sprintf("failed to load routes from database: %s", err))
-		// Continue even if loading fails - file config is already loaded
 	}
 
 	svc, err := newService(logger, tracer, &agentConfig, repo, rter)
@@ -228,7 +182,7 @@ func main() {
 		return
 	}
 
-	svc = middleware.AuthMiddleware(authz)(svc)
+	svc = middleware.AuthMiddleware(authzz)(svc)
 
 	logger.Info(fmt.Sprintf(
 		"%s service %s client configured to connect to agent at %s with %s",
@@ -316,4 +270,62 @@ func loadDatabaseRoutes(ctx context.Context, repo proxy.Repository, rter *router
 	}
 
 	return nil
+}
+
+// initAuthClients initializes authentication and authorization gRPC clients.
+func initAuthClients(
+	ctx context.Context,
+	logger *slog.Logger,
+) (smqauthn.Authentication, authz.Authorization, func(), error) {
+	grpcCfg := grpcclient.Config{}
+	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to load auth gRPC client configuration: %w", err)
+	}
+
+	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to init auth gRPC client: %w", err)
+	}
+
+	logger.Info("AuthN successfully connected to auth gRPC server " + authnClient.Secure())
+
+	domainsAuthz, _, domainsClient, err := domainsgrpc.NewAuthorization(ctx, grpcCfg)
+	if err != nil {
+		authnClient.Close()
+
+		return nil, nil, nil, fmt.Errorf("failed to init domains gRPC client: %w", err)
+	}
+
+	authorization, authzClient, err := authzsvc.NewAuthorization(ctx, grpcCfg, domainsAuthz)
+	if err != nil {
+		authnClient.Close()
+		domainsClient.Close()
+
+		return nil, nil, nil, fmt.Errorf("failed to init authz gRPC client: %w", err)
+	}
+
+	logger.Info("AuthZ successfully connected to auth gRPC server " + authzClient.Secure())
+
+	closeFunc := func() {
+		authnClient.Close()
+		domainsClient.Close()
+		authzClient.Close()
+	}
+
+	return auth, authorization, closeFunc, nil
+}
+
+// initRouter initializes the router from a config file.
+func initRouter(configPath string) (*router.Router, error) {
+	routerFile, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read router config file: %w", err)
+	}
+
+	var fileCfg fileConfig
+	if err := json.Unmarshal(routerFile, &fileCfg); err != nil {
+		return nil, fmt.Errorf("failed to parse router config file: %w", err)
+	}
+
+	return router.New(fileCfg.Router), nil
 }
