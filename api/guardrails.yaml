@@ -476,7 +476,7 @@ components:
           items:
             type: string
           example:
-            - /guardrails/guardrails/chat/completions
+            - /guardrails/messages
             - /guardrails/health
             - /guardrails
             - /guardrails/configs

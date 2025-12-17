@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
 
-@router.post("/guardrails/chat/completions", tags=["chat"])
+@router.post("/guardrails/messages", tags=["chat"])
 async def chat_completion(req: ChatRequest) -> Dict[str, Any]:
     runtime = get_runtime()
 
@@ -105,7 +105,7 @@ async def root() -> Dict[str, Any]:
         "runtime_ready": runtime.is_ready(),
         "current_revision": runtime.get_current_revision(),
         "endpoints": [
-            "/guardrails/guardrails/chat/completions",
+            "/guardrails/guardrails/messages",
             "/guardrails/health",
             "/guardrails",
             "/guardrails/configs",

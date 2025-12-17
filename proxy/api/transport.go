@@ -255,7 +255,7 @@ func guardrailsHandler(
 		r.Body.Close()
 
 		// Forward to guardrails
-		guardrailsURL := cfg.URL + "/guardrails/chat/completions"
+		guardrailsURL := cfg.URL + "/guardrails/messages"
 		log.Printf("guardrailsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
 
 		guardrailsBody, guardrailsStatus, err := forwardRequest(ctx, client, guardrailsURL, bodyBytes)
