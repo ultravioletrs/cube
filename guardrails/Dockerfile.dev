@@ -1,0 +1,43 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+FROM python:3.11-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    gcc \
+    g++ \
+    curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r guardrails && useradd -r -g guardrails guardrails
+
+# Create venv and install dependencies (this layer is cached if requirements.txt unchanged)
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy requirements first for layer caching
+COPY guardrails/requirements.txt /tmp/requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements.txt && \
+    python -m spacy download en_core_web_lg
+
+WORKDIR /app
+
+# Copy source code (changes frequently, so done last)
+COPY --chown=guardrails:guardrails guardrails/main.py .
+COPY --chown=guardrails:guardrails guardrails/src ./src
+COPY --chown=guardrails:guardrails guardrails/rails /app/rails
+
+RUN mkdir -p /app/logs && chown -R guardrails:guardrails /app/logs
+RUN chown -R guardrails:guardrails /app
+
+USER guardrails
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+EXPOSE 8001
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
