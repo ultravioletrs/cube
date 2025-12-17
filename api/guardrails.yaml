@@ -11,13 +11,13 @@ info:
     url: https://github.com/ultravioletrs/cube
 
 servers:
-  - url: http://localhost:8001
+  - url: http://localhost:8080/proxy
     description: Local development server
-  - url: https://api.example.com
+  - url: https://api.example.com/proxy
     description: Production server
 
 paths:
-  /v1/chat/completions:
+  /chat/completions:
     post:
       summary: Process chat completion through guardrails
       description: Process a chat completion request through the NeMo Guardrails runtime

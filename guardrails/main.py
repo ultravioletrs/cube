@@ -100,7 +100,7 @@ else:
         status: str
         version: str = "1.0.0"
 
-    @app.post("/v1/chat/completions", tags=["chat"])
+    @app.post("/chat/completions", tags=["chat"])
     async def chat_completion(req: ChatRequest):
         try:
             logger.info(f"Processing chat request with {len(req.messages)} messages")
@@ -169,5 +169,5 @@ else:
             "version": "1.0.0",
             "status": "running",
             "mode": "legacy",
-            "endpoints": ["/v1/chat/completions", "/health", "/docs"],
+            "endpoints": ["/chat/completions", "/health", "/docs"],
         }
