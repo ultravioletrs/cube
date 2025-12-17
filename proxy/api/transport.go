@@ -98,7 +98,7 @@ func MakeHandler(
 
 		// Chat completions with guardrails orchestration
 		if guardrailsCfg.Enabled {
-			r.Post("/api/chat", makeChatCompletionsHandler(
+			r.Post("/api/chat", guardrailsHandler(
 				endpoints.ProxyRequest,
 				proxyTransport,
 				guardrailsCfg,
@@ -213,11 +213,7 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 
 var errUnauthorized = errors.New("unauthorized")
 
-// makeChatCompletionsHandler orchestrates the guardrails flow:
-// Client -> Proxy -> Guardrails (validate) -> if blocked, return to client
-//
-//	-> if passed, Proxy -> Agent -> Ollama -> Client
-func makeChatCompletionsHandler(
+func guardrailsHandler(
 	proxyEndpoint kitendpoint.Endpoint,
 	transport http.RoundTripper,
 	cfg GuardrailsConfig,
@@ -233,6 +229,7 @@ func makeChatCompletionsHandler(
 		session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
 			return
 		}
 
@@ -244,35 +241,48 @@ func makeChatCompletionsHandler(
 			Path:     r.URL.Path,
 		}); err != nil {
 			encodeError(ctx, err, w)
+
 			return
 		}
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
+
 			return
 		}
+
 		r.Body.Close()
 
 		// Forward to guardrails
 		guardrailsURL := cfg.URL + "/v1/chat/completions"
-		log.Printf("makeChatCompletionsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
+		log.Printf("guardrailsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
 
 		guardrailsBody, guardrailsStatus, err := forwardRequest(ctx, client, guardrailsURL, bodyBytes)
 		if err != nil {
-			log.Printf(" makeChatCompletionsHandler: Failed to call guardrails: %v", err)
+			log.Printf(" guardrailsHandler: Failed to call guardrails: %v", err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
 			return
 		}
-		writeResponse(w, guardrailsStatus, guardrailsBody)
+
+		w.Header().Set("Content-Type", ContentType)
+		w.WriteHeader(guardrailsStatus)
+		_, _ = w.Write(guardrailsBody)
 	}
 }
 
-func forwardRequest(ctx context.Context, client *http.Client, url string, body []byte) ([]byte, int, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+func forwardRequest(
+	ctx context.Context,
+	client *http.Client,
+	railsURL string,
+	body []byte,
+) (b []byte, status int, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, railsURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, err
 	}
+
 	req.Header.Set("Content-Type", ContentType)
 
 	resp, err := client.Do(req)
@@ -287,10 +297,4 @@ func forwardRequest(ctx context.Context, client *http.Client, url string, body [
 	}
 
 	return respBody, resp.StatusCode, nil
-}
-
-func writeResponse(w http.ResponseWriter, status int, body []byte) {
-	w.Header().Set("Content-Type", ContentType)
-	w.WriteHeader(status)
-	w.Write(body)
 }

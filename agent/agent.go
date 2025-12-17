@@ -101,6 +101,7 @@ func (a *agentService) Proxy() http.Handler {
 		if err != nil {
 			log.Printf("Invalid target URL %s: %v", targetURL, err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
 			return
 		}
 
