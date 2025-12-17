@@ -187,7 +187,7 @@ services:
       - cube-cloud-network
 
   auth:
-    image: supermq/auth:${SMQ_RELEASE_TAG:-latest}
+    image: supermq/auth:${SMQ_RELEASE_TAG:-v0.18.3}
     container_name: cube-cloud-auth
     profiles: ["cloud"]
     logging:
@@ -284,7 +284,7 @@ services:
       - supermq-users-db-volume:/var/lib/postgresql/data
 
   users:
-    image: supermq/users:${SMQ_RELEASE_TAG:-latest}
+    image: supermq/users:${SMQ_RELEASE_TAG:-v0.18.3}
     container_name: cube-cloud-users
     profiles: ["cloud"]
     logging:
@@ -406,7 +406,7 @@ services:
       - supermq-domains-redis-volume:/data
 
   domains:
-    image: supermq/domains:${SMQ_RELEASE_TAG:-latest}
+    image: supermq/domains:${SMQ_RELEASE_TAG:-v0.18.3}
     container_name: cube-cloud-domains
     profiles: ["cloud"]
     depends_on:

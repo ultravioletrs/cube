@@ -87,7 +87,7 @@ services:
       - cube-network
 
   auth:
-    image: supermq/auth:${SMQ_RELEASE_TAG}
+    image: supermq/auth:${SMQ_RELEASE_TAG:-v0.18.3}
     container_name: supermq-auth
     depends_on:
       - auth-db
@@ -177,7 +177,7 @@ services:
       - cube-network
 
   users:
-    image: supermq/users:${SMQ_RELEASE_TAG}
+    image: supermq/users:${SMQ_RELEASE_TAG:-v0.18.3}
     container_name: supermq-users
     depends_on:
       - users-db
@@ -265,7 +265,7 @@ services:
       - cube-network
 
   ui:
-    image: ghcr.io/ultravioletrs/cube/ui:latest
+    image: ghcr.io/absmach/magistrala/ui-cube-ai:latest
     container_name: cube-ui
     restart: on-failure
     depends_on:
@@ -319,7 +319,7 @@ services:
       - supermq-domains-redis-volume:/data
 
   domains:
-    image: supermq/domains:${SMQ_RELEASE_TAG}
+    image: supermq/domains:${SMQ_RELEASE_TAG:-v0.18.3}
     container_name: supermq-domains
     depends_on:
       - domains-db

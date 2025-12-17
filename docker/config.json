@@ -42,7 +42,7 @@
       },
       {
         "name": "agent",
-        "target_url": "http://cube-agent:8901",
+        "target_url": "https://10.172.192.41:6193",
         "default_rule": true
       }
     ]
