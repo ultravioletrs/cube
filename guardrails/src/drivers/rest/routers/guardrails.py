@@ -105,7 +105,7 @@ async def root() -> Dict[str, Any]:
         "runtime_ready": runtime.is_ready(),
         "current_revision": runtime.get_current_revision(),
         "endpoints": [
-            "/guardrails/guardrails/messages",
+            "/guardrails/messages",
             "/guardrails/health",
             "/guardrails",
             "/guardrails/configs",
