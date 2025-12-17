@@ -230,93 +230,41 @@ func makeChatCompletionsHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Received request - Method: %s, URL: %s", r.Method, r.URL.String())
-
 		session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 		if !ok {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Unauthorized - no session found")
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		domainID := chi.URLParam(r, "domainID")
-		log.Printf("[DEBUG] makeChatCompletionsHandler: DomainID: %s", domainID)
 
 		if _, err := proxyEndpoint(ctx, endpoint.ProxyRequestRequest{
 			Session:  session,
 			DomainID: domainID,
 			Path:     r.URL.Path,
 		}); err != nil {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Authorization failed - %v", err)
 			encodeError(ctx, err, w)
 			return
 		}
 
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Authorization passed")
-
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Failed to read request body: %v", err)
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
 		r.Body.Close()
 
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Client request body: %s", string(bodyBytes))
-
-		// Forward to guardrails for validation
+		// Forward to guardrails
 		guardrailsURL := cfg.URL + "/v1/chat/completions"
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
+		log.Printf("makeChatCompletionsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
 
 		guardrailsBody, guardrailsStatus, err := forwardRequest(ctx, client, guardrailsURL, bodyBytes)
 		if err != nil {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Failed to call guardrails: %v", err)
+			log.Printf(" makeChatCompletionsHandler: Failed to call guardrails: %v", err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 			return
 		}
-
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Guardrails response - Status: %d, Body: %s", guardrailsStatus, string(guardrailsBody))
-
-		// Check if guardrails blocked the request
-		var result struct {
-			Choices []struct {
-				FinishReason string `json:"finish_reason"`
-			} `json:"choices"`
-		}
-		if err := json.Unmarshal(guardrailsBody, &result); err != nil {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Failed to parse guardrails response: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Guardrails parsed - Choices count: %d", len(result.Choices))
-		if len(result.Choices) > 0 {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Guardrails finish_reason: %s", result.Choices[0].FinishReason)
-		}
-
-		if len(result.Choices) > 0 && result.Choices[0].FinishReason != "stop" {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Guardrails BLOCKED request (finish_reason: %s)", result.Choices[0].FinishReason)
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Returning guardrails response to client")
-			writeResponse(w, guardrailsStatus, guardrailsBody)
-			return
-		}
-
-		// Guardrails passed - forward to agent
-		agentURL := cfg.AgentURL + "/v1/chat/completions"
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Guardrails PASSED - Forwarding to agent - URL: %s", agentURL)
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Agent request body: %s", string(bodyBytes))
-
-		agentBody, agentStatus, err := forwardRequest(ctx, client, agentURL, bodyBytes)
-		if err != nil {
-			log.Printf("[DEBUG] makeChatCompletionsHandler: Failed to call agent: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-			return
-		}
-
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Agent response - Status: %d, Body: %s", agentStatus, string(agentBody))
-		log.Printf("[DEBUG] makeChatCompletionsHandler: Returning agent response to client")
-
-		writeResponse(w, agentStatus, agentBody)
+		writeResponse(w, guardrailsStatus, guardrailsBody)
 	}
 }
 

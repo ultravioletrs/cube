@@ -91,15 +91,29 @@ docker-agent:
 
 .PHONY: docker-guardrails
 docker-guardrails:
-	@echo "Building Nemo Guardrails Docker image..."
 	docker build \
 		--no-cache \
 		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):$(VERSION) \
 		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):latest \
 		-f guardrails/Dockerfile ./guardrails
 
+.PHONY: docker-guardrails-dev
+docker-guardrails-dev:
+	docker build \
+		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):$(VERSION) \
+		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):latest \
+		-f guardrails/Dockerfile.dev .
+
+.PHONY: guardrails-venv
+guardrails-venv:
+	@echo "Setting up guardrails virtual environment in root .venv..."
+	python -m venv .venv
+	. .venv/bin/activate && pip install --upgrade pip && pip install -r guardrails/requirements.txt
+	. .venv/bin/activate && python -m spacy download en_core_web_lg
+	@echo "Guardrails venv created successfully at .venv"
+
 .PHONY: docker-dev
-docker-dev: docker-proxy-dev docker-agent-dev docker-guardrails
+docker-dev: docker-proxy-dev docker-agent-dev docker-guardrails-dev
 
 .PHONY: docker-proxy-dev
 docker-proxy-dev:
@@ -203,7 +217,7 @@ help:
 	@echo "  build              Build all services"
 	@echo "  build-proxy        Build proxy service"
 	@echo "  build-agent        Build agent service"
-	@echo "  docker             Build Docker images (including guardrails)"
+	@echo "  docker             Build Docker images"
 	@echo "  docker-guardrails  Build Nemo Guardrails Docker image"
 	@echo "  docker-dev         Build development Docker images"
 	@echo ""

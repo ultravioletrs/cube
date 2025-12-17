@@ -4,9 +4,9 @@
 models:
   - type: main
     engine: ollama
-    model: tinyllama:1.1b
+    model: llama3.2:latest
     parameters:
-      base_url: http://ollama:11434
+      base_url: http://cube-agent:8901
 
 default_llm_call_parameters:
   temperature: 0.001
@@ -97,8 +97,11 @@ rails:
       - mask sensitive data on input
   output:
     flows:
-      - mask sensitive data on output
       - self check output
+      - mask sensitive data on output
+  retrieval:
+    flows:
+      - mask sensitive data on retrieval
 tracing:
   enabled: true
   adapters:
