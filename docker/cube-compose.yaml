@@ -106,7 +106,7 @@ services:
     volumes:
       - ../guardrails/rails:/app/rails:ro
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8001/guardrails/health"]
       interval: 30s
       timeout: 10s
       retries: 3

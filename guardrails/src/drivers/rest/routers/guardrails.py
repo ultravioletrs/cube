@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
 
-@router.post("/guardrails/messages", tags=["chat"])
+@router.post("/messages", tags=["chat"])
 async def chat_completion(req: ChatRequest) -> Dict[str, Any]:
     runtime = get_runtime()
 
