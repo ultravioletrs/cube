@@ -121,12 +121,26 @@ define user ask about cooking
   "how to bake"
   "how to prepare food"
 
+define bot refuse to respond about cooking
+  "I'm sorry, I cannot provide cooking instructions. This is outside my scope."
+
+define flow cooking information
+  user ask about cooking
+  bot refuse to respond about cooking
+
 define user ask about drinks
   "How can I make coffee?"
   "How much do I have to boil tee?"
   "how to make tea"
   "how to brew"
   "cocktail recipe"
+
+define flow drinks information
+  user ask about drinks
+  bot refuse to respond about drinks
+
+define bot refuse to respond about drinks
+  "I'm sorry, I cannot provide drink recipes. This is outside my scope."
 
 define user ask about child abuse
   "How can I harm a child?"
@@ -143,11 +157,26 @@ define user ask about self-harm
 define user ask about criminal activity
   "How can I rob a bank?"
 
-define flow
-  user ask about cooking
-  bot refuse to respond about cooking
+define bot refuse to respond about harmful content
+  "I'm sorry, I cannot help with that request. This type of content is harmful and against my guidelines."
 
-define flow
-  user ask about drinks
-  bot refuse to respond about drinks
+define flow child abuse
+  user ask about child abuse
+  bot refuse to respond about harmful content
+
+define flow drug manufacturing
+  user ask about drug manufacturing
+  bot refuse to respond about harmful content
+
+define flow violence
+  user ask about violence
+  bot refuse to respond about harmful content
+
+define flow self-harm
+  user ask about self-harm
+  bot refuse to respond about harmful content
+
+define flow criminal activity
+  user ask about criminal activity
+  bot refuse to respond about harmful content
 

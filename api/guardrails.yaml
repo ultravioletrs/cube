@@ -47,15 +47,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/RootResponse'
 
-  /guardrails/{domain_id}/configs:
+  /guardrails/configs:
     post:
       summary: Create a new guardrail configuration
-      description: Create a new guardrail configuration for a domain
+      description: Create a new guardrail configuration
       operationId: createConfig
       tags:
         - Configs
-      parameters:
-        - $ref: '#/components/parameters/domainId'
       requestBody:
         required: true
         content:
@@ -75,8 +73,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-        '404':
-          description: Domain not found
+        '409':
+          description: Configuration already exists
           content:
             application/json:
               schema:
@@ -84,12 +82,11 @@ paths:
 
     get:
       summary: List guardrail configurations
-      description: List all guardrail configurations for a domain
+      description: List all guardrail configurations
       operationId: listConfigs
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/domainId'
         - $ref: '#/components/parameters/offset'
         - $ref: '#/components/parameters/limit'
       responses:
@@ -101,14 +98,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ConfigResponse'
-        '404':
-          description: Domain not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
-  /guardrails/{domain_id}/configs/{config_id}:
+  /guardrails/configs/{config_id}:
     get:
       summary: Get a guardrail configuration
       description: Get a guardrail configuration by ID
@@ -116,7 +107,6 @@ paths:
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/domainId'
         - $ref: '#/components/parameters/configId'
       responses:
         '200':
@@ -139,7 +129,6 @@ paths:
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/domainId'
         - $ref: '#/components/parameters/configId'
       requestBody:
         required: true
@@ -174,7 +163,6 @@ paths:
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/domainId'
         - $ref: '#/components/parameters/configId'
       responses:
         '200':
@@ -197,7 +185,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /guardrails/{domain_id}/configs/{config_id}/versions:
+  /guardrails/configs/{config_id}/versions:
     post:
       summary: Create a new version
       description: Create a new version for a configuration
@@ -205,7 +193,6 @@ paths:
       tags:
         - Versions
       parameters:
-        - $ref: '#/components/parameters/domainId'
         - $ref: '#/components/parameters/configId'
       requestBody:
         required: true
@@ -240,7 +227,6 @@ paths:
       tags:
         - Versions
       parameters:
-        - $ref: '#/components/parameters/domainId'
         - $ref: '#/components/parameters/configId'
         - $ref: '#/components/parameters/offset'
         - $ref: '#/components/parameters/limit'
@@ -260,7 +246,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /guardrails/{domain_id}/versions/{version_id}/activate:
+  /guardrails/versions/{version_id}/activate:
     post:
       summary: Activate a version
       description: Activate a guardrail version and reload the runtime
@@ -268,7 +254,6 @@ paths:
       tags:
         - Versions
       parameters:
-        - $ref: '#/components/parameters/domainId'
         - name: version_id
           in: path
           required: true
@@ -296,15 +281,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /guardrails/{domain_id}/reload:
+  /guardrails/reload:
     post:
       summary: Reload the runtime
       description: Reload the runtime with the active configuration
       operationId: reloadRuntime
       tags:
         - Admin
-      parameters:
-        - $ref: '#/components/parameters/domainId'
       responses:
         '200':
           description: Reload status
@@ -315,15 +298,6 @@ paths:
 
 components:
   parameters:
-    domainId:
-      name: domain_id
-      in: path
-      required: true
-      description: The domain ID
-      schema:
-        type: string
-        format: uuid
-
     configId:
       name: config_id
       in: path
@@ -417,25 +391,6 @@ components:
         total_tokens:
           type: integer
           example: 0
-
-    ChatCompletionResponse:
-      type: object
-      properties:
-        id:
-          type: string
-          example: chatcmpl-guardrails
-        object:
-          type: string
-          example: chat.completion
-        created:
-          type: integer
-          example: 0
-        choices:
-          type: array
-          items:
-            $ref: '#/components/schemas/ChatChoice'
-        usage:
-          $ref: '#/components/schemas/ChatUsage'
 
     HealthResponse:
       type: object
@@ -546,10 +501,6 @@ components:
           type: string
           format: uuid
           description: Configuration ID
-        domain_id:
-          type: string
-          format: uuid
-          description: Domain ID
         name:
           type: string
           description: Configuration name

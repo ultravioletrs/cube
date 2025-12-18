@@ -33,11 +33,10 @@ class PostgresGuardrailRepository(GuardrailRepository):
                 await conn.execute(
                     """
                     INSERT INTO guardrail_configs
-                    (id, domain_id, name, description, config_yaml, prompts_yaml, colang, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    (id, name, description, config_yaml, prompts_yaml, colang, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     """,
                     config.id,
-                    config.domain_id,
                     config.name,
                     config.description,
                     config.config_yaml,
@@ -59,7 +58,7 @@ class PostgresGuardrailRepository(GuardrailRepository):
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT id, domain_id, name, description, config_yaml, prompts_yaml, colang,
+                    SELECT id, name, description, config_yaml, prompts_yaml, colang,
                            created_at, updated_at
                     FROM guardrail_configs
                     WHERE id = $1
@@ -79,7 +78,7 @@ class PostgresGuardrailRepository(GuardrailRepository):
             async with self.pool.acquire() as conn:
                 row = await conn.fetchrow(
                     """
-                    SELECT id, domain_id, name, description, config_yaml, prompts_yaml, colang,
+                    SELECT id, name, description, config_yaml, prompts_yaml, colang,
                            created_at, updated_at
                     FROM guardrail_configs
                     WHERE name = $1
@@ -94,21 +93,19 @@ class PostgresGuardrailRepository(GuardrailRepository):
             raise RepositoryError(f"Failed to get config by name: {e}")
 
     async def list_configs(
-        self, domain_id: UUID, offset: int = 0, limit: int = 100
+        self, offset: int = 0, limit: int = 100
     ) -> List[GuardrailConfig]:
-        """List all guardrail configurations for a domain with pagination."""
+        """List all guardrail configurations with pagination."""
         try:
             async with self.pool.acquire() as conn:
                 rows = await conn.fetch(
                     """
-                    SELECT id, domain_id, name, description, config_yaml, prompts_yaml, colang,
+                    SELECT id, name, description, config_yaml, prompts_yaml, colang,
                            created_at, updated_at
                     FROM guardrail_configs
-                    WHERE domain_id = $1
                     ORDER BY created_at DESC
-                    OFFSET $2 LIMIT $3
+                    OFFSET $1 LIMIT $2
                     """,
-                    domain_id,
                     offset,
                     limit,
                 )
@@ -166,23 +163,24 @@ class PostgresGuardrailRepository(GuardrailRepository):
         """Create a new version for a configuration."""
         try:
             async with self.pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    INSERT INTO guardrail_versions
-                    (id, config_id, name, revision, is_active, created_at, description)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                    """,
-                    version.id,
-                    version.config_id,
-                    version.name,
-                    version.revision,
-                    version.is_active,
-                    version.created_at,
-                    version.description,
-                )
+                async with conn.transaction():
+                    await conn.execute(
+                        """
+                        INSERT INTO guardrail_versions
+                        (id, config_id, name, revision, is_active, created_at, description)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                        """,
+                        version.id,
+                        version.config_id,
+                        version.name,
+                        version.revision,
+                        version.is_active,
+                        version.created_at,
+                        version.description,
+                    )
 
-                # Materialize the version
-                await self._materialize(conn, version.id)
+                    # Materialize the version
+                    await self._materialize(conn, version.id)
 
                 return version
         except Exception as e:
@@ -400,7 +398,6 @@ class PostgresGuardrailRepository(GuardrailRepository):
         """Convert a database row to GuardrailConfig entity."""
         return GuardrailConfig(
             id=row["id"],
-            domain_id=row["domain_id"],
             name=row["name"],
             description=row["description"],
             config_yaml=row["config_yaml"],

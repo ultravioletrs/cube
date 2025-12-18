@@ -69,7 +69,6 @@ class UpdateConfig:
         # Create updated config (immutable entity pattern)
         updated = GuardrailConfig(
             id=existing.id,
-            domain_id=existing.domain_id,
             name=name if name is not None else existing.name,
             description=description if description is not None else existing.description,
             config_yaml=new_config_yaml,

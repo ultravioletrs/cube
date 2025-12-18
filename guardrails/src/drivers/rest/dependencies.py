@@ -19,6 +19,7 @@ from src.use_cases import (
     DeleteConfig,
     GetConfig,
     ListConfigs,
+    ListVersions,
     LoadActiveGuardrail,
     UpdateConfig,
 )
@@ -133,6 +134,11 @@ def get_create_version() -> CreateVersion:
 def get_activate_version() -> ActivateVersion:
     """Get ActivateVersion use case."""
     return ActivateVersion(get_repository())
+
+
+def get_list_versions() -> ListVersions:
+    """Get ListVersions use case."""
+    return ListVersions(get_repository())
 
 
 def get_load_active_guardrail() -> LoadActiveGuardrail:

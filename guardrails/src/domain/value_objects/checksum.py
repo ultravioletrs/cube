@@ -22,7 +22,8 @@ class Checksum:
     @classmethod
     def from_multiple(cls, *contents: str) -> "Checksum":
         """Create a checksum from multiple content strings."""
-        combined = "".join(contents)
+        delimiter = "\n"
+        combined = delimiter.join(contents)
         return cls.from_content(combined)
 
     def verify(self, content: str) -> bool:

@@ -7,6 +7,7 @@ from .create_version import CreateVersion
 from .delete_config import DeleteConfig
 from .get_config import GetConfig
 from .list_configs import ListConfigs
+from .list_versions import ListVersions
 from .load_active_guardrail import LoadActiveGuardrail
 from .update_config import UpdateConfig
 
@@ -17,6 +18,7 @@ __all__ = [
     "DeleteConfig",
     "GetConfig",
     "ListConfigs",
+    "ListVersions",
     "LoadActiveGuardrail",
     "UpdateConfig",
 ]

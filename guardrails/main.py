@@ -9,7 +9,6 @@ from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 from nemoguardrails import LLMRails, RailsConfig
-from pydantic import BaseModel
 
 # Add src to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,15 +49,15 @@ if USE_DATABASE:
         # Shutdown dependencies
         await shutdown_dependencies()
 
-    # Create app with clean architecture
     app = create_app()
     app.router.lifespan_context = lifespan
 
 else:
+    from src.drivers.rest.routers.schemas import ChatRequest, HealthResponse
+
     # Legacy mode: Load from file system
     logger.info("Running in legacy mode (file-based configuration)")
 
-    # FastAPI app with metadata
     app = FastAPI(
         title="Nemo Guardrails Service",
         description="AI Safety Guardrails API for input validation and output sanitization",
@@ -85,20 +84,6 @@ else:
     except Exception as e:
         logger.error(f"Failed to load guardrails configurations: {e}")
         raise
-
-    class ChatMessage(BaseModel):
-        role: str
-        content: str
-
-    class ChatRequest(BaseModel):
-        messages: list[ChatMessage]
-        model: Optional[str] = "tinyllama"
-        temperature: Optional[float] = 0.1
-        max_tokens: Optional[int] = 150
-
-    class HealthResponse(BaseModel):
-        status: str
-        version: str = "1.0.0"
 
     @app.post("/guardrails/messages", tags=["chat"])
     async def chat_completion(req: ChatRequest):
@@ -156,12 +141,12 @@ else:
             logger.error(f"Chat completion error: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @app.get("/health", response_model=HealthResponse, tags=["health"])
+    @app.get("guardrails/health", response_model=HealthResponse, tags=["health"])
     async def health_check():
         """Health check endpoint for container monitoring."""
         return HealthResponse(status="healthy")
 
-    @app.get("/", response_model=Dict[str, Any])
+    @app.get("guardrails/", response_model=Dict[str, Any])
     async def root():
         """Root endpoint with service information."""
         return {
