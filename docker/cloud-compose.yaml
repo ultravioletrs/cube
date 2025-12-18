@@ -548,6 +548,7 @@ services:
       NODE_ENV: ${UV_CUBE_NODE_ENV}
       OLLAMA_BASE_URL: ${UV_CUBE_UI_LLM_BASE_URL}
       OLLAMA_DEFAULT_MODEL: ${UV_CUBE_UI_LLM_DEFAULT_MODEL}
+      MG_UI_ALLOW_UNVERIFIED_USER: ${SMQ_ALLOW_UNVERIFIED_USER}
     labels:
       logging: "cube-ui"
       service: "ui"
