@@ -110,11 +110,17 @@ else:
                         "temperature": req.temperature,
                         "max_tokens": req.max_tokens,
                     },
-                    "output_vars": ["relevant_chunks"],
+                    "llm_params": {
+                        "model": req.model,
+                        "temperature": req.temperature,
+                        "max_tokens": req.max_tokens,
+                    },
+                    "output_vars": ["relevant_chunks", "triggered_input_rail", "triggered_output_rail"],
                     "return_context": True,
+                    "llm_output": True
                 },
             )
-
+            res.log.print_summary()
             response_content = res.response if res.response else ""
 
             # Construct OpenAI-compatible response

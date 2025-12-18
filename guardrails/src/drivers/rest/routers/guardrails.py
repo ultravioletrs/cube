@@ -50,8 +50,14 @@ async def chat_completion(req: ChatRequest) -> Dict[str, Any]:
                     "temperature": req.temperature,
                     "max_tokens": req.max_tokens,
                 },
-                "output_vars": ["relevant_chunks"],
+                "llm_params": {
+                    "model": req.model,
+                    "temperature": req.temperature,
+                    "max_tokens": req.max_tokens,
+                },
+                "output_vars": ["relevant_chunks", "triggered_input_rail", "triggered_output_rail"],
                 "return_context": True,
+                "llm_output": True
             },
         )
 

@@ -77,13 +77,10 @@ services:
       - cube-network
     volumes:
       - cube-guardrails-db-volume:/var/lib/postgresql/data
-    ports:
-      - "7070:5432"
+
   cube-guardrails:
     container_name: guardrails
     image: ghcr.io/ultravioletrs/cube/guardrails:latest
-    ports:
-      - "8001:8001"
     networks:
       - cube-network
     restart: unless-stopped
@@ -160,8 +157,6 @@ services:
     image: postgres:16.1-alpine
     container_name: cube-proxy-db
     restart: on-failure
-    ports:
-      - 6004:${UV_CUBE_PROXY_DB_PORT}
     environment:
       POSTGRES_USER: ${UV_CUBE_PROXY_DB_USER}
       POSTGRES_PASSWORD: ${UV_CUBE_PROXY_DB_PASS}
