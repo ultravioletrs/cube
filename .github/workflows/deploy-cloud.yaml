@@ -78,7 +78,7 @@ jobs:
             cd ${{ env.DEPLOY_DIR }}
 
             echo "Pulling latest code from repository"
-            git pull
+            git pull --rebase
 
             echo "Creating required directories and setting up SSL"
             cd docker
