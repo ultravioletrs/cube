@@ -89,7 +89,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```bash
    curl -ksSiX POST https://localhost/domains \
      -H "Content-Type: application/json" \
-     -H "Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjYwOTE2NTcsImlhdCI6MTc2NjA4ODA1NywiaXNzIjoic3VwZXJtcS5hdXRoIiwicm9sZSI6Miwic3ViIjoiNjQ3NjhiYmEtYjRhMi00ODZhLThhZWQtZjRjZmE4NmFmNDQ3IiwidHlwZSI6MCwidmVyaWZpZWQiOmZhbHNlfQ.HmGvFKLp2apkcoh9Gdaf2ivz__tvOa22Ia_Zgaksp2l78WRKspwDikbReOBSFdKzr5uH7DNu1TMuibbJ7czlJw" \
+     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
        "name": "Magistrala",
        "route": "magistrala1",
@@ -128,17 +128,17 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    
    List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 4):
    ```bash
-   curl -k https://localhost/proxy/47bb71e9-9d7d-400c-8545-9c8f1577b656/v1/models \
-     -H "Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjYwOTE2NTcsImlhdCI6MTc2NjA4ODA1NywiaXNzIjoic3VwZXJtcS5hdXRoIiwicm9sZSI6Miwic3ViIjoiNjQ3NjhiYmEtYjRhMi00ODZhLThhZWQtZjRjZmE4NmFmNDQ3IiwidHlwZSI6MCwidmVyaWZpZWQiOmZhbHNlfQ.HmGvFKLp2apkcoh9Gdaf2ivz__tvOa22Ia_Zgaksp2l78WRKspwDikbReOBSFdKzr5uH7DNu1TMuibbJ7czlJw" \
+   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
+     -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
    ```
 
 6. **Make your first AI request**
    
    Replace `YOUR_DOMAIN_ID` with your actual domain ID:
    ```bash
-   curl -k https://localhost/proxy/47bb71e9-9d7d-400c-8545-9c8f1577b656/v1/chat/completions \
+   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
      -H "Content-Type: application/json" \
-     -H "Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjYwOTE2NTcsImlhdCI6MTc2NjA4ODA1NywiaXNzIjoic3VwZXJtcS5hdXRoIiwicm9sZSI6Miwic3ViIjoiNjQ3NjhiYmEtYjRhMi00ODZhLThhZWQtZjRjZmE4NmFmNDQ3IiwidHlwZSI6MCwidmVyaWZpZWQiOmZhbHNlfQ.HmGvFKLp2apkcoh9Gdaf2ivz__tvOa22Ia_Zgaksp2l78WRKspwDikbReOBSFdKzr5uH7DNu1TMuibbJ7czlJw" \
+     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
        "model": "tinyllama:1.1b",
        "messages": [
@@ -152,41 +152,25 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
 ### API Endpoints
 
-Cube AI exposes all services through Traefik reverse proxy. All requests must be authenticated with a JWT token.
+Cube AI exposes all services through Traefik reverse proxy. 
+
+All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
 
 #### Proxy Endpoints (OpenAI-Compatible)
 
 **Base URL:** `https://localhost/proxy/`
 
-Available endpoints:
-
-- `GET /{domainID}/v1/models` - List available models
-- `POST /{domainID}/v1/chat/completions` - Create chat completions
-- `POST /{domainID}/v1/completions` - Create text completions
-- `GET /{domainID}/api/tags` - List Ollama models (Ollama API)
-- `POST /{domainID}/api/generate` - Generate completions (Ollama API)
-- `POST /{domainID}/api/chat` - Chat completions (Ollama API)
-
 Replace `{domainID}` with your actual domain ID obtained from step 4 in the Getting Started guide.
 
-#### Domains Service
-
-**Base URL:** `https://localhost/domains`
-
-Available endpoints:
-
-#### Users Service
-
-**Base URL:** `https://localhost/users`
-
-Available endpoints:
-
-
-#### Auth Service
-
-**Base URL:** `https://localhost`
-
-Available endpoints:
+### OpenAI-Compatible Endpoints
+| Method | Path                              | Description             |
+|--------|-----------------------------------|-------------------------|
+| GET    | `/{domainID}/v1/models`           | List available models   |
+| POST   | `/{domainID}/v1/chat/completions` | Create chat completions |
+| POST   | `/{domainID}/v1/completions`      | Create text completions |
+| GET    | `/{domainID}/api/tags`            | List Ollama models      |
+| POST   | `/{domainID}/api/generate`        | Generate completions    |
+| POST   | `/{domainID}/api/chat`            | Chat completions        |
 
 
 **Example:**
@@ -201,6 +185,63 @@ curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
 curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+#### Auth Endpoints
+**Base URL:** `https://localhost/users`
+
+### User Registration & Authentication
+| Method | Path                          | Description                            |
+|--------|-------------------------------|----------------------------------------|
+| POST   | `/users`                      | Register new user account              |
+| POST   | `/users/tokens/issue`         | Issue access and refresh token (login) |
+| POST   | `/users/tokens/refresh`       | Refresh access token                   |
+| POST   | `/password/reset-request`     | Request password reset                 |
+| PUT    | `/password/reset`             | Reset password with token              |
+
+
+**Example**
+```bash
+curl -ksSiX POST https://localhost/users/tokens/issue \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin@example.com",
+    "password": "m2N2Lfno"
+  }'
+```
+
+---
+
+#### Domains Endpoints
+**Base URL:** `https://localhost/domains`
+
+### Domain Management
+| Method | Path                          | Description                            |
+|--------|-------------------------------|----------------------------------------|
+| POST   | `/domains`                    | Create new domain                      |
+| GET    | `/domains`                    | List domains with filters              |
+| GET    | `/domains/{domainID}`         | Get domain details                     |
+| PATCH  | `/domains/{domainID}`         | Update domain name, tags, and metadata |
+| POST   | `/domains/{domainID}/enable`  | Enable a domain                        |
+| POST   | `/domains/{domainID}/disable` | Disable a domain                       |
+| POST   | `/domains/{domainID}/freeze`  | Freeze a domain                        |
+ 
+
+**Example**
+```bash
+curl -ksSiX POST https://localhost/domains \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{
+    "name": "Magistrala",
+    "route": "magistrala1",
+    "tags": ["absmach", "IoT"],
+    "metadata": {
+      "region": "EU"
+    }
+  }'
+```
+
+---
 
 ## Configuration
 
