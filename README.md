@@ -83,16 +83,16 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```
 
 4. **Create a domain**
-   
+
    All API requests require a domain ID in the URL path. You can either get the domain ID from the UI or create a new domain via the API:
-   
+
    ```bash
-   curl -sSiX POST http://localhost:9003/domains \
+   curl -ksSiX POST https://localhost/domains \
      -H "Content-Type: application/json" \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+     -H "Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjYwOTE2NTcsImlhdCI6MTc2NjA4ODA1NywiaXNzIjoic3VwZXJtcS5hdXRoIiwicm9sZSI6Miwic3ViIjoiNjQ3NjhiYmEtYjRhMi00ODZhLThhZWQtZjRjZmE4NmFmNDQ3IiwidHlwZSI6MCwidmVyaWZpZWQiOmZhbHNlfQ.HmGvFKLp2apkcoh9Gdaf2ivz__tvOa22Ia_Zgaksp2l78WRKspwDikbReOBSFdKzr5uH7DNu1TMuibbJ7czlJw" \
      -d '{
        "name": "Magistrala",
-       "route": "magistrala",
+       "route": "magistrala1",
        "tags": ["absmach", "IoT"],
        "metadata": {
          "region": "EU"
@@ -128,17 +128,17 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    
    List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 4):
    ```bash
-   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
+   curl -k https://localhost/proxy/47bb71e9-9d7d-400c-8545-9c8f1577b656/v1/models \
+     -H "Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjYwOTE2NTcsImlhdCI6MTc2NjA4ODA1NywiaXNzIjoic3VwZXJtcS5hdXRoIiwicm9sZSI6Miwic3ViIjoiNjQ3NjhiYmEtYjRhMi00ODZhLThhZWQtZjRjZmE4NmFmNDQ3IiwidHlwZSI6MCwidmVyaWZpZWQiOmZhbHNlfQ.HmGvFKLp2apkcoh9Gdaf2ivz__tvOa22Ia_Zgaksp2l78WRKspwDikbReOBSFdKzr5uH7DNu1TMuibbJ7czlJw" \
    ```
 
 6. **Make your first AI request**
    
    Replace `YOUR_DOMAIN_ID` with your actual domain ID:
    ```bash
-   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
+   curl -k https://localhost/proxy/47bb71e9-9d7d-400c-8545-9c8f1577b656/v1/chat/completions \
      -H "Content-Type: application/json" \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+     -H "Authorization: Bearer eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NjYwOTE2NTcsImlhdCI6MTc2NjA4ODA1NywiaXNzIjoic3VwZXJtcS5hdXRoIiwicm9sZSI6Miwic3ViIjoiNjQ3NjhiYmEtYjRhMi00ODZhLThhZWQtZjRjZmE4NmFmNDQ3IiwidHlwZSI6MCwidmVyaWZpZWQiOmZhbHNlfQ.HmGvFKLp2apkcoh9Gdaf2ivz__tvOa22Ia_Zgaksp2l78WRKspwDikbReOBSFdKzr5uH7DNu1TMuibbJ7czlJw" \
      -d '{
        "model": "tinyllama:1.1b",
        "messages": [
@@ -152,7 +152,9 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
 ### API Endpoints
 
-Cube AI provides OpenAI-compatible endpoints through Traefik's `/proxy` path. All requests must be authenticated with a JWT token:
+Cube AI exposes all services through Traefik reverse proxy. All requests must be authenticated with a JWT token.
+
+#### Proxy Endpoints (OpenAI-Compatible)
 
 **Base URL:** `https://localhost/proxy/`
 
@@ -166,6 +168,26 @@ Available endpoints:
 - `POST /{domainID}/api/chat` - Chat completions (Ollama API)
 
 Replace `{domainID}` with your actual domain ID obtained from step 4 in the Getting Started guide.
+
+#### Domains Service
+
+**Base URL:** `https://localhost/domains`
+
+Available endpoints:
+
+#### Users Service
+
+**Base URL:** `https://localhost/users`
+
+Available endpoints:
+
+
+#### Auth Service
+
+**Base URL:** `https://localhost`
+
+Available endpoints:
+
 
 **Example:**
 ```bash

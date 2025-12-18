@@ -15,10 +15,6 @@ http:
       stripPrefix:
         prefixes:
           - "/auth"
-    strip-invitations-health-prefix-middleware:
-      stripPrefix:
-        prefixes:
-          - "/invitations"
     strip-users-health-prefix-middleware:
       stripPrefix:
         prefixes:
@@ -27,12 +23,16 @@ http:
       stripPrefix:
         prefixes:
           - "/proxy"
+    strip-domains-health-prefix-middleware:
+      stripPrefix:
+        prefixes:
+          - "/domains"
 
   services:
     users:
       loadBalancer:
         servers:
-          - url: http://users:9002
+          - url: http://supermq-users:9002
         healthCheck:
           scheme: http
           path: /health
@@ -42,17 +42,7 @@ http:
     auth:
       loadBalancer:
         servers:
-          - url: http://auth:8189
-        healthCheck:
-          scheme: http
-          path: /health
-          interval: 10s
-          timeout: 10s
-
-    invitations:
-      loadBalancer:
-        servers:
-          - url: http://invitations:9020
+          - url: http://supermq-auth:8189
         healthCheck:
           scheme: http
           path: /health
@@ -63,6 +53,26 @@ http:
       loadBalancer:
         servers:
           - url: http://cube-proxy:8900
+        healthCheck:
+          scheme: http
+          path: /health
+          interval: 10s
+          timeout: 10s
+
+    ui:
+      loadBalancer:
+        servers:
+          - url: http://cube-ui:6193
+        healthCheck:
+          scheme: http
+          path: /health
+          interval: 10s
+          timeout: 10s
+
+    domains:
+      loadBalancer:
+        servers:
+          - url: http://supermq-domains:9003
         healthCheck:
           scheme: http
           path: /health
@@ -88,17 +98,6 @@ http:
       service: auth
       middlewares:
         - strip-auth-health-prefix-middleware
-        - retry-middleware
-        - headers-middleware
-      priority: 10
-
-    invitations-health:
-      rule: "Path(`/invitations/health`)"
-      entryPoints:
-        - websecure
-      service: invitations
-      middlewares:
-        - strip-invitations-health-prefix-middleware
         - retry-middleware
         - headers-middleware
       priority: 10
@@ -160,12 +159,33 @@ http:
         - headers-middleware
       priority: 8
 
-    invitations:
-      rule: "PathPrefix(`/invitations`)"
+    domains-health:
+      rule: "Path(`/domains/health`)"
       entryPoints:
         - websecure
-      service: invitations
+      service: domains
+      middlewares:
+        - strip-domains-health-prefix-middleware
+        - retry-middleware
+        - headers-middleware
+      priority: 10
+
+    domains:
+      rule: "PathPrefix(`/domains`)"
+      entryPoints:
+        - websecure
+      service: domains
       middlewares:
         - retry-middleware
         - headers-middleware
       priority: 8
+
+    ui:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - websecure
+      service: ui
+      middlewares:
+        - retry-middleware
+        - headers-middleware
+      priority: 1
