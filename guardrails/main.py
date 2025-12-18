@@ -141,12 +141,12 @@ else:
             logger.error(f"Chat completion error: {str(e)}")
             raise HTTPException(status_code=500, detail=str(e))
 
-    @app.get("guardrails/health", response_model=HealthResponse, tags=["health"])
+    @app.get("/guardrails/health", response_model=HealthResponse, tags=["health"])
     async def health_check():
         """Health check endpoint for container monitoring."""
-        return HealthResponse(status="healthy")
+        return HealthResponse(status="healthy", runtime_ready=True, version="1.0.0", current_revision=1)
 
-    @app.get("guardrails/", response_model=Dict[str, Any])
+    @app.get("/guardrails", response_model=Dict[str, Any])
     async def root():
         """Root endpoint with service information."""
         return {
@@ -154,5 +154,5 @@ else:
             "version": "1.0.0",
             "status": "running",
             "mode": "legacy",
-            "endpoints": ["/guardrails/messages", "/health", "/docs"],
+            "endpoints": ["/guardrails/messages", "/guardrails/health", "/guardrails/docs"],
         }
