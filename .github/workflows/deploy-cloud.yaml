@@ -36,8 +36,6 @@ on:
         type: choice
         options:
           - dev
-          - staging
-          - production
 
 concurrency:
   group: deploy-cloud-${{ github.ref }}
