@@ -86,6 +86,13 @@ jobs:
             mkdir -p traefik/ssl/certs
             echo "Created traefik/ssl/certs directory"
 
+            # Replace default admin password with secret
+            if [ ! -z "${{ secrets.CUBE_ADMIN_PASSWORD }}" ]; then
+              echo "Replacing default admin password with secret"
+              sed -i 's/SMQ_USERS_ADMIN_PASSWORD="m2N2Lfno"/SMQ_USERS_ADMIN_PASSWORD="${{ secrets.CUBE_ADMIN_PASSWORD }}"/' .env
+              echo "  ✓ Admin password updated"
+            fi
+
             # Initialize acme.json if it doesn't exist
             # if [ ! -f "traefik/ssl/certs/acme.json" ]; then
               echo "Creating acme.json for Traefik SSL"
