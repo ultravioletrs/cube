@@ -21,18 +21,73 @@ users:
     groups: sudo
   - name: ollama
     system: true
-    home: /var/lib/ollama
+    homedir: /var/lib/ollama
     shell: /usr/sbin/nologin
 
 write_files:
   - path: /etc/cube/agent.env
     content: |
+      # Cube Agent Configuration
       UV_CUBE_AGENT_LOG_LEVEL=info
       UV_CUBE_AGENT_HOST=0.0.0.0
       UV_CUBE_AGENT_PORT=7001
       UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
       UV_CUBE_AGENT_TARGET_URL=http://localhost:11434
+
+      # Server TLS/mTLS Configuration (leave empty for no TLS)
+      UV_CUBE_AGENT_SERVER_CERT=
+      UV_CUBE_AGENT_SERVER_KEY=
+      UV_CUBE_AGENT_SERVER_CA_CERTS=
+
+      # Client mTLS Configuration (leave empty for no client auth)
+      UV_CUBE_AGENT_CLIENT_CERT=
+      UV_CUBE_AGENT_CLIENT_KEY=
+      UV_CUBE_AGENT_CLIENT_CA=
+
+      # Attestation Configuration
+      UV_CUBE_AGENT_ATTESTATION_URL=
+      UV_CUBE_AGENT_ATTESTATION_POLICY=
+
+      # Model Configuration
+      UV_CUBE_AGENT_DEFAULT_MODEL=
+      UV_CUBE_AGENT_ALLOWED_MODELS=
     permissions: '0644'
+
+  # TLS/mTLS Certificate placeholders (uncomment and fill in for production)
+  # - path: /etc/cube/certs/server.crt
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     <REPLACE_WITH_SERVER_CERTIFICATE>
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+  #
+  # - path: /etc/cube/certs/server.key
+  #   content: |
+  #     -----BEGIN PRIVATE KEY-----
+  #     <REPLACE_WITH_SERVER_KEY>
+  #     -----END PRIVATE KEY-----
+  #   permissions: '0600'
+  #
+  # - path: /etc/cube/certs/ca.pem
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     <REPLACE_WITH_CA_CERTIFICATE>
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+  #
+  # - path: /etc/cube/certs/client.crt
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     <REPLACE_WITH_CLIENT_CERTIFICATE>
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+  #
+  # - path: /etc/cube/certs/client.key
+  #   content: |
+  #     -----BEGIN PRIVATE KEY-----
+  #     <REPLACE_WITH_CLIENT_KEY>
+  #     -----END PRIVATE KEY-----
+  #   permissions: '0600'
 
   - path: /etc/systemd/system/ollama.service
     content: |
@@ -87,18 +142,27 @@ write_files:
         sleep 2
       done
 
-      # Pull default model
-      echo "Pulling tinyllama model..."
-      /usr/local/bin/ollama pull tinyllama:1.1b
-      echo "Model pull complete!"
+      # Pull models from environment variable or default
+      # To customize: set CUBE_MODELS="model1:tag1,model2:tag2" in runcmd
+      MODELS="${CUBE_MODELS:-tinyllama:1.1b}"
+
+      IFS=',' read -ra MODEL_LIST <<< "$MODELS"
+      for model in "${MODEL_LIST[@]}"; do
+        echo "Pulling model: $model..."
+        /usr/local/bin/ollama pull "$model"
+      done
+      echo "All models pulled successfully!"
     permissions: '0755'
 
 runcmd:
   # Create directories
-  - mkdir -p /etc/cube /var/lib/ollama /var/log/cube
+  - mkdir -p /etc/cube /etc/cube/certs /var/lib/ollama /var/log/cube
 
   # Set ownership
   - chown -R ollama:ollama /var/lib/ollama
+
+  # Customize models (optional - uncomment and modify to pull different models)
+  # - export CUBE_MODELS="llama2:7b,codellama:13b,mistral:latest"
 
   # Install Ollama
   - echo "Installing Ollama..."

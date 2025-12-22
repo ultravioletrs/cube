@@ -14,7 +14,6 @@ on:
   push:
     branches:
       - main
-      - cube-92
     paths:
       - "docker/cloud-compose.yaml"
       - "docker/supermq-compose.yaml"
@@ -85,6 +84,8 @@ jobs:
             echo "Creating required directories and setting up SSL"
             cd docker
             echo "Entered docker"
+
+            # Ensure traefik directories exist with correct permissions
             mkdir -p traefik/ssl/certs
             echo "Created traefik/ssl/certs directory"
 
@@ -95,20 +96,24 @@ jobs:
               echo "  ✓ Admin password updated"
             fi
 
-            # Initialize acme.json if it doesn't exist
-            # if [ ! -f "traefik/ssl/certs/acme.json" ]; then
-              echo "Creating acme.json for Traefik SSL"
+            # Initialize acme.json if it doesn't exist or fix permissions
+            echo "Setting up acme.json for Traefik SSL"
+
+            # Create acme.json if it doesn't exist (using touch to be safe)
+            touch traefik/ssl/certs/acme.json
+
+            # Only write {} if file is empty
+            if [ ! -s traefik/ssl/certs/acme.json ]; then
+              echo "Initializing empty acme.json"
               echo '{}' > traefik/ssl/certs/acme.json
-              echo "Setting permissions for acme.json"
-              chmod 600 traefik/ssl/certs/acme.json
-              echo "  ✓ Created acme.json with correct permissions"
               echo "  ✓ Created acme.json"
-            # else
-            #   echo "acme.json already exists, setting permissions"
-            #   chmod 600 traefik/ssl/certs/acme.json
-            #   echo "  ✓ Set permissions for existing acme.json"
-            #   echo "  ✓ acme.json already exists"
-            # fi
+            else
+              echo "  ✓ acme.json already exists with content"
+            fi
+
+            # Ensure correct permissions
+            chmod 600 traefik/ssl/certs/acme.json
+            echo "  ✓ Set permissions (600) on acme.json"
 
             echo "Updating environment variables and configuration with secrets"
             # Replace placeholder with actual public URL from secrets

@@ -106,7 +106,7 @@ systemctl restart cube-agent
 Check the service status:
 
 ```bash
-/etc/init.d/S95agent status
+/etc/init.d/S95cube-agent status
 ```
 
 View the process:
@@ -118,7 +118,7 @@ ps aux | grep cube-agent
 Restart the service:
 
 ```bash
-/etc/init.d/S95agent restart
+/etc/init.d/S95cube-agent restart
 ```
 
 ### Test the Agent API
@@ -134,3 +134,35 @@ Check the agent configuration:
 ```bash
 cat /etc/cube/agent.env
 ```
+
+## Cloud-init provisioning (Terraform deployments)
+
+For deploying Cube Agent on cloud CVMs, use the Terraform/OpenTofu templates from the [cocos-infra](https://github.com/ultravioletrs/cocos-infra) repository with Cube's cloud-init configuration located in [`hal/terraform/cloud-init/cube-agent-config.yml`](../terraform/cloud-init/cube-agent-config.yml).
+
+```bash
+# Clone cocos-infra repository
+git clone https://github.com/ultravioletrs/cocos-infra.git
+
+# Reference Cube's cloud-init in terraform.tfvars
+cd cocos-infra/gcp  # or azure
+cat > terraform.tfvars <<EOF
+cloud_init_config = "/path/to/cube/hal/terraform/cloud-init/cube-agent-config.yml"
+# ... other variables
+EOF
+
+terraform init
+terraform apply
+```
+
+The Cube cloud-init config:
+- Installs Ollama and Cube Agent
+- Creates systemd services for both components
+- Configures TLS/mTLS certificates (when provided)
+- Pulls specified LLM models (default: tinyllama:1.1b)
+- Logs to `/var/log/cloud-init-output.log` and `/var/log/cube/`
+
+To customize the cloud-init configuration, edit `hal/terraform/cloud-init/cube-agent-config.yml`:
+- Update agent configuration in `/etc/cube/agent.env` section
+- Add TLS/mTLS certificates (uncomment certificate sections and add your certs)
+- Change default models by setting `CUBE_MODELS` environment variable
+- Adjust Ollama or Cube Agent service settings
