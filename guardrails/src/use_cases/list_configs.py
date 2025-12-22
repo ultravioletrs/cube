@@ -28,7 +28,7 @@ class ListConfigs:
 
     async def execute(
         self, offset: int = 0, limit: int = 100
-    ) -> List[GuardrailConfig]:
+    ) -> ListConfigsResult:
         """
         List all guardrail configurations with pagination.
 
@@ -37,6 +37,13 @@ class ListConfigs:
             limit: Maximum number of records to return
 
         Returns:
-            List of GuardrailConfig entities
+            ListConfigsResult containing configs and pagination metadata
         """
-        return await self.repo.list_configs(offset=offset, limit=limit)
+        configs = await self.repo.list_configs(offset=offset, limit=limit)
+        total = await self.repo.count_configs()
+        return ListConfigsResult(
+            configs=configs,
+            total=total,
+            offset=offset,
+            limit=limit,
+        )

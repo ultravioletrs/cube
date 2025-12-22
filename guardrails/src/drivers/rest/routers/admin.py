@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -75,27 +74,32 @@ async def create_config(
     )
 
 
-@router.get("/configs", response_model=List[ConfigResponse], tags=["configs"])
+@router.get("/configs", response_model=ConfigListResponse, tags=["configs"])
 async def list_configs(
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     uc: ListConfigs = Depends(get_list_configs),
-) -> List[ConfigResponse]:
+) -> ConfigListResponse:
     """List all guardrail configurations."""
-    configs = await uc.execute(offset=offset, limit=limit)
-    return [
-        ConfigResponse(
-            id=c.id,
-            name=c.name,
-            description=c.description,
-            config_yaml=c.config_yaml,
-            prompts_yaml=c.prompts_yaml,
-            colang=c.colang,
-            created_at=c.created_at,
-            updated_at=c.updated_at,
-        )
-        for c in configs
-    ]
+    result = await uc.execute(offset=offset, limit=limit)
+    return ConfigListResponse(
+        configs=[
+            ConfigResponse(
+                id=c.id,
+                name=c.name,
+                description=c.description,
+                config_yaml=c.config_yaml,
+                prompts_yaml=c.prompts_yaml,
+                colang=c.colang,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+            )
+            for c in result.configs
+        ],
+        total=result.total,
+        offset=result.offset,
+        limit=result.limit,
+    )
 
 
 @router.get("/configs/{config_id}", response_model=ConfigResponse, tags=["configs"])
@@ -186,7 +190,7 @@ async def create_version(
 
 @router.get(
     "/configs/{config_id}/versions",
-    response_model=List[VersionResponse],
+    response_model=VersionListResponse,
     tags=["versions"],
 )
 async def list_versions(
@@ -194,21 +198,26 @@ async def list_versions(
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     uc: ListVersions = Depends(get_list_versions),
-) -> List[VersionResponse]:
+) -> VersionListResponse:
     """List all versions for a configuration."""
-    versions = await uc.execute(config_id, offset=offset, limit=limit)
-    return [
-        VersionResponse(
-            id=v.id,
-            config_id=v.config_id,
-            name=v.name,
-            revision=v.revision,
-            is_active=v.is_active,
-            description=v.description,
-            created_at=v.created_at,
-        )
-        for v in versions
-    ]
+    result = await uc.execute(config_id, offset=offset, limit=limit)
+    return VersionListResponse(
+        versions=[
+            VersionResponse(
+                id=v.id,
+                config_id=v.config_id,
+                name=v.name,
+                revision=v.revision,
+                is_active=v.is_active,
+                description=v.description,
+                created_at=v.created_at,
+            )
+            for v in result.versions
+        ],
+        total=result.total,
+        offset=result.offset,
+        limit=result.limit,
+    )
 
 
 # ==================== Activation ====================

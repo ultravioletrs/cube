@@ -114,6 +114,18 @@ class PostgresGuardrailRepository(GuardrailRepository):
             logger.error(f"Failed to list configs: {e}")
             raise RepositoryError(f"Failed to list configs: {e}")
 
+    async def count_configs(self) -> int:
+        """Count total number of guardrail configurations."""
+        try:
+            async with self.pool.acquire() as conn:
+                result = await conn.fetchval(
+                    "SELECT COUNT(*) FROM guardrail_configs"
+                )
+                return result or 0
+        except Exception as e:
+            logger.error(f"Failed to count configs: {e}")
+            raise RepositoryError(f"Failed to count configs: {e}")
+
     async def update_config(self, config: GuardrailConfig) -> GuardrailConfig:
         """Update an existing guardrail configuration."""
         try:
@@ -228,6 +240,19 @@ class PostgresGuardrailRepository(GuardrailRepository):
         except Exception as e:
             logger.error(f"Failed to list versions: {e}")
             raise RepositoryError(f"Failed to list versions: {e}")
+
+    async def count_versions(self, config_id: UUID) -> int:
+        """Count total number of versions for a configuration."""
+        try:
+            async with self.pool.acquire() as conn:
+                result = await conn.fetchval(
+                    "SELECT COUNT(*) FROM guardrail_versions WHERE config_id = $1",
+                    config_id,
+                )
+                return result or 0
+        except Exception as e:
+            logger.error(f"Failed to count versions: {e}")
+            raise RepositoryError(f"Failed to count versions: {e}")
 
     async def get_latest_version(self, config_id: UUID) -> Optional[GuardrailVersion]:
         """Get the latest version for a configuration."""

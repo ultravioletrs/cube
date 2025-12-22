@@ -39,6 +39,11 @@ class GuardrailRepository(ABC):
         pass
 
     @abstractmethod
+    async def count_configs(self) -> int:
+        """Count total number of guardrail configurations."""
+        pass
+
+    @abstractmethod
     async def update_config(self, config: GuardrailConfig) -> GuardrailConfig:
         """Update an existing guardrail configuration."""
         pass
@@ -65,6 +70,11 @@ class GuardrailRepository(ABC):
         self, config_id: UUID, offset: int = 0, limit: int = 100
     ) -> List[GuardrailVersion]:
         """List all versions for a configuration."""
+        pass
+
+    @abstractmethod
+    async def count_versions(self, config_id: UUID) -> int:
+        """Count total number of versions for a configuration."""
         pass
 
     @abstractmethod

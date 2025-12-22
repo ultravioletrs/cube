@@ -1,11 +1,22 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
+from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
 from src.domain.entities import GuardrailVersion
 from src.ports.repositories import GuardrailRepository
+
+
+@dataclass
+class ListVersionsResult:
+    """Result container for paginated version listing."""
+
+    versions: List[GuardrailVersion]
+    total: int
+    offset: int
+    limit: int
 
 
 class ListVersions:
@@ -18,7 +29,7 @@ class ListVersions:
 
     async def execute(
         self, config_id: UUID, offset: int = 0, limit: int = 100
-    ) -> List[GuardrailVersion]:
+    ) -> ListVersionsResult:
         """
         List all versions for a configuration with pagination.
 
@@ -28,6 +39,13 @@ class ListVersions:
             limit: Maximum number of records to return
 
         Returns:
-            List of GuardrailVersion entities
+            ListVersionsResult containing versions and pagination metadata
         """
-        return await self.repo.list_versions(config_id, offset=offset, limit=limit)
+        versions = await self.repo.list_versions(config_id, offset=offset, limit=limit)
+        total = await self.repo.count_versions(config_id)
+        return ListVersionsResult(
+            versions=versions,
+            total=total,
+            offset=offset,
+            limit=limit,
+        )
