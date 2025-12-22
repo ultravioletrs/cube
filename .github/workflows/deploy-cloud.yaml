@@ -77,6 +77,10 @@ jobs:
             echo "Changing directory to project"
             cd ${{ env.DEPLOY_DIR }}
 
+            echo "Resetting any local changes from previous deployment"
+            git reset --hard HEAD
+            git clean -fd
+
             echo "Pulling latest code from repository"
             git pull --rebase
 
