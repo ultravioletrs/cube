@@ -77,17 +77,9 @@ jobs:
             echo "Changing directory to project"
             cd ${{ env.DEPLOY_DIR }}
 
-            echo "Resetting any local changes from previous deployment"
-            # Fix permissions on Docker-created files before cleaning
-            if [ -d "docker/ssl/certs" ]; then
-              sudo chown -R $USER:$USER docker/ssl/certs || true
-            fi
-            if [ -d "docker/traefik/ssl" ]; then
-              sudo chown -R $USER:$USER docker/traefik/ssl || true
-            fi
-
-            git reset --hard HEAD
-            git clean -fd
+            echo "Resetting files modified by previous deployment"
+            # Only reset the specific files we modify with secrets
+            git checkout HEAD -- docker/.env docker/cloud-compose.yaml docker/traefik/dynamic.toml 2>/dev/null || true
 
             echo "Pulling latest code from repository"
             git pull --rebase
