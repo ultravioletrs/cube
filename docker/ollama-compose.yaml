@@ -11,7 +11,7 @@ services:
   ollama:
     profiles: ["ollama", "default"]
     container_name: ollama
-    image: ollama/ollama:0.3.12 # For AMD GPU, use ollama/ollama:0.3.8-rocm
+    image: ollama/ollama:latest # For AMD GPU, use ollama/ollama:0.3.8-rocm
     restart: unless-stopped
     volumes:
       - ollama:/root/.ollama
@@ -40,6 +40,48 @@ services:
       - ollama
     entrypoint: /bin/sh
     command: -c "docker exec ollama ollama run tinyllama:1.1b"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cube-network
+
+  pull-gemma:
+    profiles: ["ollama", "default"]
+    image: docker:27.3.1
+    container_name: pull-gemma
+    restart: on-failure
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command: -c "docker exec ollama ollama run gemma:2b"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cube-network
+
+  pull-gpt-oss:
+    profiles: ["ollama", "default"]
+    image: docker:27.3.1
+    container_name: pull-gpt-oss
+    restart: on-failure
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command: -c "docker exec ollama ollama run gpt-oss:latest"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cube-network
+
+  pull-llama:
+    profiles: ["ollama", "default"]
+    image: docker:27.3.1
+    container_name: pull-llama
+    restart: on-failure
+    depends_on:
+      - ollama
+    entrypoint: /bin/sh
+    command: -c "docker exec ollama ollama run llama3.2:latest"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

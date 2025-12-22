@@ -1,0 +1,50 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+define user express greeting
+  "hello"
+  "hi"
+  "hey"
+  "good morning"
+  "good afternoon"
+  "good evening"
+  "greetings"
+
+define bot express greeting
+  "Hello! How can I assist you today?"
+  "Hi there! What can I help you with?"
+  "Greetings! How may I be of service?"
+
+define user ask about capabilities
+  "what can you do"
+  "what are your capabilities"
+  "how can you help me"
+  "what can you help with"
+  "tell me about your features"
+
+define bot respond about capabilities
+  "I can help with a variety of tasks including answering questions, providing information, and assisting with analysis. I have safety guardrails in place to ensure our conversation remains helpful and appropriate."
+
+define user say goodbye
+  "bye"
+  "goodbye"
+  "see you later"
+  "talk to you later"
+  "farewell"
+
+define bot say goodbye
+  "Goodbye! Feel free to return if you need any assistance."
+  "Take care! I'm here whenever you need help."
+  "Farewell! Have a great day!"
+
+define flow greeting
+  user express greeting
+  bot express greeting
+
+define flow capabilities
+  user ask about capabilities
+  bot respond about capabilities
+
+define flow goodbye
+  user say goodbye
+  bot say goodbye

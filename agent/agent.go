@@ -95,6 +95,8 @@ func (a *agentService) Proxy() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		targetURL := a.config.BackendURL
 
+		log.Printf("Agent received: %s %s", r.Method, r.URL.Path)
+
 		target, err := url.Parse(targetURL)
 		if err != nil {
 			log.Printf("Invalid target URL %s: %v", targetURL, err)
@@ -110,7 +112,7 @@ func (a *agentService) Proxy() http.Handler {
 		proxy.Director = func(req *http.Request) {
 			originalDirector(req)
 			a.modifyHeaders(req)
-			log.Printf("Agent forwarding to %s: %s %s", targetURL, req.Method, req.URL.Path)
+			log.Printf("Agent forwarding to Backend: %s %s", req.Method, req.URL.Path)
 		}
 
 		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {

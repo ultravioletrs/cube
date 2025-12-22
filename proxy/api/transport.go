@@ -4,14 +4,17 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/absmach/supermq"
 	api "github.com/absmach/supermq/api/http"
@@ -28,6 +31,13 @@ import (
 
 const ContentType = "application/json"
 
+// GuardrailsConfig holds configuration for the guardrails sidecar.
+type GuardrailsConfig struct {
+	Enabled  bool
+	URL      string
+	AgentURL string
+}
+
 func MakeHandler(
 	svc proxy.Service,
 	instanceID string,
@@ -36,6 +46,7 @@ func MakeHandler(
 	idp supermq.IDProvider,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
+	guardrailsCfg GuardrailsConfig,
 ) http.Handler {
 	endpoints := endpoint.MakeEndpoints(svc)
 
@@ -85,7 +96,16 @@ func MakeHandler(
 			encodeGetAttestationPolicyResponse,
 		).ServeHTTP)
 
-		// Proxy all requests using the router
+		// Chat completions with guardrails orchestration
+		if guardrailsCfg.Enabled {
+			r.Post("/api/chat", guardrailsHandler(
+				endpoints.ProxyRequest,
+				proxyTransport,
+				guardrailsCfg,
+			))
+		}
+
+		// Proxy all other requests using the router
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
 
@@ -192,3 +212,89 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 }
 
 var errUnauthorized = errors.New("unauthorized")
+
+func guardrailsHandler(
+	proxyEndpoint kitendpoint.Endpoint,
+	transport http.RoundTripper,
+	cfg GuardrailsConfig,
+) http.HandlerFunc {
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   120 * time.Second,
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+			return
+		}
+
+		domainID := chi.URLParam(r, "domainID")
+
+		if _, err := proxyEndpoint(ctx, endpoint.ProxyRequestRequest{
+			Session:  session,
+			DomainID: domainID,
+			Path:     r.URL.Path,
+		}); err != nil {
+			encodeError(ctx, err, w)
+
+			return
+		}
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+
+			return
+		}
+
+		r.Body.Close()
+
+		// Forward to guardrails
+		guardrailsURL := cfg.URL + "/guardrails/messages"
+		log.Printf("guardrailsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
+
+		guardrailsBody, guardrailsStatus, err := forwardRequest(ctx, client, guardrailsURL, bodyBytes)
+		if err != nil {
+			log.Printf(" guardrailsHandler: Failed to call guardrails: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", ContentType)
+		w.WriteHeader(guardrailsStatus)
+		_, _ = w.Write(guardrailsBody)
+	}
+}
+
+func forwardRequest(
+	ctx context.Context,
+	client *http.Client,
+	railsURL string,
+	body []byte,
+) (b []byte, status int, err error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, railsURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, err
+	}
+
+	req.Header.Set("Content-Type", ContentType)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return respBody, resp.StatusCode, nil
+}

@@ -4,6 +4,7 @@
 volumes:
   opensearch-data:
   cube-proxy-db-volume:
+  cube-guardrails-db-volume:
 
 services:
   opensearch:
@@ -63,6 +64,61 @@ services:
     networks:
       - cube-network
     restart: unless-stopped
+  
+  cube-guardrails-db:
+    image: postgres:16.2-alpine
+    container_name: cube-guardrails-db
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${UV_GUARDRAILS_DB_USER}
+      POSTGRES_PASSWORD: ${UV_GUARDRAILS_DB_PASS}
+      POSTGRES_DB: ${UV_GUARDRAILS_DB_NAME}
+    networks:
+      - cube-network
+    volumes:
+      - cube-guardrails-db-volume:/var/lib/postgresql/data
+
+  cube-guardrails:
+    container_name: guardrails
+    image: ghcr.io/ultravioletrs/cube/guardrails:latest
+    networks:
+      - cube-network
+    restart: unless-stopped
+    depends_on:
+      - cube-guardrails-db
+    environment:
+      - PYTHONPATH=/app
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=8001
+      - UVICORN_LOG_LEVEL=info
+      - TRANSFORMERS_CACHE=/app/cache
+      - HF_HOME=/app/cache
+      - XDG_CACHE_HOME=/app/cache
+      - UV_GUARDRAILS_USE_DATABASE=${UV_GUARDRAILS_USE_DATABASE}
+      - UV_GUARDRAILS_DB_HOST=${UV_GUARDRAILS_DB_HOST}
+      - UV_GUARDRAILS_DB_PORT=${UV_GUARDRAILS_DB_PORT}
+      - UV_GUARDRAILS_DB_USER=${UV_GUARDRAILS_DB_USER}
+      - UV_GUARDRAILS_DB_PASS=${UV_GUARDRAILS_DB_PASS}
+      - UV_GUARDRAILS_DB_NAME=${UV_GUARDRAILS_DB_NAME}
+    volumes:
+      - ../guardrails/rails:/app/rails:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/guardrails/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "logging=guardrails"
+      - "service=guardrails"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "guardrails|{{.Name}}"
+
 
   cube-agent:
     container_name: cube-agent
@@ -94,13 +150,13 @@ services:
         tag: "cube-agent|{{.Name}}"
     depends_on:
       - fluent-bit
+    ports:
+      - ${UV_CUBE_AGENT_PORT}:${UV_CUBE_AGENT_PORT}
 
   cube-proxy-db:
     image: postgres:16.1-alpine
     container_name: cube-proxy-db
     restart: on-failure
-    ports:
-      - 6004:${UV_CUBE_PROXY_DB_PORT}
     environment:
       POSTGRES_USER: ${UV_CUBE_PROXY_DB_USER}
       POSTGRES_PASSWORD: ${UV_CUBE_PROXY_DB_PASS}
@@ -126,7 +182,7 @@ services:
       UV_CUBE_PROXY_HOST: ${UV_CUBE_PROXY_HOST}
       UV_CUBE_PROXY_PORT: ${UV_CUBE_PROXY_PORT}
       UV_CUBE_PROXY_SERVER_CERT: ${UV_CUBE_PROXY_SERVER_CERT}
-      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY}  
+      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY}
       SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
       UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
       UV_CUBE_PROXY_ROUTER_CONFIG: ${UV_CUBE_PROXY_ROUTER_CONFIG}
@@ -146,6 +202,8 @@ services:
       UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
       UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
       UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
+      UV_CUBE_GUARDRAILS_ENABLED: ${UV_CUBE_GUARDRAILS_ENABLED}
+      UV_CUBE_GUARDRAILS_URL: ${UV_CUBE_GUARDRAILS_URL}
     volumes:
       - type: bind
         source: ./config.json

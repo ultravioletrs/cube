@@ -1,0 +1,112 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+models:
+  - type: main
+    engine: ollama
+    model: llama3.2:latest
+    parameters:
+      base_url: http://cube-agent:8901
+
+default_llm_call_parameters:
+  temperature: 0.001
+
+instructions:
+  - type: general
+    content: |
+      You are a helpful AI assistant. Provide accurate, helpful information while maintaining ethical guidelines.
+
+rails:
+  config:
+    sensitive_data_detection:
+      # Presidio analyzer configuration
+      nlp_engine_name: spacy
+      supported_languages: [en]
+      models:
+        - lang_code: en
+          model_name: en_core_web_lg
+      ner_model_configuration:
+        model_to_presidio_entity_mapping:
+          PER: PERSON
+          PERSON: PERSON
+          NORP: NRP
+          FAC: LOCATION
+          LOC: LOCATION
+          GPE: LOCATION
+          LOCATION: LOCATION
+          ORG: ORGANIZATION
+          ORGANIZATION: ORGANIZATION
+          DATE: DATE_TIME
+          TIME: DATE_TIME
+        low_confidence_score_multiplier: 0.4
+        low_score_entity_names: []
+        labels_to_ignore:
+          - ORGANIZATION
+          - CARDINAL
+          - EVENT
+          - LANGUAGE
+          - LAW
+          - MONEY
+          - ORDINAL
+          - PERCENT
+          - PRODUCT
+          - QUANTITY
+          - WORK_OF_ART
+      input:
+        score_threshold: 0.6
+        entities:
+          - PERSON
+          - EMAIL_ADDRESS
+          - CREDIT_CARD
+          - CRYPTO
+          - DATE_TIME
+          - IBAN_CODE
+          - IP_ADDRESS
+          - NRP
+          - LOCATION
+          - MEDICAL_LICENSE
+      output:
+        score_threshold: 0.6
+        entities:
+          - PERSON
+          - EMAIL_ADDRESS
+          - CREDIT_CARD
+          - CRYPTO
+          - DATE_TIME
+          - IBAN_CODE
+          - IP_ADDRESS
+          - NRP
+          - LOCATION
+          - MEDICAL_LICENSE
+      retrieval:
+        score_threshold: 0.6
+        entities:
+          - PERSON
+          - EMAIL_ADDRESS
+          - CREDIT_CARD
+          - CRYPTO
+          - DATE_TIME
+          - IBAN_CODE
+          - IP_ADDRESS
+          - NRP
+          - LOCATION
+          - MEDICAL_LICENSE
+  input:
+    flows:
+      - self check input
+      - mask sensitive data on input
+  output:
+    flows:
+      - self check output
+      - mask sensitive data on output
+  retrieval:
+    flows:
+      - mask sensitive data on retrieval
+tracing:
+  enabled: true
+  adapters:
+    # FileSystem adapter for development and debugging
+    - name: FileSystem
+      filepath: "./logs/traces.jsonl"
+    # OpenTelemetry adapter for production environments
+    - name: OpenTelemetry

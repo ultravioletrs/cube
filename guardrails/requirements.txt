@@ -1,0 +1,21 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+nemoguardrails[tracing,sdd]==0.19.0
+fastapi==0.125.0
+uvicorn[standard]==0.38.0
+#python-multipart==0.0.21
+#httpx==0.28.1
+langchain-openai==1.1.5
+pandas==2.3.3
+presidio-analyzer==2.2.360
+presidio-anonymizer==2.2.360
+aiofiles==25.1.0
+
+# Database support (PostgreSQL)
+asyncpg>=0.29.0
+
+# Testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+pytest-cov>=4.1.0
