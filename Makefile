@@ -208,6 +208,26 @@ clean-env:
 		echo "Removed UV_CUBE_AGENT_TARGET_URL from $(ENV_FILE)"; \
 	fi
 
+.PHONY: local
+local:
+	@echo "Configuring for local deployment..."
+	@if [ -f $(ENV_FILE) ]; then \
+		sed -i 's|__CUBE_PUBLIC_URL__|http://localhost|g' $(ENV_FILE); \
+		sed -i 's|__CUBE_DOMAIN__|localhost|g' $(ENV_FILE); \
+		echo "✓ Replaced placeholders in $(ENV_FILE)"; \
+	fi
+	@if [ -f docker/traefik/dynamic.toml ]; then \
+		sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml; \
+		echo "✓ Replaced placeholders in docker/traefik/dynamic.toml"; \
+	fi
+	@if [ -f docker/cloud-compose.yaml ]; then \
+		sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/cloud-compose.yaml; \
+		echo "✓ Replaced placeholders in docker/cloud-compose.yaml"; \
+	fi
+	@echo "✓ Local deployment configuration complete"
+	@echo ""
+	@echo "You can now run 'make up' to start services"
+
 # Help
 .PHONY: help
 help:
@@ -226,6 +246,7 @@ help:
 	@echo "  config-vllm        Configure for vLLM backend"
 	@echo "  show-config        Show current configuration"
 	@echo "  clean-env          Clean environment configuration"
+	@echo "  local              Configure for local deployment (replace placeholders)"
 	@echo ""
 	@echo "Deployment Commands:"
 	@echo "  up                 Start with configured backend (AI_BACKEND=ollama|vllm)"

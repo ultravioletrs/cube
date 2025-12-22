@@ -3,12 +3,32 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # CVM Health Monitor and Auto-restart Script
+#
+# This script monitors the health of Cube Confidential VM (CVM) and automatically
+# restarts it if it crashes or becomes unresponsive. It provides daemon mode for
+# continuous monitoring and various management commands.
+#
+# Features:
+#   - Automatic CVM restart on failure
+#   - Daemon mode for background monitoring
+#   - Health check monitoring with configurable intervals
+#   - Logging of all CVM lifecycle events
+#   - PID file management for daemon control
+#
+# Usage:
+#   ./cvm-monitor.sh daemon          # Start monitoring daemon
+#   ./cvm-monitor.sh start_background # Start CVM and monitor in background
+#   ./cvm-monitor.sh stop             # Stop CVM and monitoring daemon
+#   ./cvm-monitor.sh restart          # Restart both CVM and monitoring
+#   ./cvm-monitor.sh status           # Check CVM and daemon status
+#   ./cvm-monitor.sh logs             # View monitoring logs
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM_NAME="cube-ai-vm"
 CHECK_INTERVAL=30
 LOG_DIR="/tmp/cube-logs"
 LOG_FILE="$LOG_DIR/cube-cvm-monitor.log"
-QEMU_SCRIPT="/home/washington/cube/hal/buildroot/qemu.sh"
+QEMU_SCRIPT="${SCRIPT_DIR}/qemu.sh"
 PIDFILE="/tmp/cube-cvm-daemon.pid"
 
 # Create log directory if it doesn't exist
@@ -237,7 +257,7 @@ case "$1" in
         pgrep -f "qemu-system-x86_64" -l | head -5 || echo "No QEMU processes found"
         
         if [ -f "$PIDFILE" ]; then
-            local pid=$(cat "$PIDFILE" 2>/dev/null)
+            pid=$(cat "$PIDFILE" 2>/dev/null)
             echo ""
             echo "PID file shows: $pid"
             if kill -0 "$pid" 2>/dev/null; then
