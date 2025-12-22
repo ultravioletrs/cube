@@ -1,0 +1,13 @@
+# Azure Configuration
+subscription_id     = "your-azure-subscription-id"
+resource_group_name = "cube-cvm-rg"
+location            = "westus"
+vm_name             = "cube-cvm-01"
+machine_type        = "Standard_DC2as_v5"  # AMD SEV-SNP, 2 vCPU, 8GB RAM
+
+# Authentication
+admin_username = "cubeadmin"
+admin_password = "ChangeMe123!"  # Change this!
+
+# Cloud-init configuration
+cloud_init_config = "../cloud-init/cube-agent-config.yml"
