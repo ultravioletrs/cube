@@ -597,10 +597,10 @@ services:
       SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
       UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
       UV_CUBE_PROXY_ROUTER_CONFIG: ${UV_CUBE_PROXY_ROUTER_CONFIG}
-      UV_CUBE_AGENT_CLIENT_CERT: /etc/cube/certs/client.crt
-      UV_CUBE_AGENT_CLIENT_KEY: /etc/cube/certs/client.key
-      UV_CUBE_AGENT_CLIENT_CA: /etc/cube/certs/ca.pem
-      UV_CUBE_AGENT_SERVER_CA_CERTS: /etc/cube/certs/ca.pem
+      UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/certs/client.crt}
+      UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/certs/client.key}
+      UV_CUBE_AGENT_CLIENT_CA: ${UV_CUBE_AGENT_CLIENT_CA:+/etc/cube/certs/ca.pem}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_CLIENT_CA:+/etc/cube/certs/ca.pem}
       UV_CUBE_AGENT_INSECURE_SKIP_VERIFY: "false"
       UV_CUBE_PROXY_DB_HOST: ${UV_CUBE_PROXY_DB_HOST}
       UV_CUBE_PROXY_DB_PORT: ${UV_CUBE_PROXY_DB_PORT}
@@ -638,9 +638,20 @@ services:
           create_host_path: true
       # Cube Agent mTLS client certificates
       - type: bind
-        source: ./ssl/certs/agent
-        target: /etc/cube/certs
-        read_only: true
+        source: ${UV_CUBE_AGENT_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /etc/cube/certs/client${UV_CUBE_AGENT_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /etc/cube/certs/client${UV_CUBE_AGENT_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_CA:-ssl/certs/dummy/ca_cert}
+        target: /etc/cube/certs/ca${UV_CUBE_AGENT_CLIENT_CA:+.pem}
+        bind:
+          create_host_path: true
     labels:
       logging: "cube-proxy"
       service: "proxy"

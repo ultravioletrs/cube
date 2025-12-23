@@ -214,6 +214,10 @@ local:
 	@if [ -f $(ENV_FILE) ]; then \
 		sed -i 's|__CUBE_PUBLIC_URL__|http://localhost|g' $(ENV_FILE); \
 		sed -i 's|__CUBE_DOMAIN__|localhost|g' $(ENV_FILE); \
+		sed -i 's|__CUBE_AGENT_URL__|http://localhost:7001|g' $(ENV_FILE); \
+		sed -i 's|__CUBE_AGENT_CLIENT_CERT_PATH__||g' $(ENV_FILE); \
+		sed -i 's|__CUBE_AGENT_CLIENT_KEY_PATH__||g' $(ENV_FILE); \
+		sed -i 's|__CUBE_AGENT_CLIENT_CA_PATH__||g' $(ENV_FILE); \
 		echo "✓ Replaced placeholders in $(ENV_FILE)"; \
 	fi
 	@if [ -f docker/traefik/dynamic.toml ]; then \

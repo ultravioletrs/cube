@@ -148,6 +148,12 @@ jobs:
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
 
+            # Replace agent client cert paths (certs are mounted in the proxy container)
+            # These paths refer to the mounted certs inside the container at /etc/cube/certs/
+            sed -i "s|__CUBE_AGENT_CLIENT_CERT_PATH__|/etc/cube/certs/client.crt|g" .env
+            sed -i "s|__CUBE_AGENT_CLIENT_KEY_PATH__|/etc/cube/certs/client.key|g" .env
+            sed -i "s|__CUBE_AGENT_CLIENT_CA_PATH__|/etc/cube/certs/ca.pem|g" .env
+
             echo "Pulling latest Docker images"
             docker compose -f cloud-compose.yaml --profile cloud pull 2>&1
 
