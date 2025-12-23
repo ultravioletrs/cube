@@ -1,0 +1,276 @@
+#cloud-config
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+#
+# Cloud-init configuration for Cube Agent on Confidential VMs
+#
+# To select AI backend, set CUBE_AI_BACKEND environment variable before deployment:
+#   - export CUBE_AI_BACKEND=ollama  (default)
+#   - export CUBE_AI_BACKEND=vllm
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - curl
+  - git
+  - golang-go
+  - build-essential
+  - net-tools
+  - python3
+  - python3-pip
+  - python3-venv
+
+users:
+  - name: cubeadmin
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: sudo
+  - name: ollama
+    system: true
+    homedir: /var/lib/ollama
+    shell: /usr/sbin/nologin
+
+write_files:
+  - path: /etc/cube/agent.env.template
+    content: |
+      # Cube Agent Configuration
+      # Log level: debug, info, warn, error
+      UV_CUBE_AGENT_LOG_LEVEL=info
+
+      # HTTP Server Configuration
+      UV_CUBE_AGENT_HOST=0.0.0.0
+      UV_CUBE_AGENT_PORT=7001
+      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+
+      # Backend URL (Ollama or vLLM)
+      UV_CUBE_AGENT_TARGET_URL=__AI_BACKEND_URL__
+
+      # Server TLS/mTLS Configuration (leave empty for no TLS)
+      # Set these to enable HTTPS on the agent server
+      UV_CUBE_AGENT_SERVER_CERT=
+      UV_CUBE_AGENT_SERVER_KEY=
+      UV_CUBE_AGENT_SERVER_CA_CERTS=
+
+      # Client mTLS Configuration (leave empty for no client auth)
+      # Used when agent connects to backend with mTLS
+      UV_CUBE_AGENT_CLIENT_CERT=
+      UV_CUBE_AGENT_CLIENT_KEY=
+      UV_CUBE_AGENT_CLIENT_CA=
+
+      # Certificate Authority Configuration
+      # URL to certificate authority service for dynamic cert provisioning
+      UV_CUBE_AGENT_CA_URL=
+      UV_CUBE_AGENT_CERTS_TOKEN=
+
+      # CVM Identification
+      # Unique identifier for this confidential VM instance
+      UV_CUBE_AGENT_CVM_ID=
+
+      # Azure MAA (Microsoft Azure Attestation) Configuration
+      # Only needed for Azure CVMs with MAA attestation
+      AGENT_MAA_URL=https://sharedeus2.eus2.attest.azure.net
+      AGENT_OS_BUILD=UVC
+      AGENT_OS_DISTRO=UVC
+      AGENT_OS_TYPE=UVC
+      AGENT_VMPL=2
+    permissions: '0644'
+
+  # TLS/mTLS Certificate placeholders (uncomment and fill in for production)
+  # - path: /etc/cube/certs/server.crt
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     <REPLACE_WITH_SERVER_CERTIFICATE>
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+  #
+  # - path: /etc/cube/certs/server.key
+  #   content: |
+  #     -----BEGIN PRIVATE KEY-----
+  #     <REPLACE_WITH_SERVER_KEY>
+  #     -----END PRIVATE KEY-----
+  #   permissions: '0600'
+  #
+  # - path: /etc/cube/certs/ca.pem
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     <REPLACE_WITH_CA_CERTIFICATE>
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+  #
+  # - path: /etc/cube/certs/client.crt
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     <REPLACE_WITH_CLIENT_CERTIFICATE>
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+  #
+  # - path: /etc/cube/certs/client.key
+  #   content: |
+  #     -----BEGIN PRIVATE KEY-----
+  #     <REPLACE_WITH_CLIENT_KEY>
+  #     -----END PRIVATE KEY-----
+  #   permissions: '0600'
+
+  - path: /etc/systemd/system/ollama.service
+    content: |
+      [Unit]
+      Description=Ollama Service
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=ollama
+      Group=ollama
+      Environment="OLLAMA_HOST=0.0.0.0:11434"
+      ExecStart=/usr/local/bin/ollama serve
+      Restart=always
+      RestartSec=3
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  - path: /etc/systemd/system/vllm.service
+    content: |
+      [Unit]
+      Description=vLLM Service
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=ollama
+      Group=ollama
+      WorkingDirectory=/var/lib/ollama
+      Environment="VLLM_HOST=0.0.0.0"
+      Environment="VLLM_PORT=8000"
+      ExecStart=/usr/local/bin/vllm serve __VLLM_MODEL__ --host 0.0.0.0 --port 8000
+      Restart=always
+      RestartSec=3
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  - path: /etc/systemd/system/cube-agent.service
+    content: |
+      [Unit]
+      Description=Cube Agent Service
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      EnvironmentFile=/etc/cube/agent.env
+      ExecStart=/usr/local/bin/cube-agent
+      Restart=on-failure
+      RestartSec=5
+      StandardOutput=journal
+      StandardError=journal
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  - path: /usr/local/bin/pull-ollama-models.sh
+    content: |
+      #!/bin/bash
+      # Wait for ollama to be ready
+      echo "Waiting for Ollama to be ready..."
+      for i in $(seq 1 60); do
+        if curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
+          echo "Ollama is ready!"
+          break
+        fi
+        sleep 2
+      done
+
+      # Pull models from environment variable or default
+      # To customize: set CUBE_MODELS="model1:tag1,model2:tag2" in runcmd
+      MODELS="${CUBE_MODELS:-tinyllama:1.1b}"
+
+      IFS=',' read -ra MODEL_LIST <<< "$MODELS"
+      for model in "${MODEL_LIST[@]}"; do
+        echo "Pulling model: $model..."
+        /usr/local/bin/ollama pull "$model"
+      done
+      echo "All models pulled successfully!"
+    permissions: '0755'
+
+runcmd:
+  # Set AI backend (default: ollama)
+  # Override by setting CUBE_AI_BACKEND=vllm before deployment
+  - export AI_BACKEND="${CUBE_AI_BACKEND:-ollama}"
+  - [ sh, -c, 'echo "Selected AI Backend: $AI_BACKEND" | tee -a /var/log/cube/setup.log' ]
+
+  # Create directories
+  - mkdir -p /etc/cube /etc/cube/certs /var/lib/ollama /var/log/cube
+
+  # Set ownership
+  - chown -R ollama:ollama /var/lib/ollama
+
+  # Configure agent based on backend
+  - |
+    if [ "$AI_BACKEND" = "vllm" ]; then
+      echo "Configuring for vLLM backend..."
+      sed 's|__AI_BACKEND_URL__|http://localhost:8000|g' /etc/cube/agent.env.template > /etc/cube/agent.env
+
+      # Set vLLM model (default: facebook/opt-125m for testing)
+      VLLM_MODEL="${CUBE_VLLM_MODEL:-facebook/opt-125m}"
+      echo "vLLM model: $VLLM_MODEL"
+      sed -i "s|__VLLM_MODEL__|$VLLM_MODEL|g" /etc/systemd/system/vllm.service
+
+      echo "Installing vLLM..."
+      pip3 install vllm==0.6.3.post1
+
+      # Start vLLM service
+      systemctl daemon-reload
+      systemctl enable vllm
+      systemctl start vllm
+
+      echo "Waiting for vLLM to initialize..."
+      sleep 10
+
+    else
+      echo "Configuring for Ollama backend..."
+      sed 's|__AI_BACKEND_URL__|http://localhost:11434|g' /etc/cube/agent.env.template > /etc/cube/agent.env
+
+      # Customize models (optional - set CUBE_MODELS env var)
+      # export CUBE_MODELS="llama2:7b,codellama:13b,mistral:latest"
+
+      echo "Installing Ollama..."
+      curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.5.0 sh
+
+      # Start Ollama service
+      systemctl daemon-reload
+      systemctl enable ollama
+      systemctl start ollama
+
+      echo "Waiting for Ollama to initialize..."
+      sleep 5
+
+      # Pull models in background
+      echo "Starting model download in background..."
+      nohup /usr/local/bin/pull-ollama-models.sh > /var/log/cube/ollama-pull.log 2>&1 &
+    fi
+
+  # Clone and build Cube Agent
+  - [ sh, -c, 'echo "Building Cube Agent..." | tee -a /var/log/cube/setup.log' ]
+  - cd /tmp
+  - git clone https://github.com/ultravioletrs/cube.git
+  - cd cube
+  - /usr/bin/go build -ldflags="-s -w" -o /tmp/cube-agent ./cmd/agent
+  - mv /tmp/cube-agent /usr/local/bin/cube-agent
+  - chmod +x /usr/local/bin/cube-agent
+
+  # Start Cube Agent service
+  - systemctl daemon-reload
+  - systemctl enable cube-agent
+  - systemctl start cube-agent
+
+  # Log completion
+  - [ sh, -c, 'echo "Cube Agent setup complete with $AI_BACKEND backend!" | tee -a /var/log/cube/setup.log' ]
+
+final_message: "Cube Agent service started. Access Cube Agent at http://<IP>:7001"
