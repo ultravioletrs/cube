@@ -199,8 +199,19 @@ git clone https://github.com/ultravioletrs/cocos-infra.git
 # For GCP, set cloud_init_config in terraform.tfvars
 cd cocos-infra/gcp
 cat > terraform.tfvars <<EOF
-cloud_init_config = "/path/to/cube/hal/ubuntu/cube-agent-config.yml"
-# ... other variables
+# IMPORTANT: Use absolute path to the cube-agent-config.yml file
+# Example: If cube repo is cloned to /home/user/cube, use:
+cloud_init_config = "/home/user/cube/hal/ubuntu/cube-agent-config.yml"
+
+# Other required variables
+project_id = "your-gcp-project-id"
+region = "us-central1"
+zone = "us-central1-a"
+vm_name = "cube-ai-vm"
+machine_type = "n2d-standard-4"
+min_cpu_platform = "AMD Milan"
+confidential_instance_type = "SEV_SNP"
+disk_encryption_id = "projects/<project-id>/locations/global/keyRings/vm-encryption-keyring/cryptoKeys/vm-encryption-key"
 EOF
 
 terraform init
@@ -234,11 +245,23 @@ terraform apply
 
 ```bash
 # After terraform apply, add firewall rule for Cube Agent
+# Replace YOUR_PROJECT_ID with your actual GCP project ID
+# Replace YOUR_VM_NAME with the vm_name from terraform.tfvars (default: cube-ai-vm)
 gcloud compute firewall-rules create allow-cube-agent-7001 \
   --allow=tcp:7001 \
   --source-ranges=0.0.0.0/0 \
-  --target-tags=cube-ai-cvm-01 \
-  --project=valued-base-354714
+  --target-tags=YOUR_VM_NAME \
+  --project=YOUR_PROJECT_ID
+
+# Example:
+# gcloud compute firewall-rules create allow-cube-agent-7001 \
+#   --allow=tcp:7001 \
+#   --source-ranges=0.0.0.0/0 \
+#   --target-tags=cube-ai-vm \
+#   --project=my-gcp-project
+
+# Note: The target-tags should match the vm_name set in your terraform.tfvars
+# The cocos-infra terraform scripts automatically tag the VM with the vm_name
 ```
 
 After `apply`, SSH into the VM and run:

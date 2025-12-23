@@ -10,21 +10,13 @@ on:
       - completed
     branches:
       - main
+      - cube-92
 
+  # TODO: Remove push trigger before merging to main
+  # This is for testing deployment on cube-92 branch
   push:
     branches:
-      - main
-    paths:
-      - "docker/cloud-compose.yaml"
-      - "docker/supermq-compose.yaml"
-      - "docker/.env"
-      - "docker/config.json"
-      - "docker/fluent-bit.conf"
-      - "docker/parsers.conf"
-      - "docker/opensearch-index-template.json"
-      - "docker/traefik/traefik.toml"
-      - "docker/traefik/dynamic.toml"
-      - ".github/workflows/deploy-cloud.yaml"
+      - cube-92
 
   workflow_dispatch:
     inputs:
@@ -78,8 +70,12 @@ jobs:
             # Only reset the specific files we modify with secrets
             git checkout HEAD -- docker/.env docker/cloud-compose.yaml docker/traefik/dynamic.toml 2>/dev/null || true
 
+            echo "Checking out branch: ${{ github.ref_name }}"
+            git fetch origin
+            git checkout ${{ github.ref_name }} || git checkout -b ${{ github.ref_name }} origin/${{ github.ref_name }}
+
             echo "Pulling latest code from repository"
-            git pull --rebase
+            git pull --rebase origin ${{ github.ref_name }}
 
             echo "Creating required directories and setting up SSL"
             cd docker
@@ -96,20 +92,48 @@ jobs:
               echo "  ✓ Admin password updated"
             fi
 
-            # Initialize acme.json if it doesn't exist or fix permissions
-            echo "Setting up acme.json for Traefik SSL"
+              echo "Setting up acme.json for Traefik SSL"
 
-            # Create acme.json if it doesn't exist (using touch to be safe)
-            touch traefik/ssl/certs/acme.json
+            ACME_PATH="traefik/ssl/certs/acme.json"
+            ACME_DIR="$(dirname "$ACME_PATH")"
 
-            # Only write {} if file is empty
-            if [ ! -s traefik/ssl/certs/acme.json ]; then
-              echo "Initializing empty acme.json"
-              echo '{}' > traefik/ssl/certs/acme.json
-              echo "  ✓ Created acme.json"
-            else
-              echo "  ✓ acme.json already exists with content"
+            # Ensure directory exists
+            mkdir -p "$ACME_DIR"
+
+            # Quick diagnostics (so CI logs show what's going on if it fails)
+            echo "  • whoami: $(whoami 2>/dev/null || true)"
+            echo "  • id: $(id 2>/dev/null || true)"
+            ls -ld "$ACME_DIR" || true
+
+            # Fail early with a clear message if the directory isn't writable
+            if [ ! -w "$ACME_DIR" ]; then
+              echo "ERROR: $ACME_DIR is not writable"
+              ls -ld "$ACME_DIR" || true
+              exit 1
             fi
+
+            # Create file if missing
+            if [ ! -f "$ACME_PATH" ]; then
+              echo "  • Creating acme.json"
+              printf '{}' > "$ACME_PATH"
+            fi
+
+            # If file exists but is empty, initialize it
+            if [ ! -s "$ACME_PATH" ]; then
+              echo "  • Initializing empty acme.json"
+              printf '{}' > "$ACME_PATH"
+            fi
+
+            # Set correct perms (Traefik expects 600). If this fails, print useful info.
+            if ! chmod 600 "$ACME_PATH"; then
+              echo "ERROR: chmod 600 failed for $ACME_PATH"
+              ls -l "$ACME_PATH" || true
+              ls -ld "$ACME_DIR" || true
+              exit 1
+            fi
+
+            echo "  ✓ acme.json ready"
+            ls -l "$ACME_PATH" || true
 
             # Ensure correct permissions
             chmod 600 traefik/ssl/certs/acme.json
@@ -118,6 +142,8 @@ jobs:
             echo "Updating environment variables and configuration with secrets"
             # Replace placeholder with actual public URL from secrets
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
+            # Replace placeholder with actual agent URL from secrets
+            sed -i "s|__CUBE_AGENT_URL__|${{ secrets.CUBE_AGENT_URL }}|g" .env
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
@@ -138,7 +164,7 @@ jobs:
             docker compose -f cloud-compose.yaml --profile cloud ps 2>&1
 
             echo "=== Verifying Critical Services ==="
-            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy fluent-bit"
+            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy fluent-bit guardrails"
             ALL_RUNNING=true
 
             for SERVICE in $SERVICES; do

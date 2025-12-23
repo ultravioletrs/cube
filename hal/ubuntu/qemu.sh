@@ -184,7 +184,6 @@ runcmd:
   - chown -R ollama:ollama /home/ollama
   - curl -fsSL https://ollama.com/install.sh | sh
   - git clone https://github.com/ultravioletrs/cube.git /tmp/cube
-  - cd /tmp/cube && git fetch origin pull/88/head:pr-88 && git checkout pr-88
   - export HOME=/root
   - cd /tmp/cube && /usr/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
   - systemctl daemon-reload

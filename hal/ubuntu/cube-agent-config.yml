@@ -35,29 +35,45 @@ write_files:
   - path: /etc/cube/agent.env.template
     content: |
       # Cube Agent Configuration
+      # Log level: debug, info, warn, error
       UV_CUBE_AGENT_LOG_LEVEL=info
+
+      # HTTP Server Configuration
       UV_CUBE_AGENT_HOST=0.0.0.0
       UV_CUBE_AGENT_PORT=7001
       UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+
+      # Backend URL (Ollama or vLLM)
       UV_CUBE_AGENT_TARGET_URL=__AI_BACKEND_URL__
 
       # Server TLS/mTLS Configuration (leave empty for no TLS)
+      # Set these to enable HTTPS on the agent server
       UV_CUBE_AGENT_SERVER_CERT=
       UV_CUBE_AGENT_SERVER_KEY=
       UV_CUBE_AGENT_SERVER_CA_CERTS=
 
       # Client mTLS Configuration (leave empty for no client auth)
+      # Used when agent connects to backend with mTLS
       UV_CUBE_AGENT_CLIENT_CERT=
       UV_CUBE_AGENT_CLIENT_KEY=
       UV_CUBE_AGENT_CLIENT_CA=
 
-      # Attestation Configuration
-      UV_CUBE_AGENT_ATTESTATION_URL=
-      UV_CUBE_AGENT_ATTESTATION_POLICY=
+      # Certificate Authority Configuration
+      # URL to certificate authority service for dynamic cert provisioning
+      UV_CUBE_AGENT_CA_URL=
+      UV_CUBE_AGENT_CERTS_TOKEN=
 
-      # Model Configuration
-      UV_CUBE_AGENT_DEFAULT_MODEL=
-      UV_CUBE_AGENT_ALLOWED_MODELS=
+      # CVM Identification
+      # Unique identifier for this confidential VM instance
+      UV_CUBE_AGENT_CVM_ID=
+
+      # Azure MAA (Microsoft Azure Attestation) Configuration
+      # Only needed for Azure CVMs with MAA attestation
+      AGENT_MAA_URL=https://sharedeus2.eus2.attest.azure.net
+      AGENT_OS_BUILD=UVC
+      AGENT_OS_DISTRO=UVC
+      AGENT_OS_TYPE=UVC
+      AGENT_VMPL=2
     permissions: '0644'
 
   # TLS/mTLS Certificate placeholders (uncomment and fill in for production)
@@ -207,7 +223,7 @@ runcmd:
       sed -i "s|__VLLM_MODEL__|$VLLM_MODEL|g" /etc/systemd/system/vllm.service
 
       echo "Installing vLLM..."
-      pip3 install vllm
+      pip3 install vllm==0.6.3.post1
 
       # Start vLLM service
       systemctl daemon-reload
@@ -225,7 +241,7 @@ runcmd:
       # export CUBE_MODELS="llama2:7b,codellama:13b,mistral:latest"
 
       echo "Installing Ollama..."
-      curl -fsSL https://ollama.com/install.sh | sh
+      curl -fsSL https://ollama.com/install.sh | OLLAMA_VERSION=0.5.0 sh
 
       # Start Ollama service
       systemctl daemon-reload
