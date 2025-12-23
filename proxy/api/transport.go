@@ -167,6 +167,11 @@ func makeProxyHandler(
 		prxy := httputil.NewSingleHostReverseProxy(target)
 		prxy.Transport = transport
 
+		prxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		}
+
 		originalDirector := prxy.Director
 		prxy.Director = func(req *http.Request) {
 			originalDirector(req)
