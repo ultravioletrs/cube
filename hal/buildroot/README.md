@@ -137,16 +137,64 @@ cat /etc/cube/agent.env
 
 ## Cloud-init provisioning (Terraform deployments)
 
-For deploying Cube Agent on cloud CVMs, use the Terraform/OpenTofu templates from the [cocos-infra](https://github.com/ultravioletrs/cocos-infra) repository with Cube's cloud-init configuration located in [`hal/terraform/cloud-init/cube-agent-config.yml`](../terraform/cloud-init/cube-agent-config.yml).
+For deploying Cube Agent on cloud CVMs, use the Terraform/OpenTofu templates from the [cocos-infra](https://github.com/ultravioletrs/cocos-infra) repository with Cube's cloud-init configuration located in [`hal/ubuntu/cube-agent-config.yml`](../ubuntu/cube-agent-config.yml).
+
+### What the cloud-init config does
+
+On first boot, `cube-agent-config.yml`:
+
+- Installs dependencies (`curl`, `git`, `golang-go`, `build-essential`, ...)
+- Creates users:
+  - `cubeadmin` (sudo)
+  - `ollama` (system)
+- Writes:
+  - `/etc/cube/agent.env` (Cube Agent runtime config)
+  - `/etc/systemd/system/ollama.service`
+  - `/etc/systemd/system/cube-agent.service`
+  - `/usr/local/bin/pull-ollama-models.sh` (downloads models)
+- Installs Ollama and starts it
+- Pulls the default model (`tinyllama:1.1b`) in the background (log: `/var/log/cube/ollama-pull.log`)
+- Clones this repo and builds `cube-agent`, installs it to `/usr/local/bin/cube-agent`, then starts it
+
+### Customization
+
+Edit `hal/ubuntu/cube-agent-config.yml`:
+
+- **Cube Agent settings**: change `/etc/cube/agent.env` (e.g. `UV_CUBE_AGENT_INSTANCE_ID`, `UV_CUBE_AGENT_TARGET_URL`, ports)
+- **TLS/mTLS certificates**: uncomment certificate sections and add your certs
+- **Ollama settings**: change `OLLAMA_HOST` in `ollama.service`
+- **Models**: update `/usr/local/bin/pull-ollama-models.sh` or set `CUBE_MODELS` environment variable
+- **Source build**: update the `git clone` URL/branch if you want to build from a fork/branch
+
+### Logs
+
+- Cloud-init: `/var/log/cloud-init-output.log`
+- Model pulls: `/var/log/cube/ollama-pull.log`
+- Setup completion: `/var/log/cube/setup.log`
+- Services: `journalctl -u ollama -u cube-agent`
+
+### Testing
+
+#### 1) Validate the config (local)
+
+From the repo root:
 
 ```bash
-# Clone cocos-infra repository
+cloud-init schema --config-file hal/ubuntu/cube-agent-config.yml
+```
+
+#### 2) Deploy on a cloud VM (Terraform/OpenTofu)
+
+Use Terraform/OpenTofu templates from the [cocos-infra](https://github.com/ultravioletrs/cocos-infra) repository and reference this cloud-init file via the `cloud_init_config` variable.
+
+```bash
+# Clone cocos-infra
 git clone https://github.com/ultravioletrs/cocos-infra.git
 
-# Reference Cube's cloud-init in terraform.tfvars
-cd cocos-infra/gcp  # or azure
+# For GCP, set cloud_init_config in terraform.tfvars
+cd cocos-infra/gcp
 cat > terraform.tfvars <<EOF
-cloud_init_config = "/path/to/cube/hal/terraform/cloud-init/cube-agent-config.yml"
+cloud_init_config = "/path/to/cube/hal/ubuntu/cube-agent-config.yml"
 # ... other variables
 EOF
 
@@ -154,15 +202,23 @@ terraform init
 terraform apply
 ```
 
-The Cube cloud-init config:
-- Installs Ollama and Cube Agent
-- Creates systemd services for both components
-- Configures TLS/mTLS certificates (when provided)
-- Pulls specified LLM models (default: tinyllama:1.1b)
-- Logs to `/var/log/cloud-init-output.log` and `/var/log/cube/`
+**Note:** The cocos-infra firewall rules allow port 7002 (CoCoS default). To access Cube Agent on port 7001, you'll need to add a firewall rule:
 
-To customize the cloud-init configuration, edit `hal/terraform/cloud-init/cube-agent-config.yml`:
-- Update agent configuration in `/etc/cube/agent.env` section
-- Add TLS/mTLS certificates (uncomment certificate sections and add your certs)
-- Change default models by setting `CUBE_MODELS` environment variable
-- Adjust Ollama or Cube Agent service settings
+```bash
+# After terraform apply, add firewall rule for Cube Agent
+gcloud compute firewall-rules create allow-cube-agent-7001 \
+  --allow=tcp:7001 \
+  --source-ranges=0.0.0.0/0 \
+  --target-tags=cube-ai-cvm-01 \
+  --project=valued-base-354714
+```
+
+After `apply`, SSH into the VM and run:
+
+```bash
+cloud-init status --wait
+sudo systemctl status ollama cube-agent --no-pager
+curl -sf http://localhost:7001/health
+```
+
+If you need to hit the agent from outside the VM, ensure your firewall/security group allows inbound TCP `7001`.
