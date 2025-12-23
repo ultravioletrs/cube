@@ -83,16 +83,16 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```
 
 4. **Create a domain**
-   
+
    All API requests require a domain ID in the URL path. You can either get the domain ID from the UI or create a new domain via the API:
-   
+
    ```bash
-   curl -sSiX POST http://localhost:9003/domains \
+   curl -ksSiX POST https://localhost/domains \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
        "name": "Magistrala",
-       "route": "magistrala",
+       "route": "magistrala1",
        "tags": ["absmach", "IoT"],
        "metadata": {
          "region": "EU"
@@ -152,20 +152,26 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
 ### API Endpoints
 
-Cube AI provides OpenAI-compatible endpoints through Traefik's `/proxy` path. All requests must be authenticated with a JWT token:
+Cube AI exposes all services through Traefik reverse proxy. 
+
+All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
+
+#### Proxy Endpoints (OpenAI-Compatible)
 
 **Base URL:** `https://localhost/proxy/`
 
-Available endpoints:
-
-- `GET /{domainID}/v1/models` - List available models
-- `POST /{domainID}/v1/chat/completions` - Create chat completions
-- `POST /{domainID}/v1/completions` - Create text completions
-- `GET /{domainID}/api/tags` - List Ollama models (Ollama API)
-- `POST /{domainID}/api/generate` - Generate completions (Ollama API)
-- `POST /{domainID}/api/chat` - Chat completions (Ollama API)
-
 Replace `{domainID}` with your actual domain ID obtained from step 4 in the Getting Started guide.
+
+### OpenAI-Compatible Endpoints
+| Method | Path                              | Description             |
+|--------|-----------------------------------|-------------------------|
+| GET    | `/{domainID}/v1/models`           | List available models   |
+| POST   | `/{domainID}/v1/chat/completions` | Create chat completions |
+| POST   | `/{domainID}/v1/completions`      | Create text completions |
+| GET    | `/{domainID}/api/tags`            | List Ollama models      |
+| POST   | `/{domainID}/api/generate`        | Generate completions    |
+| POST   | `/{domainID}/api/chat`            | Chat completions        |
+
 
 **Example:**
 ```bash
@@ -179,6 +185,63 @@ curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
 curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
+
+#### Auth Endpoints
+**Base URL:** `https://localhost/users`
+
+### User Registration & Authentication
+| Method | Path                          | Description                            |
+|--------|-------------------------------|----------------------------------------|
+| POST   | `/users`                      | Register new user account              |
+| POST   | `/users/tokens/issue`         | Issue access and refresh token (login) |
+| POST   | `/users/tokens/refresh`       | Refresh access token                   |
+| POST   | `/password/reset-request`     | Request password reset                 |
+| PUT    | `/password/reset`             | Reset password with token              |
+
+
+**Example**
+```bash
+curl -ksSiX POST https://localhost/users/tokens/issue \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin@example.com",
+    "password": "m2N2Lfno"
+  }'
+```
+
+---
+
+#### Domains Endpoints
+**Base URL:** `https://localhost/domains`
+
+### Domain Management
+| Method | Path                          | Description                            |
+|--------|-------------------------------|----------------------------------------|
+| POST   | `/domains`                    | Create new domain                      |
+| GET    | `/domains`                    | List domains with filters              |
+| GET    | `/domains/{domainID}`         | Get domain details                     |
+| PATCH  | `/domains/{domainID}`         | Update domain name, tags, and metadata |
+| POST   | `/domains/{domainID}/enable`  | Enable a domain                        |
+| POST   | `/domains/{domainID}/disable` | Disable a domain                       |
+| POST   | `/domains/{domainID}/freeze`  | Freeze a domain                        |
+ 
+
+**Example**
+```bash
+curl -ksSiX POST https://localhost/domains \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{
+    "name": "Magistrala",
+    "route": "magistrala1",
+    "tags": ["absmach", "IoT"],
+    "metadata": {
+      "region": "EU"
+    }
+  }'
+```
+
+---
 
 ## Configuration
 
