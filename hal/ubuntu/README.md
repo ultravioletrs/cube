@@ -5,34 +5,39 @@ This directory contains the cloud-init configuration file for deploying Cube Age
 ## Files
 
 - `cube-agent-config.yml`: Cloud-init config that installs and starts:
-  - Ollama (`ollama.service`, port `11434`)
+  - Ollama (`ollama.service`, port `11434`) OR vLLM (`vllm.service`, port `8000`)
   - Cube Agent (`cube-agent.service`, port `7001`)
 
 ## What the cloud-init config does
 
 On first boot, `cube-agent-config.yml`:
 
-- Installs dependencies (`curl`, `git`, `golang-go`, `build-essential`, ...)
+- Installs dependencies (`curl`, `git`, `golang-go`, `build-essential`, `python3`, `python3-pip`, ...)
 - Creates users:
   - `cubeadmin` (sudo)
-  - `ollama` (system)
-- Writes:
-  - `/etc/cube/agent.env` (Cube Agent runtime config)
+  - `ollama` (system - used for both Ollama and vLLM)
+- Writes systemd service files:
   - `/etc/systemd/system/ollama.service`
+  - `/etc/systemd/system/vllm.service`
   - `/etc/systemd/system/cube-agent.service`
-  - `/usr/local/bin/pull-ollama-models.sh` (downloads models)
-- Installs Ollama and starts it
-- Pulls the default model (`tinyllama:1.1b`) in the background (log: `/var/log/cube/ollama-pull.log`)
+  - `/usr/local/bin/pull-ollama-models.sh` (downloads Ollama models)
+- **Conditionally installs AI backend** based on `CUBE_AI_BACKEND` environment variable:
+  - **Ollama** (default): Installs Ollama, starts service, pulls models in background
+  - **vLLM**: Installs vLLM via pip, starts service with specified model
+- Configures `/etc/cube/agent.env` with appropriate backend URL
 - Clones this repo and builds `cube-agent`, installs it to `/usr/local/bin/cube-agent`, then starts it
 
 ## Customization
 
 Edit `cube-agent-config.yml`:
 
-- **Cube Agent settings**: change `/etc/cube/agent.env` (e.g. `UV_CUBE_AGENT_INSTANCE_ID`, `UV_CUBE_AGENT_TARGET_URL`, ports)
+- **AI Backend selection**: Set `CUBE_AI_BACKEND` environment variable before deployment
+  - `CUBE_AI_BACKEND=ollama` (default) - Uses Ollama for model inference
+  - `CUBE_AI_BACKEND=vllm` - Uses vLLM for model inference
+- **Cube Agent settings**: change `/etc/cube/agent.env.template` (e.g. `UV_CUBE_AGENT_INSTANCE_ID`, ports)
 - **TLS/mTLS certificates**: uncomment certificate sections and add your certs
-- **Ollama settings**: change `OLLAMA_HOST` in `ollama.service`
-- **Models**: update `/usr/local/bin/pull-ollama-models.sh` or set `CUBE_MODELS` environment variable
+- **Ollama models**: set `CUBE_MODELS` environment variable (e.g. `CUBE_MODELS="llama2:7b,mistral:latest"`)
+- **vLLM model**: set `CUBE_VLLM_MODEL` environment variable (e.g. `CUBE_VLLM_MODEL="meta-llama/Llama-2-7b-hf"`)
 - **Source build**: update the `git clone` URL/branch if you want to build from a fork/branch
 
 ## Logs
@@ -70,6 +75,29 @@ EOF
 terraform init
 terraform apply
 ```
+
+**Selecting AI Backend:**
+
+By default, Ollama is used. To deploy with vLLM instead:
+
+```bash
+# Option 1: Set environment variable before apply
+export CUBE_AI_BACKEND=vllm
+export CUBE_VLLM_MODEL="meta-llama/Llama-2-7b-hf"  # Optional: specify model
+terraform apply
+
+# Option 2: Modify cloud-init file to set default
+# Edit hal/ubuntu/cube-agent-config.yml and change:
+# - export AI_BACKEND="${CUBE_AI_BACKEND:-vllm}"
+```
+
+**Backend comparison:**
+- **Ollama** (default): Easy to use, supports multiple models, better for CPU/small GPU
+  - Port: 11434
+  - Models pulled automatically (tinyllama:1.1b by default)
+- **vLLM**: High-performance inference, requires GPU, optimized for large models
+  - Port: 8000
+  - Requires specifying model (facebook/opt-125m by default for testing)
 
 **Note:** The cocos-infra firewall rules allow port 7002 (CoCoS default). To access Cube Agent on port 7001, you'll need to add a firewall rule:
 

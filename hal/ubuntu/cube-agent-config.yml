@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Cloud-init configuration for Cube Agent on Confidential VMs
+#
+# To select AI backend, set CUBE_AI_BACKEND environment variable before deployment:
+#   - export CUBE_AI_BACKEND=ollama  (default)
+#   - export CUBE_AI_BACKEND=vllm
 
 package_update: true
 package_upgrade: false
@@ -13,6 +17,9 @@ packages:
   - golang-go
   - build-essential
   - net-tools
+  - python3
+  - python3-pip
+  - python3-venv
 
 users:
   - name: cubeadmin
@@ -25,14 +32,14 @@ users:
     shell: /usr/sbin/nologin
 
 write_files:
-  - path: /etc/cube/agent.env
+  - path: /etc/cube/agent.env.template
     content: |
       # Cube Agent Configuration
       UV_CUBE_AGENT_LOG_LEVEL=info
       UV_CUBE_AGENT_HOST=0.0.0.0
       UV_CUBE_AGENT_PORT=7001
       UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
-      UV_CUBE_AGENT_TARGET_URL=http://localhost:11434
+      UV_CUBE_AGENT_TARGET_URL=__AI_BACKEND_URL__
 
       # Server TLS/mTLS Configuration (leave empty for no TLS)
       UV_CUBE_AGENT_SERVER_CERT=
@@ -109,11 +116,33 @@ write_files:
       WantedBy=multi-user.target
     permissions: '0644'
 
+  - path: /etc/systemd/system/vllm.service
+    content: |
+      [Unit]
+      Description=vLLM Service
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=ollama
+      Group=ollama
+      WorkingDirectory=/var/lib/ollama
+      Environment="VLLM_HOST=0.0.0.0"
+      Environment="VLLM_PORT=8000"
+      ExecStart=/usr/local/bin/vllm serve __VLLM_MODEL__ --host 0.0.0.0 --port 8000
+      Restart=always
+      RestartSec=3
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
   - path: /etc/systemd/system/cube-agent.service
     content: |
       [Unit]
       Description=Cube Agent Service
-      After=network-online.target ollama.service
+      After=network-online.target
       Wants=network-online.target
 
       [Service]
@@ -155,33 +184,64 @@ write_files:
     permissions: '0755'
 
 runcmd:
+  # Set AI backend (default: ollama)
+  # Override by setting CUBE_AI_BACKEND=vllm before deployment
+  - export AI_BACKEND="${CUBE_AI_BACKEND:-ollama}"
+  - [ sh, -c, 'echo "Selected AI Backend: $AI_BACKEND" | tee -a /var/log/cube/setup.log' ]
+
   # Create directories
   - mkdir -p /etc/cube /etc/cube/certs /var/lib/ollama /var/log/cube
 
   # Set ownership
   - chown -R ollama:ollama /var/lib/ollama
 
-  # Customize models (optional - uncomment and modify to pull different models)
-  # - export CUBE_MODELS="llama2:7b,codellama:13b,mistral:latest"
+  # Configure agent based on backend
+  - |
+    if [ "$AI_BACKEND" = "vllm" ]; then
+      echo "Configuring for vLLM backend..."
+      sed 's|__AI_BACKEND_URL__|http://localhost:8000|g' /etc/cube/agent.env.template > /etc/cube/agent.env
 
-  # Install Ollama
-  - echo "Installing Ollama..."
-  - curl -fsSL https://ollama.com/install.sh | sh
+      # Set vLLM model (default: facebook/opt-125m for testing)
+      VLLM_MODEL="${CUBE_VLLM_MODEL:-facebook/opt-125m}"
+      echo "vLLM model: $VLLM_MODEL"
+      sed -i "s|__VLLM_MODEL__|$VLLM_MODEL|g" /etc/systemd/system/vllm.service
 
-  # Start Ollama service
-  - systemctl daemon-reload
-  - systemctl enable ollama
-  - systemctl start ollama
+      echo "Installing vLLM..."
+      pip3 install vllm
 
-  # Wait for Ollama to initialize
-  - sleep 5
+      # Start vLLM service
+      systemctl daemon-reload
+      systemctl enable vllm
+      systemctl start vllm
 
-  # Pull models in background
-  - echo "Starting model download in background..."
-  - nohup /usr/local/bin/pull-ollama-models.sh > /var/log/cube/ollama-pull.log 2>&1 &
+      echo "Waiting for vLLM to initialize..."
+      sleep 10
+
+    else
+      echo "Configuring for Ollama backend..."
+      sed 's|__AI_BACKEND_URL__|http://localhost:11434|g' /etc/cube/agent.env.template > /etc/cube/agent.env
+
+      # Customize models (optional - set CUBE_MODELS env var)
+      # export CUBE_MODELS="llama2:7b,codellama:13b,mistral:latest"
+
+      echo "Installing Ollama..."
+      curl -fsSL https://ollama.com/install.sh | sh
+
+      # Start Ollama service
+      systemctl daemon-reload
+      systemctl enable ollama
+      systemctl start ollama
+
+      echo "Waiting for Ollama to initialize..."
+      sleep 5
+
+      # Pull models in background
+      echo "Starting model download in background..."
+      nohup /usr/local/bin/pull-ollama-models.sh > /var/log/cube/ollama-pull.log 2>&1 &
+    fi
 
   # Clone and build Cube Agent
-  - echo "Building Cube Agent..."
+  - [ sh, -c, 'echo "Building Cube Agent..." | tee -a /var/log/cube/setup.log' ]
   - cd /tmp
   - git clone https://github.com/ultravioletrs/cube.git
   - cd cube
@@ -195,6 +255,6 @@ runcmd:
   - systemctl start cube-agent
 
   # Log completion
-  - echo "Cube Agent setup complete!" | tee -a /var/log/cube/setup.log
+  - [ sh, -c, 'echo "Cube Agent setup complete with $AI_BACKEND backend!" | tee -a /var/log/cube/setup.log' ]
 
-final_message: "Cube Agent and Ollama services started. Access Cube Agent at http://<IP>:7001"
+final_message: "Cube Agent service started. Access Cube Agent at http://<IP>:7001"
