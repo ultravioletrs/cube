@@ -87,7 +87,7 @@ services:
       - cube-network
 
   auth:
-    image: supermq/auth:${SMQ_RELEASE_TAG}
+    image: docker.io/supermq/auth:${SMQ_RELEASE_TAG}
     container_name: supermq-auth
     depends_on:
       - auth-db
@@ -101,16 +101,17 @@ services:
       SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
       SMQ_SPICEDB_HOST: ${SMQ_SPICEDB_HOST}
       SMQ_SPICEDB_PORT: ${SMQ_SPICEDB_PORT}
-      SMQ_AUTH_ACCESS_TOKEN_DURATION: ${SMQ_AUTH_ACCESS_TOKEN_DURATION}
-      SMQ_AUTH_REFRESH_TOKEN_DURATION: ${SMQ_AUTH_REFRESH_TOKEN_DURATION}
       SMQ_AUTH_INVITATION_DURATION: ${SMQ_AUTH_INVITATION_DURATION}
-      SMQ_AUTH_SECRET_KEY: ${SMQ_AUTH_SECRET_KEY}
       SMQ_AUTH_HTTP_HOST: ${SMQ_AUTH_HTTP_HOST}
       SMQ_AUTH_HTTP_PORT: ${SMQ_AUTH_HTTP_PORT}
       SMQ_AUTH_HTTP_SERVER_CERT: ${SMQ_AUTH_HTTP_SERVER_CERT}
       SMQ_AUTH_HTTP_SERVER_KEY: ${SMQ_AUTH_HTTP_SERVER_KEY}
       SMQ_AUTH_GRPC_HOST: ${SMQ_AUTH_GRPC_HOST}
       SMQ_AUTH_GRPC_PORT: ${SMQ_AUTH_GRPC_PORT}
+      SMQ_AUTH_ACCESS_TOKEN_DURATION: ${SMQ_AUTH_ACCESS_TOKEN_DURATION}
+      SMQ_AUTH_REFRESH_TOKEN_DURATION: ${SMQ_AUTH_REFRESH_TOKEN_DURATION}
+      SMQ_AUTH_KEYS_ALGORITHM: ${SMQ_AUTH_KEYS_ALGORITHM}
+      SMQ_AUTH_KEYS_PRIVATE_KEY_PATH: ${SMQ_AUTH_KEYS_PRIVATE_KEY_PATH:+/keys/private.key}
       ## Compose supports parameter expansion in environment,
       ## Eg: ${VAR:+replacement} or ${VAR+replacement} -> replacement if VAR is set and non-empty, otherwise empty
       ## Eg :${VAR:-default} or ${VAR-default}  -> value of VAR if set and non-empty, otherwise default
@@ -132,11 +133,20 @@ services:
       SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
       SMQ_AUTH_ADAPTER_INSTANCE_ID: ${SMQ_AUTH_ADAPTER_INSTANCE_ID}
       SMQ_ES_URL: ${SMQ_ES_URL}
+      SMQ_AUTH_CACHE_URL: ${SMQ_AUTH_CACHE_URL}
     ports:
-      - ${SMQ_AUTH_GRPC_PORT}:${SMQ_AUTH_GRPC_PORT}
       - ${SMQ_AUTH_HTTP_PORT}:${SMQ_AUTH_HTTP_PORT}
+      - ${SMQ_AUTH_GRPC_PORT}:${SMQ_AUTH_GRPC_PORT}
+    networks:
+      - cube-network
     volumes:
       - ./spicedb/schema.zed:${SMQ_SPICEDB_SCHEMA_FILE}
+      # Auth private key file
+      - type: bind
+        source: ${SMQ_AUTH_KEYS_PRIVATE_KEY_PATH:-ssl/certs/dummy/private_key}
+        target: /keys/private.key
+        bind:
+          create_host_path: true
       # Auth gRPC mTLS server certificates
       - type: bind
         source: ${SMQ_AUTH_GRPC_SERVER_CERT:-ssl/certs/dummy/server_cert}
@@ -158,8 +168,6 @@ services:
         target: /auth-grpc-client-ca${SMQ_AUTH_GRPC_CLIENT_CA_CERTS:+.crt}
         bind:
           create_host_path: true
-    networks:
-      - cube-network
 
   users-db:
     image: postgres:16.2-alpine
@@ -226,6 +234,7 @@ services:
       SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
       SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
       SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      SMQ_AUTH_KEYS_ALGORITHM: ${SMQ_AUTH_KEYS_ALGORITHM}
       SMQ_GOOGLE_CLIENT_ID: ${SMQ_GOOGLE_CLIENT_ID}
       SMQ_GOOGLE_CLIENT_SECRET: ${SMQ_GOOGLE_CLIENT_SECRET}
       SMQ_GOOGLE_REDIRECT_URL: ${SMQ_GOOGLE_REDIRECT_URL}
@@ -364,6 +373,7 @@ services:
       SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
       SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
       SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      SMQ_AUTH_KEYS_ALGORITHM: ${SMQ_AUTH_KEYS_ALGORITHM}
       SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
       SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
       SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
@@ -374,6 +384,7 @@ services:
       - cube-network
     volumes:
       - ./spicedb/schema.zed:${SMQ_SPICEDB_SCHEMA_FILE}
+      - ./permission.yaml:/permission.yaml
       # Auth gRPC mTLS server certificates
       - type: bind
         source: ${SMQ_DOMAINS_GRPC_SERVER_CERT:-ssl/certs/dummy/server_cert}
