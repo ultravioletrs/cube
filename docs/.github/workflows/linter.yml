@@ -1,0 +1,28 @@
+name: Linter
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: latest
+
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli
+
+      - name: run markdownlint
+        run: markdownlint --disable MD013 MD033 -- docs/
