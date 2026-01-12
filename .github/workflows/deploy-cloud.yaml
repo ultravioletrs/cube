@@ -79,13 +79,13 @@ jobs:
             mkdir -p traefik/ssl/certs
 
             # Initialize acme.json if it doesn't exist
-            if [ ! -f "traefik/ssl/certs/acme.json" ]; then
-              echo '{}' > traefik/ssl/certs/acme.json
-              chmod 600 traefik/ssl/certs/acme.json
-              echo "  ✓ Created acme.json"
-            else
+            if test -f traefik/ssl/certs/acme.json; then
               chmod 600 traefik/ssl/certs/acme.json
               echo "  ✓ acme.json already exists"
+            else
+              printf '{}' > traefik/ssl/certs/acme.json
+              chmod 600 traefik/ssl/certs/acme.json
+              echo "  ✓ Created acme.json"
             fi
 
             echo "Updating environment variables and configuration with secrets"
