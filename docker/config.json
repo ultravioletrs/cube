@@ -3,7 +3,7 @@
     "routes": [
       {
         "name": "attestation",
-        "target_url": "${UV_CUBE_AGENT_URL}",
+        "target_url": "__CUBE_AGENT_URL__",
         "matchers": [
           {
             "condition": "path",
@@ -42,7 +42,7 @@
       },
       {
         "name": "agent",
-        "target_url": "http://cube-agent:8901",
+        "target_url": "__CUBE_AGENT_URL__",
         "default_rule": true
       }
     ]
