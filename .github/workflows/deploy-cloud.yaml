@@ -90,6 +90,11 @@ jobs:
 
             echo "Updating environment variables and configuration with secrets"
             # Replace placeholder with actual public URL from secrets
+            sed -i "s|__SMQ_EMAIL_HOST__|${{ secrets.SMQ_EMAIL_HOST }}|g" .env
+            sed -i "s|__SMQ_EMAIL_PORT__|${{ secrets.SMQ_EMAIL_PORT }}|g" .env
+            sed -i "s|__SMQ_EMAIL_USERNAME__|${{ secrets.SMQ_EMAIL_USERNAME }}|g" .env
+            sed -i "s|__SMQ_EMAIL_PASSWORD__|${{ secrets.SMQ_EMAIL_PASSWORD }}|g" .env
+            sed -i "s|__SMQ_EMAIL_FROM_ADDRESS__|${{ secrets.SMQ_EMAIL_FROM_ADDRESS }}|g" .env
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
