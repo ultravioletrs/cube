@@ -60,7 +60,8 @@ jobs:
           script_stop: true
           command_timeout: 200m
           script: |
-            set -e
+            set -euo pipefail
+            set -x
 
             echo "=== Cube Cloud Deployment Started ==="
 
