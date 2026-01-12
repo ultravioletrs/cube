@@ -68,6 +68,17 @@ async def init_dependencies() -> None:
         logger.info(f"Loaded active configuration revision {materialized.revision}")
     except Exception as e:
         logger.warning(f"No active configuration found: {e}")
+        logger.info("Initializing default configuration from ./rails...")
+        
+        try:
+            await _create_default_config()
+            # Try loading the newly created config
+            loader = LoadActiveGuardrail(_repository)
+            materialized = await loader.execute()
+            await _runtime.swap(materialized)
+            logger.info(f"Loaded default configuration revision {materialized.revision}")
+        except Exception as ex:
+            logger.error(f"Failed to initialize default configuration: {ex}")
 
     logger.info("Dependencies initialized successfully")
 
@@ -144,3 +155,61 @@ def get_list_versions() -> ListVersions:
 def get_load_active_guardrail() -> LoadActiveGuardrail:
     """Get LoadActiveGuardrail use case."""
     return LoadActiveGuardrail(get_repository())
+
+
+
+async def _create_default_config() -> None:
+    """Create a default configuration if none exists."""
+    import glob
+    
+    logger.info("Creating default configuration from ./rails...")
+    
+    # Read config files
+    rails_dir = "./rails"
+    if not os.path.exists(rails_dir):
+        logger.warning(f"Rails directory {rails_dir} not found. Skipping default config creation.")
+        return
+
+    try:
+        with open(os.path.join(rails_dir, "config.yml"), "r") as f:
+            config_yaml = f.read()
+    except FileNotFoundError:
+        logger.warning("config.yml not found in ./rails")
+        return
+
+    prompts_yaml = ""
+    try:
+        with open(os.path.join(rails_dir, "prompts.yml"), "r") as f:
+            prompts_yaml = f.read()
+    except FileNotFoundError:
+        pass
+
+    colang = ""
+    for file in glob.glob(os.path.join(rails_dir, "*.co")):
+        with open(file, "r") as f:
+            colang += f.read() + "\n"
+
+    # Create config
+    create_config_uc = get_create_config()
+    config = await create_config_uc.execute(
+        name="default-config",
+        description="Default configuration initialized from file system",
+        config_yaml=config_yaml,
+        prompts_yaml=prompts_yaml,
+        colang=colang,
+    )
+    logger.info(f"Created default config: {config.id}")
+
+    # Create version
+    create_version_uc = get_create_version()
+    version = await create_version_uc.execute(
+        config_id=config.id,
+        name="v1",
+        description="Initial default version",
+    )
+    logger.info(f"Created default version: {version.id}")
+
+    # Activate version
+    activate_version_uc = get_activate_version()
+    await activate_version_uc.execute(version.id)
+    logger.info(f"Activated default version: {version.id}")
