@@ -100,8 +100,6 @@ jobs:
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
-            # Replace placeholder with actual agent URL in config.json
-            sed -i "s|__CUBE_AGENT_URL__|https://${{ secrets.CUBE_SERVER_IP }}:6193|g" config.json
 
             echo "Pulling latest Docker images"
             docker compose -f cloud-compose.yaml --profile cloud pull 2>&1
