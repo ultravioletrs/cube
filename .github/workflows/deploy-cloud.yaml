@@ -71,6 +71,7 @@ jobs:
             cd ${{ env.DEPLOY_DIR }}
 
             echo "Pulling latest code from repository"
+            git stash
             git pull
 
             echo "Creating required directories and setting up SSL"
@@ -95,7 +96,7 @@ jobs:
             sed -i "s|__SMQ_EMAIL_PASSWORD__|${{ secrets.SMQ_EMAIL_PASSWORD }}|g" .env
             sed -i "s|__SMQ_EMAIL_FROM_ADDRESS__|${{ secrets.SMQ_EMAIL_FROM_ADDRESS }}|g" .env
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
-            sed -i "s|__CUBE_AGENT_URL__|http://${{ secrets.CUBE_SERVER_IP }}:6193|g" .env
+            sed -i "s|__CUBE_AGENT_URL__|https://${{ secrets.CUBE_SERVER_IP }}:6193|g" .env
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
