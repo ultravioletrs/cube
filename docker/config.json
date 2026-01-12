@@ -2,6 +2,20 @@
   "router": {
     "routes": [
       {
+        "name": "attestation",
+        "target_url": "https://10.172.192.41:6193",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "/attestation/.*",
+            "is_regex": true
+          }
+        ],
+        "priority": 15,
+        "strip_prefix": "",
+        "auth_required": true
+      },
+      {
         "name": "audit",
         "target_url": "http://opensearch:9200",
         "matchers": [
@@ -28,7 +42,7 @@
       },
       {
         "name": "agent",
-        "target_url": "http://cube-agent:8901",
+        "target_url": "https://10.172.192.41:6193",
         "default_rule": true
       }
     ]

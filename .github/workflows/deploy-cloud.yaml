@@ -1,0 +1,161 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+name: Deploy Cube Cloud Services
+
+on:
+  push:
+    branches:
+      - main
+      - cube-92
+    paths:
+      - "docker/cloud-compose.yaml"
+      - "docker/supermq-compose.yaml"
+      - "docker/.env"
+      - "docker/config.json"
+      - "docker/fluent-bit.conf"
+      - "docker/parsers.conf"
+      - "docker/opensearch-index-template.json"
+      - "docker/traefik/traefik.toml"
+      - "docker/traefik/dynamic.toml"
+      - ".github/workflows/deploy-cloud.yaml"
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - production
+
+concurrency:
+  group: deploy-cloud-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  DEPLOY_DIR: cube-cloud
+
+jobs:
+  deploy-cloud:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment || 'dev' }}
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Deploy Cube Cloud Services
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CUBE_SERVER_IP }}
+          port: 49200
+          username: ${{ secrets.CUBE_SERVER_USERNAME }}
+          key: ${{ secrets.CUBE_SERVER_KEY }}
+          script_stop: true
+          command_timeout: 200m
+          script: |
+            set -euo pipefail
+
+            echo "=== Cube Cloud Deployment Started ==="
+
+            echo "Logging into GitHub Container Registry"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "Changing directory to project"
+            cd ${{ env.DEPLOY_DIR }}
+
+            echo "Pulling latest code from repository"
+            git stash
+            git pull
+
+            echo "Creating required directories and setting up SSL"
+            cd docker
+            mkdir -p traefik/ssl/certs
+
+            # Initialize acme.json if it doesn't exist
+            if test -f traefik/ssl/certs/acme.json; then
+              chmod 600 traefik/ssl/certs/acme.json
+              echo "  ✓ acme.json already exists"
+            else
+              printf '{}' > traefik/ssl/certs/acme.json
+              chmod 600 traefik/ssl/certs/acme.json
+              echo "  ✓ Created acme.json"
+            fi
+
+            echo "Updating environment variables and configuration with secrets"
+            # Replace placeholder with actual public URL from secrets
+            sed -i "s|__SMQ_EMAIL_HOST__|${{ secrets.SMQ_EMAIL_HOST }}|g" .env
+            sed -i "s|__SMQ_EMAIL_PORT__|${{ secrets.SMQ_EMAIL_PORT }}|g" .env
+            sed -i "s|__SMQ_EMAIL_USERNAME__|${{ secrets.SMQ_EMAIL_USERNAME }}|g" .env
+            sed -i "s|__SMQ_EMAIL_PASSWORD__|${{ secrets.SMQ_EMAIL_PASSWORD }}|g" .env
+            sed -i "s|__SMQ_EMAIL_FROM_ADDRESS__|${{ secrets.SMQ_EMAIL_FROM_ADDRESS }}|g" .env
+            sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
+            sed -i "s|__CUBE_AGENT_URL__|https://${{ secrets.CUBE_SERVER_IP }}:6193|g" .env
+            # Replace placeholder with actual domain from secrets
+            sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
+            sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
+
+            echo "Pulling latest Docker images"
+            docker compose -f cloud-compose.yaml --profile cloud pull 2>&1
+
+            echo "Stopping existing services"
+            docker compose -f cloud-compose.yaml --profile cloud down 2>&1
+
+            echo "Starting cloud services"
+            docker compose -f cloud-compose.yaml --profile cloud up -d 2>&1
+
+            echo "Waiting for services to start (30 seconds)..."
+            sleep 30
+
+            echo "Checking service status..."
+            docker compose -f cloud-compose.yaml --profile cloud ps 2>&1
+
+            echo "=== Verifying Critical Services ==="
+            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy fluent-bit"
+            ALL_RUNNING=true
+
+            for SERVICE in $SERVICES; do
+              if docker ps --format '{{.Names}}' | grep -q "cube-cloud-$SERVICE"; then
+                echo "✓ Service $SERVICE is running"
+              else
+                echo "✗ Service $SERVICE is not running"
+                ALL_RUNNING=false
+              fi
+            done
+
+            if [ "$ALL_RUNNING" = false ]; then
+              echo "Deployment verification failed!"
+              docker compose -f cloud-compose.yaml --profile cloud logs --tail=50 2>&1
+              exit 1
+            fi
+
+            echo "✓ All cloud services deployed successfully!"
+
+            echo ""
+            echo "=== Service URLs (All through Traefik Gateway) ==="
+            echo "  - Cube UI: ${{ secrets.CUBE_PUBLIC_URL }}/"
+            echo "  - Cube Proxy API: ${{ secrets.CUBE_PUBLIC_URL }}/proxy"
+            echo "  - Traefik Dashboard: http://${{ secrets.CUBE_SERVER_IP }}:49212"
+            echo ""
+            echo "Note: HTTP automatically redirects to HTTPS"
+
+      - name: System Cleanup
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.CUBE_SERVER_IP }}
+          port: 49200
+          username: ${{ secrets.CUBE_SERVER_USERNAME }}
+          key: ${{ secrets.CUBE_SERVER_KEY }}
+          script_stop: false
+          command_timeout: 10m
+          script: |
+            echo "Running system cleanup..."
+            docker system prune -a -f
+            echo "✓ Cleanup completed"
