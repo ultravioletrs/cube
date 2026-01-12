@@ -13,6 +13,7 @@ volumes:
   supermq-auth-db-volume:
   supermq-domains-db-volume:
   supermq-domains-redis-volume:
+  cube-proxy-db-volume:
 
 networks:
   cube-cloud-network:
@@ -551,6 +552,20 @@ services:
       logging: "cube-ui"
       service: "ui"
 
+  cube-proxy-db:
+    image: postgres:16.1-alpine
+    container_name: cube-cloud-cube-proxy-db
+    profiles: ["cloud"]
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${UV_CUBE_PROXY_DB_USER}
+      POSTGRES_PASSWORD: ${UV_CUBE_PROXY_DB_PASS}
+      POSTGRES_DB: ${UV_CUBE_PROXY_DB_NAME}
+    networks:
+      - cube-cloud-network
+    volumes:
+      - cube-proxy-db-volume:/var/lib/postgresql/data
+
   cube-proxy:
     container_name: cube-cloud-proxy
     profiles: ["cloud"]
@@ -567,6 +582,7 @@ services:
     depends_on:
       - auth
       - fluent-bit
+      - cube-proxy-db
     environment:
       UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
       UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
@@ -584,6 +600,15 @@ services:
       SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
       SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
       SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      UV_CUBE_PROXY_DB_HOST: ${UV_CUBE_PROXY_DB_HOST}
+      UV_CUBE_PROXY_DB_PORT: ${UV_CUBE_PROXY_DB_PORT}
+      UV_CUBE_PROXY_DB_USER: ${UV_CUBE_PROXY_DB_USER}
+      UV_CUBE_PROXY_DB_PASS: ${UV_CUBE_PROXY_DB_PASS}
+      UV_CUBE_PROXY_DB_NAME: ${UV_CUBE_PROXY_DB_NAME}
+      UV_CUBE_PROXY_DB_SSL_MODE: ${UV_CUBE_PROXY_DB_SSL_MODE}
+      UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
+      UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
+      UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
     volumes:
       - type: bind
         source: ./config.json
