@@ -7,7 +7,7 @@ on:
   push:
     branches:
       - main
-      - cube-92
+      - cube-127
     paths:
       - "docker/cloud-compose.yaml"
       - "docker/supermq-compose.yaml"
