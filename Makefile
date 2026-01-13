@@ -162,15 +162,71 @@ else
 	@$(MAKE) up-ollama
 endif
 
+.PHONY: config-cloud-local
+config-cloud-local:
+	@echo "Configuring cloud deployment for local environment..."
+	@cp docker/.env docker/.env.backup 2>/dev/null || true
+	@cp docker/traefik/dynamic.toml docker/traefik/dynamic.toml.backup 2>/dev/null || true
+	@sed -i 's|__SMQ_EMAIL_HOST__|localhost|g' docker/.env
+	@sed -i 's|__SMQ_EMAIL_PORT__|1025|g' docker/.env
+	@sed -i 's|__SMQ_EMAIL_USERNAME__|test|g' docker/.env
+	@sed -i 's|__SMQ_EMAIL_PASSWORD__|test|g' docker/.env
+	@sed -i 's|__SMQ_EMAIL_FROM_ADDRESS__|noreply@localhost|g' docker/.env
+	@sed -i 's|__CUBE_AGENT_URL__|http://localhost:8901|g' docker/.env
+	@sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml
+	@echo "✓ Configured with local defaults"
+
+.PHONY: restore-cloud-config
+restore-cloud-config:
+	@echo "Restoring cloud deployment placeholders..."
+	@if [ -f docker/.env.backup ]; then \
+		mv docker/.env.backup docker/.env; \
+		echo "✓ Restored .env"; \
+	fi
+	@if [ -f docker/traefik/dynamic.toml.backup ]; then \
+		mv docker/traefik/dynamic.toml.backup docker/traefik/dynamic.toml; \
+		echo "✓ Restored dynamic.toml"; \
+	fi
+
+.PHONY: up-cloud
+up-cloud: config-cloud-local
+	@echo "Starting Cube Cloud services with local configuration..."
+	@mkdir -p docker/traefik/ssl/certs docker/traefik/letsencrypt
+	@if [ ! -f docker/traefik/ssl/certs/acme.json ]; then \
+		printf '{}' > docker/traefik/ssl/certs/acme.json; \
+		chmod 600 docker/traefik/ssl/certs/acme.json; \
+		echo "✓ Created acme.json"; \
+	fi
+	docker compose -f docker/cloud-compose.yaml --profile cloud up -d
+	@echo ""
+	@echo "=== Cube Cloud Services Started ==="
+	@echo "  - UI: http://localhost:49210/"
+	@echo "  - Proxy API: http://localhost:49210/proxy"
+	@echo "  - Traefik Dashboard: http://localhost:49212"
+	@echo ""
+	@echo "Note: Run 'make restore-cloud-config' to restore placeholders after stopping"
+
 .PHONY: down
 down:
 	@echo "Stopping all Cube services..."
 	docker compose -f docker/compose.yaml down
 
+.PHONY: down-cloud
+down-cloud:
+	@echo "Stopping Cube Cloud services..."
+	docker compose -f docker/cloud-compose.yaml --profile cloud down
+	@$(MAKE) restore-cloud-config
+
 .PHONY: down-volumes
 down-volumes:
 	@echo "Stopping all Cube services and removing volumes..."
 	docker compose -f docker/compose.yaml down -v
+
+.PHONY: down-cloud-volumes
+down-cloud-volumes:
+	@echo "Stopping Cube Cloud services and removing volumes..."
+	docker compose -f docker/cloud-compose.yaml --profile cloud down -v
+	@$(MAKE) restore-cloud-config
 
 .PHONY: restart
 restart: down up
@@ -181,9 +237,16 @@ restart-ollama: down up-ollama
 .PHONY: restart-vllm
 restart-vllm: down up-vllm
 
+.PHONY: restart-cloud
+restart-cloud: down-cloud up-cloud
+
 .PHONY: logs
 logs:
 	docker compose -f docker/compose.yaml logs -f
+
+.PHONY: logs-cloud
+logs-cloud:
+	docker compose -f docker/cloud-compose.yaml --profile cloud logs -f
 
 .PHONY: dev-setup
 dev-setup: build docker-dev
@@ -231,16 +294,26 @@ help:
 	@echo "  up                 Start with configured backend (AI_BACKEND=ollama|vllm)"
 	@echo "  up-ollama          Start with Ollama backend (pulls models automatically)"
 	@echo "  up-vllm            Start with vLLM backend"
+	@echo "  up-cloud           Start cloud deployment with local defaults"
 	@echo "  down               Stop all services"
+	@echo "  down-cloud         Stop cloud services and restore config"
 	@echo "  down-volumes       Stop all services and remove volumes"
+	@echo "  down-cloud-volumes Stop cloud services, remove volumes, and restore config"
 	@echo "  restart            Restart with configured backend"
+	@echo "  restart-cloud      Restart cloud deployment"
+	@echo ""
+	@echo "Cloud Configuration Commands:"
+	@echo "  config-cloud-local Configure cloud deployment with localhost defaults"
+	@echo "  restore-cloud-config Restore placeholder values in cloud config files"
 	@echo ""
 	@echo "Logs:"
 	@echo "  logs               Show all logs"
+	@echo "  logs-cloud         Show cloud deployment logs"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make up AI_BACKEND=vllm              # Start with vLLM"
 	@echo "  make up-ollama                       # Start with Ollama (pulls models)"
+	@echo "  make up-cloud                        # Start cloud deployment locally"
 	@echo "  make up-cube-full                    # Start with guardrails"
 	@echo "  make config-vllm && make up          # Configure and start vLLM"
 
