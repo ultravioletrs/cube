@@ -97,7 +97,7 @@ jobs:
             sed -i "s|__SMQ_EMAIL_FROM_ADDRESS__|${{ secrets.SMQ_EMAIL_FROM_ADDRESS }}|g" .env
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
             sed -i "s|__CUBE_AGENT_URL__|https://${{ secrets.CUBE_SERVER_IP }}:6193|g" .env
-            sed -i "s|__CUBE_AGENT_URL__|https://10.172.192.41 :6193|g" ../guardrails/rails/config.yml
+            sed -i "s|__CUBE_AGENT_URL__|https://10.172.192.41:6193|g" ../guardrails/rails/config.yml
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
