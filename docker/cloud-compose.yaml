@@ -616,6 +616,8 @@ services:
       UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
       UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.pem}
       UV_CUBE_AGENT_ATTESTED_TLS: ${UV_CUBE_AGENT_ATTESTED_TLS}
+      UV_CUBE_AGENT_ATTESTATION_POLICY: ${UV_CUBE_AGENT_ATTESTATION_POLICY:+/etc/cube/attestation-policy.json}
+      UV_CUBE_AGENT_PRODUCT_NAME: ${UV_CUBE_AGENT_PRODUCT_NAME}
     volumes:
       - type: bind
         source: ./config.json
@@ -649,6 +651,11 @@ services:
       - type: bind
         source: ${UV_CUBE_AGENT_SERVER_CA_CERTS:-/etc/cube/certs/ca.pem}
         target: /etc/cube/agent-certs/ca.pem
+        read_only: true
+      # Attestation policy
+      - type: bind
+        source: ${UV_CUBE_AGENT_ATTESTATION_POLICY:-./attestation-policy.json}
+        target: /etc/cube/attestation-policy.json
         read_only: true
     labels:
       logging: "cube-proxy"
