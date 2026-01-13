@@ -615,6 +615,7 @@ services:
       UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
       UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
       UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.pem}
+      UV_CUBE_AGENT_ATTESTED_TLS: ${UV_CUBE_AGENT_ATTESTED_TLS}
     volumes:
       - type: bind
         source: ./config.json
