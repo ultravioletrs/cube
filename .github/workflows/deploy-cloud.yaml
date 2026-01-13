@@ -117,7 +117,7 @@ jobs:
             docker compose -f cloud-compose.yaml --profile cloud ps 2>&1
 
             echo "=== Verifying Critical Services ==="
-            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy fluent-bit"
+            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy guardrails fluent-bit"
             ALL_RUNNING=true
 
             for SERVICE in $SERVICES; do
