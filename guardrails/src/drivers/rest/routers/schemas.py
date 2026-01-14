@@ -155,6 +155,20 @@ class ChatCompletionResponse(BaseModel):
     usage: ChatUsage
 
 
+# ==================== Evaluation Schemas ====================
+
+
+class EvaluationResponse(BaseModel):
+    """Schema for guardrails evaluation response."""
+
+    decision: str = Field(..., description="ALLOW, BLOCK, or MODIFY")
+    reason: Optional[str] = None
+    modified_messages: Optional[List[ChatMessage]] = None
+    guardrails_response: Optional[str] = None
+    evaluation_time_ms: float
+    triggered_rails: List[str] = []
+
+
 # ==================== Health Schemas ====================
 
 
