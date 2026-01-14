@@ -10,12 +10,14 @@ on:
     paths:
       - ".github/workflows/cd.yaml"
       - "**.go"
+      - "guardrails/**"
   pull_request:
     branches:
       - main
     paths:
       - ".github/workflows/cd.yaml"
       - "**.go"
+      - "guardrails/**"
   workflow_dispatch:
 
 jobs:
