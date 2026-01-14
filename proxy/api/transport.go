@@ -31,11 +31,114 @@ import (
 
 const ContentType = "application/json"
 
+// ErrGuardrailsEvalFailed indicates that guardrails evaluation returned a non-OK status.
+var ErrGuardrailsEvalFailed = errors.New("guardrails evaluation returned non-OK status")
+
 // GuardrailsConfig holds configuration for the guardrails sidecar.
 type GuardrailsConfig struct {
 	Enabled  bool
 	URL      string
 	AgentURL string
+}
+
+type EvaluationResponse struct {
+	Decision           string   `json:"decision"`
+	Reason             string   `json:"reason"`
+	GuardrailsResponse string   `json:"guardrails_response"`
+	EvaluationTimeMs   float64  `json:"evaluation_time_ms"`
+	TriggeredRails     []string `json:"triggered_rails"`
+}
+
+// ChatCompletionResponse represents an OpenAI-compatible chat completion response.
+type ChatCompletionResponse struct {
+	ID      string                 `json:"id"`
+	Object  string                 `json:"object"`
+	Created int64                  `json:"created"`
+	Model   string                 `json:"model"`
+	Choices []ChatCompletionChoice `json:"choices"`
+	Usage   *ChatCompletionUsage   `json:"usage,omitempty"`
+}
+
+type ChatCompletionChoice struct {
+	Index        int                    `json:"index"`
+	Message      ChatCompletionMessage  `json:"message"`
+	Delta        *ChatCompletionMessage `json:"delta,omitempty"`
+	FinishReason string                 `json:"finish_reason"`
+}
+
+type ChatCompletionMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+type ChatCompletionUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+	TotalTokens      int `json:"total_tokens"`
+}
+
+// ChatRequest represents the incoming chat request format.
+type ChatRequest struct {
+	Messages []ChatCompletionMessage `json:"messages"`
+}
+
+// GuardrailsEvalRequest is the format expected by the guardrails evaluation endpoints.
+type GuardrailsEvalRequest struct {
+	Messages []ChatCompletionMessage `json:"messages"`
+}
+
+// OllamaMessage represents a message in the Ollama chat format.
+type OllamaMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// OllamaChatResponse represents an Ollama-compatible chat response.
+type OllamaChatResponse struct {
+	Model              string        `json:"model"`
+	CreatedAt          string        `json:"created_at"`
+	Message            OllamaMessage `json:"message"`
+	Done               bool          `json:"done"`
+	DoneReason         string        `json:"done_reason,omitempty"`
+	TotalDuration      int64         `json:"total_duration,omitempty"`
+	LoadDuration       int64         `json:"load_duration,omitempty"`
+	PromptEvalCount    int           `json:"prompt_eval_count,omitempty"`
+	PromptEvalDuration int64         `json:"prompt_eval_duration,omitempty"`
+	EvalCount          int           `json:"eval_count,omitempty"`
+	EvalDuration       int64         `json:"eval_duration,omitempty"`
+}
+
+type OllamaChatRequest struct {
+	Model    string          `json:"model"`
+	Messages []OllamaMessage `json:"messages"`
+	Stream   bool            `json:"stream"`
+}
+
+func extractAssistantContentFromOllama(resp *OllamaChatResponse) string {
+	return resp.Message.Content
+}
+
+func buildOutputEvalRequest(originalBody []byte, assistantContent string) *GuardrailsEvalRequest {
+	var originalReq OllamaChatRequest
+	if err := json.Unmarshal(originalBody, &originalReq); err != nil {
+		log.Printf("buildOutputEvalRequest: Failed to parse original request: %v", err)
+
+		return nil
+	}
+
+	messages := make([]ChatCompletionMessage, 0, len(originalReq.Messages)+1)
+	for _, m := range originalReq.Messages {
+		messages = append(messages, ChatCompletionMessage(m))
+	}
+
+	messages = append(messages, ChatCompletionMessage{
+		Role:    "assistant",
+		Content: assistantContent,
+	})
+
+	return &GuardrailsEvalRequest{
+		Messages: messages,
+	}
 }
 
 func MakeHandler(
@@ -102,6 +205,7 @@ func MakeHandler(
 				endpoints.ProxyRequest,
 				proxyTransport,
 				guardrailsCfg,
+				rter,
 			))
 		}
 
@@ -218,14 +322,17 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 
 var errUnauthorized = errors.New("unauthorized")
 
+const guardrailsTimeout = 30 * time.Minute
+
 func guardrailsHandler(
 	proxyEndpoint kitendpoint.Endpoint,
 	transport http.RoundTripper,
 	cfg GuardrailsConfig,
+	rter *router.Router,
 ) http.HandlerFunc {
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   120 * time.Second,
+		Timeout:   guardrailsTimeout,
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -238,11 +345,9 @@ func guardrailsHandler(
 			return
 		}
 
-		domainID := chi.URLParam(r, "domainID")
-
 		if _, err := proxyEndpoint(ctx, endpoint.ProxyRequestRequest{
 			Session:  session,
-			DomainID: domainID,
+			DomainID: chi.URLParam(r, "domainID"),
 			Path:     r.URL.Path,
 		}); err != nil {
 			encodeError(ctx, err, w)
@@ -259,22 +364,167 @@ func guardrailsHandler(
 
 		r.Body.Close()
 
-		// Forward to guardrails
-		guardrailsURL := cfg.URL + "/guardrails/messages"
-		log.Printf("guardrailsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
+		guardrailsCtx, cancel := context.WithTimeout(ctx, guardrailsTimeout)
+		defer cancel()
 
-		guardrailsBody, guardrailsStatus, err := forwardRequest(ctx, client, guardrailsURL, bodyBytes)
+		// Evaluate input
+		evalResp, err := evaluateGuardrails(guardrailsCtx, client, cfg.URL+"/guardrails/evaluate/input", bodyBytes)
 		if err != nil {
-			log.Printf(" guardrailsHandler: Failed to call guardrails: %v", err)
+			log.Printf("guardrailsHandler: Input evaluation failed: %v", err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 
 			return
 		}
 
-		w.Header().Set("Content-Type", ContentType)
-		w.WriteHeader(guardrailsStatus)
-		_, _ = w.Write(guardrailsBody)
+		if evalResp.Decision == "BLOCK" {
+			log.Printf("guardrailsHandler: Request BLOCKED by input rails. Triggered: %v", evalResp.TriggeredRails)
+			writeGuardrailsBlockResponse(w, evalResp.GuardrailsResponse)
+
+			return
+		}
+
+		// Forward to agent
+		agentURL, err := buildAgentURL(r, rter)
+		if err != nil {
+			log.Printf("guardrailsHandler: Failed to build agent URL: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
+			return
+		}
+
+		agentBody, agentStatus, err := forwardRequest(ctx, client, agentURL, bodyBytes)
+		if err != nil {
+			log.Printf("guardrailsHandler: Failed to call Agent: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
+			return
+		}
+
+		if agentStatus >= 400 {
+			log.Printf("guardrailsHandler: Agent returned error status %d, passing through", agentStatus)
+			writeAgentResponse(w, agentStatus, agentBody)
+
+			return
+		}
+
+		// Evaluate output
+		outputEvalResp := evaluateOutput(guardrailsCtx, client, cfg.URL, bodyBytes, agentBody)
+		if outputEvalResp != nil && outputEvalResp.Decision == "BLOCK" {
+			log.Printf("guardrailsHandler: Response BLOCKED by output rails. Triggered: %v", outputEvalResp.TriggeredRails)
+			writeGuardrailsBlockResponse(w, outputEvalResp.GuardrailsResponse)
+
+			return
+		}
+
+		writeAgentResponse(w, agentStatus, agentBody)
 	}
+}
+
+func evaluateGuardrails(
+	ctx context.Context, client *http.Client, evalURL string, body []byte,
+) (*EvaluationResponse, error) {
+	evalBody, evalStatus, err := forwardRequest(ctx, client, evalURL, body)
+	if err != nil {
+		return nil, err
+	}
+
+	if evalStatus != http.StatusOK {
+		return nil, ErrGuardrailsEvalFailed
+	}
+
+	var evalResp EvaluationResponse
+	if err := json.Unmarshal(evalBody, &evalResp); err != nil {
+		return nil, err
+	}
+
+	return &evalResp, nil
+}
+
+func buildAgentURL(r *http.Request, rter *router.Router) (string, error) {
+	targetURL, stripPrefix, err := rter.DetermineTarget(r)
+	if err != nil {
+		return "", err
+	}
+
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		return "", err
+	}
+
+	agentPath := r.URL.Path
+	if domainID := chi.URLParam(r, "domainID"); domainID != "" {
+		agentPath = strings.TrimPrefix(agentPath, "/"+domainID)
+	}
+
+	if stripPrefix != "" {
+		agentPath = strings.TrimPrefix(agentPath, stripPrefix)
+	}
+
+	return target.String() + agentPath, nil
+}
+
+func evaluateOutput(
+	ctx context.Context, client *http.Client, guardrailsURL string, requestBody, agentBody []byte,
+) *EvaluationResponse {
+	var agentResp OllamaChatResponse
+	if err := json.Unmarshal(agentBody, &agentResp); err != nil {
+		log.Printf("guardrailsHandler: Failed to parse agent response for output evaluation: %v", err)
+
+		return nil
+	}
+
+	assistantContent := extractAssistantContentFromOllama(&agentResp)
+	if assistantContent == "" {
+		log.Printf("guardrailsHandler: No assistant content found, skipping output evaluation")
+
+		return nil
+	}
+
+	outputEvalReq := buildOutputEvalRequest(requestBody, assistantContent)
+	if outputEvalReq == nil {
+		return nil
+	}
+
+	outputEvalBody, err := json.Marshal(outputEvalReq)
+	if err != nil {
+		log.Printf("guardrailsHandler: Failed to marshal output eval request: %v", err)
+
+		return nil
+	}
+
+	evalResp, err := evaluateGuardrails(ctx, client, guardrailsURL+"/guardrails/evaluate/output", outputEvalBody)
+	if err != nil {
+		log.Printf("guardrailsHandler: Output evaluation failed: %v", err)
+
+		return nil
+	}
+
+	return evalResp
+}
+
+func writeGuardrailsBlockResponse(w http.ResponseWriter, content string) {
+	resp := OllamaChatResponse{
+		Model:     "guardrails",
+		CreatedAt: time.Now().Format(time.RFC3339),
+		Message: OllamaMessage{
+			Role:    "assistant",
+			Content: content,
+		},
+		Done:       true,
+		DoneReason: "stop",
+	}
+
+	w.Header().Set("Content-Type", ContentType)
+
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("writeGuardrailsBlockResponse: Failed to encode response: %v", err)
+	}
+}
+
+func writeAgentResponse(w http.ResponseWriter, status int, body []byte) {
+	w.Header().Set("Content-Type", ContentType)
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
 }
 
 func forwardRequest(
