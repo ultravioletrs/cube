@@ -1,4 +1,7 @@
 #!/bin/bash
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
 # Mount host certificates via 9p and configure mTLS
 set -e
 

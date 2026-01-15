@@ -1,3 +1,6 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
 # Dynamic Traefik Configuration for Cube Services
 # Defines HTTP routers and services for UI and Proxy
 
