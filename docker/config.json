@@ -3,7 +3,7 @@
     "routes": [
       {
         "name": "attestation",
-        "target_url": "https://10.172.192.41:6193",
+        "target_url": "http://10.172.192.41:6193",
         "matchers": [
           {
             "condition": "path",
@@ -42,7 +42,7 @@
       },
       {
         "name": "agent",
-        "target_url": "https://10.172.192.41:6193",
+        "target_url": "http://10.172.192.41:6193",
         "default_rule": true
       }
     ]

@@ -11,7 +11,6 @@ QEMU_OVMF_CODE="/var/cube-ai/OVMF.fd"
 KERNEL_PATH="/etc/cube/bzImage"
 # INITRD_PATH="../../buildroot/output/images/rootfs.cpio.gz" # Unused for disk boot
 FS_PATH="/etc/cube/rootfs.ext4"
-CERTS_PATH="/etc/cube/certs"
 QEMU_APPEND_ARG="root=/dev/vda rw console=ttyS0"
 
 function check(){
@@ -49,8 +48,6 @@ function start_qemu(){
     -no-reboot \
     -kernel $KERNEL_PATH \
     -drive file=$FS_PATH,format=raw,if=virtio,index=0  \
-    -fsdev local,id=cert_fs,path=$CERTS_PATH,security_model=mapped \
-    -device virtio-9p-pci,fsdev=cert_fs,mount_tag=certs_share \
     -append "$QEMU_APPEND_ARG"
 }
 
@@ -104,8 +101,6 @@ function start_tdx(){
     -append "$QEMU_APPEND_ARG" \
     -object memory-backend-memfd,id=mem0,size=20G \
     -drive file=$FS_PATH,format=raw,if=virtio \
-    -fsdev local,id=cert_fs,path=$CERTS_PATH,security_model=mapped \
-    -device virtio-9p-pci,fsdev=cert_fs,mount_tag=certs_share \
     -device vhost-vsock-pci,guest-cid=6 \
     -monitor pty \
     -monitor unix:monitor,server,nowait
