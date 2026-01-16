@@ -31,48 +31,6 @@ services:
     #   - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES-all}
     #   - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES-compute,utility}
 
-  pull-tinyllama:
-    profiles: ["ollama", "default"]
-    image: docker:27.3.1
-    container_name: pull-tinyllama
-    restart: on-failure
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama run tinyllama:1.1b"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - cube-network
-
-  pull-gemma:
-    profiles: ["ollama", "default"]
-    image: docker:27.3.1
-    container_name: pull-gemma
-    restart: on-failure
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama run gemma:2b"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - cube-network
-
-  pull-gpt-oss:
-    profiles: ["ollama", "default"]
-    image: docker:27.3.1
-    container_name: pull-gpt-oss
-    restart: on-failure
-    depends_on:
-      - ollama
-    entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama run gpt-oss:latest"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    networks:
-      - cube-network
-
   pull-llama:
     profiles: ["ollama", "default"]
     image: docker:27.3.1
@@ -81,7 +39,7 @@ services:
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama run llama3.2:latest"
+    command: -c "docker exec ollama ollama run llama3.2:3b"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:

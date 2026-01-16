@@ -2,6 +2,18 @@
   "router": {
     "routes": [
       {
+        "name": "guardrails-agent",
+        "target_url": "http://cube-agent:8901",
+        "matchers": [
+          {
+            "condition": "header",
+            "field": "X-Guardrails-Request",
+            "pattern": "true"
+          }
+        ],
+        "priority": 25
+      },
+      {
         "name": "attestation",
         "target_url": "__CUBE_INTERNAL_AGENT_URL__",
         "matchers": [
@@ -38,6 +50,19 @@
           }
         ],
         "priority": 15
+      },
+      {
+        "name": "guardrails-chat",
+        "target_url": "http://guardrails:8001/guardrails/messages",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": ".*/api/chat",
+            "is_regex": true
+          }
+        ],
+        "priority": 20,
+        "strip_prefix": "/api/chat"
       },
       {
         "name": "agent",

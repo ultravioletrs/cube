@@ -7,6 +7,8 @@ models:
     model: llama3.2:3b
     parameters:
       base_url: __CUBE_INTERNAL_AGENT_URL__
+      headers:
+        X-Guardrails-Request: "true"
 
 instructions:
   - type: general
