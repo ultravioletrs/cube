@@ -4,9 +4,11 @@
 models:
   - type: main
     engine: ollama
-    model: llama3.2:3b
+    model: llama3:2:3b
     parameters:
-      base_url: http://ollama:11434
+      base_url: http://cube-proxy:8900
+      headers:
+        X-Guardrails-Request: "true"
 
 instructions:
   - type: general
