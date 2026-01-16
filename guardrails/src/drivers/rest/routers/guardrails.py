@@ -17,6 +17,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
 
+def clean_response(response: str) -> str:
+    """Clean the guardrails response by replacing 'bot' with 'I'."""
+    if not response:
+        return response
+
+    cleaned = response.strip()
+
+    if cleaned.lower().startswith("bot "):
+        cleaned = "I" + cleaned[3:]
+
+    return cleaned
+
+
 @router.post("/messages", tags=["chat"])
 async def chat_completion(req: ChatRequest) -> Dict[str, Any]:
     runtime = get_runtime()
@@ -62,6 +75,7 @@ async def chat_completion(req: ChatRequest) -> Dict[str, Any]:
         )
 
         response_content = res.response if res.response else ""
+        response_content = clean_response(response_content)
 
         # Construct OpenAI-compatible response
         return {
