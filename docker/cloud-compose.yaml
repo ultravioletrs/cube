@@ -614,12 +614,9 @@ services:
       UV_CUBE_GUARDRAILS_ENABLED: ${UV_CUBE_GUARDRAILS_ENABLED}
       UV_CUBE_GUARDRAILS_URL: ${UV_CUBE_GUARDRAILS_URL}
       # Agent maTLS Configuration
-      # UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
-      # UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
-      # UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.pem}
-      # UV_CUBE_AGENT_ATTESTED_TLS: ${UV_CUBE_AGENT_ATTESTED_TLS}
-      # UV_CUBE_AGENT_ATTESTATION_POLICY: ${UV_CUBE_AGENT_ATTESTATION_POLICY:+/etc/cube/attestation-policy.json}
-      # UV_CUBE_AGENT_PRODUCT_NAME: ${UV_CUBE_AGENT_PRODUCT_NAME}
+      UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
+      UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.pem}
     volumes:
       - type: bind
         source: ./config.json
