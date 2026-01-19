@@ -172,7 +172,7 @@ config-cloud-local:
 	@sed -i 's|__SMQ_EMAIL_USERNAME__|test|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PASSWORD__|test|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_FROM_ADDRESS__|noreply@localhost|g' docker/.env
-	@sed -i 's|__CUBE_AGENT_URL__|http://localhost:8901|g' docker/.env
+	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://localhost:8901|g' docker/.env
 	@sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml
 	@echo "✓ Configured with local defaults"
 
