@@ -12,6 +12,7 @@ on:
     paths:
       - ".github/workflows/cd.yaml"
       - "**.go"
+      - "guardrails/**"
 
   workflow_dispatch:
 
