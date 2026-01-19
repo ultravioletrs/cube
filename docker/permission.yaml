@@ -4,14 +4,12 @@
 domains:
   operations:
     # Domain operations
-    - create: create_permission
     - update: update_permission
     - read: read_permission
     - enable: enable_permission
     - disable: disable_permission
     - list: read_permission
     - send_invitation: manage_role_permission
-    - list_invitation: membership_permission
     - list_domain_invitation: manage_role_permission
     - delete_invitation: manage_role_permission
     # LLM operations
@@ -19,16 +17,16 @@ domains:
     - llm_update: llm_update_permission
     - llm_read: llm_read_permission
     - llm_delete: llm_delete_permission
-    - chat_completions: llm_chat_completions_permission
-    - completions: llm_completions_permission
-    - embeddings: llm_embeddings_permission
-    - transcription: llm_transcription_permission
-    - translation: llm_translation_permission
-    - utility: llm_utility_permission
-    - pooling: llm_pooling_permission
-    - classification: llm_classification_permission
-    - scoring: llm_scoring_permission
-    - rerank: llm_rerank_permission
+    - llm_chat_completions: llm_chat_completions_permission
+    - llm_completions: llm_completions_permission
+    - llm_embeddings: llm_embeddings_permission
+    - llm_transcription: llm_transcription_permission
+    - llm_translation: llm_translation_permission
+    - llm_utility: llm_utility_permission
+    - llm_pooling: llm_pooling_permission
+    - llm_classification: llm_classification_permission
+    - llm_scoring: llm_scoring_permission
+    - llm_rerank: llm_rerank_permission
     # Audit log operations
     - audit_log_read: audit_log_read_permission
     - audit_log_export: audit_log_export_permission
