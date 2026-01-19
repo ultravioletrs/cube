@@ -51,7 +51,7 @@ function start_qemu(){
     -append "$QEMU_APPEND_ARG"
 }
 
-function start_cvm(){
+function start_sev(){
     if ! command -v $QEMU_AMDSEV_BINARY &> /dev/null; then
         echo "QEMU binary not found at $QEMU_AMDSEV_BINARY"
         exit 1
@@ -68,7 +68,7 @@ function start_cvm(){
     -cpu $CPU_TYPE \
     -machine q35 \
     -enable-kvm \
-    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001,hostfwd=tcp::6194-:11434,hostfwd=tcp::6195-:8000,dns=8.8.8.8 \
+    -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6193-:7001,dns=8.8.8.8 \
     -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
     -nographic \
     -no-reboot \
@@ -126,7 +126,8 @@ function print_help(){
     echo "Usage: $0 [command]"
     echo "Commands:"
     echo "  start: Start the QEMU VM"
-    echo "  start_cvm: Start the QEMU VM with AMD SEV-SNP enabled"
+    echo "  start_sev: Start the QEMU VM with AMD SEV-SNP enabled"
+    echo "  start_tdx: Start the QEMU VM with Intel TDX enabled"
     echo "  measure: Use sev-snp-measure utility to calculate the expected measurement"
     echo "  check: Check if the required files are present"
 }
@@ -144,8 +145,8 @@ if [ $# -gt 0 ]; then
         "check")
             check
             ;;
-        "start_cvm")
-            start_cvm
+        "start_sev")
+            start_sev
             ;;
         "start_tdx")
             start_tdx

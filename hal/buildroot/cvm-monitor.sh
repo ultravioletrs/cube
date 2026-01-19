@@ -11,7 +11,7 @@ VM_NAME="cube-ai-vm"                           # VM identifier (must match -name
 CHECK_INTERVAL=30                              # Health check interval (seconds)
 LOG_DIR="/tmp/cube-logs"                       # Log directory
 QEMU_SCRIPT="./qemu.sh"                        # Path to your QEMU launch script
-QEMU_COMMAND="start_tdx"                       # start_cvm | start_tdx | start
+QEMU_COMMAND="start_tdx"                       # start_sev | start_tdx | start
 
 # Optional: extra "is it actually usable?" TCP checks via hostfwd ports
 # (set to "1" to enable)
@@ -243,7 +243,7 @@ start_monitor_background() {
   fi
 
   log "Starting monitor in background..."
-  nohup "$0" daemon >>"$MONITOR_LOG" 2>&1 &
+  nohup "$0" _daemon >>"$MONITOR_LOG" 2>&1 &
   local mpid="$!"
   echo "$mpid" >"$MONITOR_PID_FILE"
   log "Monitor started (pid=${mpid}). Logs -> ${MONITOR_LOG}"
@@ -313,16 +313,17 @@ logs() {
 
 print_help() {
   cat <<EOF
-Usage: $0 [command]
+Usage: $0 [command] [options]
 
 Commands:
-  start        Start CVM once (no monitoring)
-  daemon       Run monitor in foreground (Ctrl+C stops monitoring, VM stays running)
-  background   Run monitor detached in background
+  start [-d]   Start CVM (use -d to run monitor in background)
   stop         Stop monitor + stop CVM
   status       Show CVM and monitor status
   logs         Tail monitor logs
   check        Verify system requirements and underlying QEMU script checks
+
+Options:
+  -d           Run monitor as daemon in background (use with start)
 
 Config:
   Edit variables at top of file:
@@ -332,20 +333,20 @@ EOF
 
 main() {
   local cmd="${1:-}"
+  local flag="${2:-}"
   case "$cmd" in
     start)
       check_requirements
-      start_vm_once
+      start_vm_once || true
+      if [[ "$flag" == "-d" ]]; then
+        start_monitor_background
+      fi
       ;;
-    daemon)
+    _daemon)
+      # Internal command used by background monitor process
       check_requirements
       start_vm_once || true
       start_monitor_foreground
-      ;;
-    background)
-      check_requirements
-      start_vm_once || true
-      start_monitor_background
       ;;
     stop)
       stop_monitor
