@@ -40,24 +40,12 @@
         "strip_prefix": "/audit"
       },
       {
-        "name": "guardrails-admin",
-        "target_url": "http://guardrails:8001/guardrails",
-        "matchers": [
-          {
-            "condition": "path",
-            "pattern": "/guardrails/.*",
-            "is_regex": true
-          }
-        ],
-        "priority": 15
-      },
-      {
-        "name": "guardrails-chat",
+        "name": "forward-to-guardrails",
         "target_url": "http://guardrails:8001/guardrails/messages",
         "matchers": [
           {
             "condition": "path",
-            "pattern": ".*/api/chat",
+            "pattern": "^.*/api/chat$",
             "is_regex": true
           }
         ],

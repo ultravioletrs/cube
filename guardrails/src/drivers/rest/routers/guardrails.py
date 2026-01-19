@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
+import re
 from typing import Any, Dict
 
 from fastapi import APIRouter, HTTPException
@@ -17,17 +18,33 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
 
-def clean_response(response: str) -> str:
-    """Clean the guardrails response by replacing 'bot' with 'I'."""
+def clean_response(response) -> str:
     if not response:
-        return response
+        return ""
+
+    if isinstance(response, list):
+        parts = []
+        for item in response:
+            if isinstance(item, dict):
+                parts.append(item.get("content", str(item)))
+            else:
+                parts.append(str(item))
+        response = " ".join(parts)
+
+    if not isinstance(response, str):
+        response = str(response)
 
     cleaned = response.strip()
+
+    cleaned = re.sub(r'^(bot|I)\s+\w+(\s+\w+)*\s*\n', '', cleaned, flags=re.IGNORECASE)
+
+    if cleaned.startswith('"') and cleaned.endswith('"'):
+        cleaned = cleaned[1:-1]
 
     if cleaned.lower().startswith("bot "):
         cleaned = "I" + cleaned[3:]
 
-    return cleaned
+    return cleaned.strip()
 
 
 @router.post("/messages", tags=["chat"])
@@ -77,24 +94,13 @@ async def chat_completion(req: ChatRequest) -> Dict[str, Any]:
         response_content = res.response if res.response else ""
         response_content = clean_response(response_content)
 
-        # Construct OpenAI-compatible response
         return {
-            "id": "chatcmpl-guardrails",
-            "object": "chat.completion",
-            "created": 0,
             "model": req.model,
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {"role": "assistant", "content": response_content},
-                    "finish_reason": "stop",
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "total_tokens": 0,
+            "message": {
+                "role": "assistant",
+                "content": response_content,
             },
+            "done": True,
         }
 
     except Exception as e:

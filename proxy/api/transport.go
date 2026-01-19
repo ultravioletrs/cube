@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -36,6 +35,7 @@ func MakeHandler(
 	idp supermq.IDProvider,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
+	guardrailsEnabled bool,
 ) http.Handler {
 	endpoints := endpoint.MakeEndpoints(svc)
 
@@ -74,6 +74,10 @@ func MakeHandler(
 		decodeDeleteRouteRequest,
 		encodeDeleteRouteResponse,
 	)).ServeHTTP)
+
+	if guardrailsEnabled {
+		mux.Handle("/api/*", guardrailsHandler(proxyTransport, rter))
+	}
 
 	mux.Route("/{domainID}", func(r chi.Router) {
 		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
@@ -128,56 +132,7 @@ func makeProxyHandler(
 			return
 		}
 
-		// Determine target using router
-		targetURL, stripPrefix, err := rter.DetermineTarget(r)
-		if err != nil {
-			log.Printf("Failed to determine target: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-
-			return
-		}
-
-		target, err := url.Parse(targetURL)
-		if err != nil {
-			log.Printf("Invalid target URL %s: %v", targetURL, err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-
-			return
-		}
-
-		prxy := httputil.NewSingleHostReverseProxy(target)
-		prxy.Transport = transport
-
-		prxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-			log.Printf("Proxy error: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
-		}
-
-		originalDirector := prxy.Director
-		prxy.Director = func(req *http.Request) {
-			// Strip domainID prefix
-			if domainID := chi.URLParam(req, "domainID"); domainID != "" {
-				prefix := "/" + domainID
-
-				req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
-				if req.URL.RawPath != "" {
-					req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
-				}
-			}
-
-			// Strip configured prefix
-			if stripPrefix != "" {
-				req.URL.Path = strings.TrimPrefix(req.URL.Path, stripPrefix)
-				if req.URL.RawPath != "" {
-					req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, stripPrefix)
-				}
-			}
-
-			originalDirector(req)
-		}
-
-		// Proceed to proxy
-		prxy.ServeHTTP(w, r)
+		serveReverseProxy(w, r, transport, rter)
 	}
 }
 
@@ -198,3 +153,91 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 }
 
 var errUnauthorized = errors.New("unauthorized")
+
+func singleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+
+	bslash := strings.HasPrefix(b, "/")
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		return a + "/" + b
+	}
+
+	return a + b
+}
+
+func guardrailsHandler(transport http.RoundTripper, rter *router.Router) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Guardrails-Request") != "true" {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+
+			return
+		}
+
+		serveReverseProxy(w, r, transport, rter)
+	}
+}
+
+func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router) {
+	targetURL, stripPrefix, err := rter.DetermineTarget(r)
+	if err != nil {
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
+		return
+	}
+
+	target, err := url.Parse(targetURL)
+	if err != nil {
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+
+		return
+	}
+
+	prxy := httputil.NewSingleHostReverseProxy(target)
+	prxy.Transport = transport
+
+	prxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
+		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+	}
+
+	prxy.Director = func(req *http.Request) {
+		if domainID := chi.URLParam(req, "domainID"); domainID != "" {
+			prefix := "/" + domainID
+
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
+			if req.URL.RawPath != "" {
+				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
+			}
+		}
+
+		if stripPrefix != "" {
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, stripPrefix)
+			if req.URL.RawPath != "" {
+				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, stripPrefix)
+			}
+		}
+
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+
+		remainingPath := req.URL.Path
+		if target.Path != "" {
+			if remainingPath == "" || remainingPath == "/" {
+				req.URL.Path = target.Path
+			} else {
+				req.URL.Path = singleJoiningSlash(target.Path, remainingPath)
+			}
+		}
+
+		req.URL.RawQuery = target.RawQuery
+		if req.URL.RawQuery == "" {
+			req.URL.RawQuery = req.URL.Query().Encode()
+		}
+
+		req.Host = target.Host
+	}
+
+	prxy.ServeHTTP(w, r)
+}

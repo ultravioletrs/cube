@@ -212,7 +212,7 @@ func main() {
 
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter,
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter, cfg.GuardrailsEnabled,
 		),
 		logger)
 
