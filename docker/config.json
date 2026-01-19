@@ -53,6 +53,18 @@
         "strip_prefix": "/api/chat"
       },
       {
+        "name": "guardrails-admin",
+        "target_url": "http://guardrails:8001/guardrails",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "/guardrails/.*",
+            "is_regex": true
+          }
+        ],
+        "priority": 15
+      },
+      {
         "name": "agent",
         "target_url": "__CUBE_INTERNAL_AGENT_URL__",
         "default_rule": true
