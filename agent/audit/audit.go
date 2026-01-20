@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +73,13 @@ type Event struct {
 	PIIDetected     bool     `json:"pii_detected"`
 	ComplianceTags  []string `json:"compliance_tags,omitempty"`
 
+	// aTLS & Attestation (extends Auth section above)
+	ATLSHandshake     bool                   `json:"atls_handshake"`
+	ATLSHandshakeMs   float64                `json:"atls_handshake_ms,omitempty"`
+	AttestationError  string                 `json:"attestation_error,omitempty"`
+	AttestationNonce  string                 `json:"attestation_nonce,omitempty"`
+	AttestationReport map[string]interface{} `json:"attestation_report,omitempty"`
+
 	// Error handling
 	Error     string `json:"error,omitempty"`
 	ErrorCode string `json:"error_code,omitempty"`
@@ -103,13 +111,16 @@ type Config struct {
 type responseCapture struct {
 	http.ResponseWriter
 
-	statusCode int
-	size       int64
-	body       *bytes.Buffer
+	statusCode      int
+	size            int64
+	body            *bytes.Buffer
+	responseHeaders http.Header
 }
 
 func (rc *responseCapture) WriteHeader(statusCode int) {
 	rc.statusCode = statusCode
+	// Capture response headers before they're written
+	rc.responseHeaders = rc.ResponseWriter.Header().Clone()
 	rc.ResponseWriter.WriteHeader(statusCode)
 }
 
@@ -120,6 +131,11 @@ func (rc *responseCapture) Write(data []byte) (int, error) {
 	}
 
 	return rc.ResponseWriter.Write(data)
+}
+
+// Header returns the header map to allow setting response headers.
+func (rc *responseCapture) Header() http.Header {
+	return rc.ResponseWriter.Header()
 }
 
 // NewAuditMiddleware creates a new audit middleware instance.
@@ -253,6 +269,9 @@ func (am *auditMiddleware) createAuditEvent(
 
 	event.ContentFiltered = am.checkContentFilter(&event)
 
+	// Extract attestation information from response headers (set by instrumented transport)
+	am.extractAttestationInfo(&event, capture.responseHeaders)
+
 	return event
 }
 
@@ -291,18 +310,52 @@ func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) 
 }
 
 func (am *auditMiddleware) extractLLMResponse(event *Event, responseBody []byte) {
-	var responseData map[string]interface{}
+	var responseData map[string]any
 	if err := json.Unmarshal(responseBody, &responseData); err != nil {
 		return
 	}
 
-	if usage, ok := responseData["usage"].(map[string]interface{}); ok {
+	if usage, ok := responseData["usage"].(map[string]any); ok {
 		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
 			event.InputTokens = int(promptTokens)
 		}
 
 		if completionTokens, ok := usage["completion_tokens"].(float64); ok {
 			event.OutputTokens = int(completionTokens)
+		}
+	}
+}
+
+func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Header) {
+	if headers == nil {
+		return
+	}
+
+	// Check for aTLS handshake indicator
+	if atlsType := headers.Get("X-Attestation-Type"); atlsType != "" {
+		event.ATLSHandshake = true
+		event.AttestationType = atlsType
+
+		// Parse attestation OK status
+		if atlsOK := headers.Get("X-Attestation-OK"); atlsOK == "true" {
+			event.AttestationOK = true
+		}
+
+		// Capture attestation error if any
+		if atlsError := headers.Get("X-Attestation-Error"); atlsError != "" {
+			event.AttestationError = atlsError
+		}
+
+		// Capture attestation nonce
+		if atlsNonce := headers.Get("X-Attestation-Nonce"); atlsNonce != "" {
+			event.AttestationNonce = atlsNonce
+		}
+
+		// Capture handshake timing
+		if handshakeMs := headers.Get("X-ATLS-Handshake-Ms"); handshakeMs != "" {
+			if ms, err := strconv.ParseFloat(handshakeMs, 64); err == nil {
+				event.ATLSHandshakeMs = ms
+			}
 		}
 	}
 }
@@ -340,6 +393,22 @@ func (am *auditMiddleware) logAuditEvent(ctx context.Context, event *Event) {
 
 	if event.TLSVersion != "" {
 		logAttrs = append(logAttrs, slog.String("tls_version", event.TLSVersion))
+	}
+
+	// Add attestation details if aTLS was used
+	if event.ATLSHandshake {
+		logAttrs = append(logAttrs,
+			slog.Bool("atls_handshake", event.ATLSHandshake),
+			slog.Float64("atls_handshake_ms", event.ATLSHandshakeMs),
+			slog.Bool("attestation_ok", event.AttestationOK),
+			slog.String("attestation_type", event.AttestationType),
+		)
+		if event.AttestationError != "" {
+			logAttrs = append(logAttrs, slog.String("attestation_error", event.AttestationError))
+		}
+		if event.AttestationNonce != "" {
+			logAttrs = append(logAttrs, slog.String("attestation_nonce", event.AttestationNonce))
+		}
 	}
 
 	logAttrs = append(logAttrs, slog.Any("event", event))
