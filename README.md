@@ -1,10 +1,31 @@
+<div align="center">
+
 # Cube AI
 
-Cube AI is a framework for building GPT-based AI applications using confidential computing. It protects user data and the AI model by using a trusted execution environment (TEE). TEE is a secure area of a processor that ensures that code and data loaded inside it are protected with respect to confidentiality and integrity. Data confidentiality prevents unauthorized access of data from outside the TEE, while code integrity ensures that code inside the TEE remains unchanged and unaltered from unauthorized access.
+Confidential computing framework for GPT-based applications.
+
+OpenAI-compatible API, multiple LLM backends, and TEE-backed isolation for data and model privacy.
+
+[![CI](https://github.com/ultravioletrs/cube/actions/workflows/main.yaml/badge.svg)](https://github.com/ultravioletrs/cube/actions/workflows/main.yaml)
+[![UI CI](https://github.com/ultravioletrs/cube/actions/workflows/ui-ci.yaml/badge.svg)](https://github.com/ultravioletrs/cube/actions/workflows/ui-ci.yaml)
+[![Check License](https://github.com/ultravioletrs/cube/actions/workflows/check-license.yaml/badge.svg)](https://github.com/ultravioletrs/cube/actions/workflows/check-license.yaml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ultravioletrs/cube)](https://goreportcard.com/report/github.com/ultravioletrs/cube)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+
+[Guide](https://github.com/ultravioletrs/cube-docs) | [Docs](https://github.com/ultravioletrs/cube-docs) | [License](LICENSE)
+</div>
+
+## Introduction
+
+Cube AI is a framework for building GPT-based applications using confidential computing. It protects user data and AI models with a trusted execution environment (TEE), which is a secure area of the processor that ensures code and data loaded inside it remain confidential and intact. This provides strong data confidentiality and code integrity even when the host environment is not fully trusted.
 
 <p align="center">
   <img src="https://github.com/ultravioletrs/cube-docs/blob/main/docs/img/cube-ai.png">
 </p>
+
+## Why Cube AI
+
+Traditional GPT-based applications often rely on public cloud services where operators or hardware providers can access prompts and model responses. Cube AI addresses these privacy concerns by executing inference inside TEEs, ensuring that user data and AI models remain protected from unauthorized access outside the enclave.
 
 ## Key Features
 
@@ -27,19 +48,15 @@ Cube AI now supports vLLM, a high-throughput and memory-efficient inference engi
 
 ### Ollama Integration
 
-Cube AI also integrates with Ollama for local model deployment, providing:
+Cube AI integrates with Ollama for local model deployment, providing:
 
-- Easy model management and deployment
-- Local inference capabilities
+- Model management and deployment
+- Local inference
 - Support for various open-source models
 
-## Why Cube AI?
+## How Cube AI Works
 
-Traditional GPT-based AI applications often rely on public cloud services, which can be vulnerable to security breaches and unauthorized access. The tenant for example openai, and the hardware provider for example Azure, are not always transparent about their security practices and can be easily compromised. They can also access your prompts and model responses. Cube AI addresses these privacy concerns by using TEEs. Using TEEs, Cube AI ensures that user data and AI models are protected from unauthorized access outside the TEE. This helps to maintain user privacy and ensures that AI models are used in a controlled and secure manner.
-
-## How does Cube AI work?
-
-Cube AI uses TEEs to protect user data and AI models from unauthorized access. TEE offers an execution space that provides a higher level of security for trusted applications running on the device. In Cube AI, the TEE ensures that AI models are executed securely and in a controlled environment.
+Cube AI uses TEEs to protect user data and AI models from unauthorized access. The TEE provides a secure execution space for trusted applications. In Cube AI, inference runs inside the TEE so prompts, responses, and model data are protected even if the host OS is compromised.
 
 ## Getting Started
 
@@ -52,19 +69,22 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 ### Quick Start
 
 1. **Clone the repository**
+
    ```bash
    git clone https://github.com/ultravioletrs/cube.git
    cd cube
    ```
 
 2. **Start Cube AI services**
+
    ```bash
    make up
    ```
 
 3. **Get your authentication token**
 
-   All API requests require authentication using JWT tokens. Once the services are running, obtain a JWT token:
+   All API requests require JWT authentication. Once services are running, obtain a token:
+
    ```bash
    curl -ksSiX POST https://localhost/users/tokens/issue \
      -H "Content-Type: application/json" \
@@ -73,8 +93,9 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
        "password": "m2N2Lfno"
      }'
    ```
-   
-   The response will contain your JWT token:
+
+   Response:
+
    ```json
    {
      "access_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9...",
@@ -84,7 +105,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
 4. **Create a domain**
 
-   All API requests require a domain ID in the URL path. You can either get the domain ID from the UI or create a new domain via the API:
+   All API requests require a domain ID in the URL path. You can fetch a domain ID from the UI or create one via the API:
 
    ```bash
    curl -ksSiX POST https://localhost/domains \
@@ -99,8 +120,9 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
        }
      }'
    ```
-   
-   The response will contain your domain information including the `id`:
+
+   Response (includes `id`):
+
    ```json
    {
      "id": "d7f9b3b8-4f7e-4f44-8d47-1a6e5e6f7a2b",
@@ -116,25 +138,24 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
      "updated_at": "2025-10-29T14:12:01Z"
    }
    ```
-   
-   **Notes:**
-   - `name` and `route` are required fields
-   - `route` must be unique and cannot be changed after creation
-   - `metadata` must be a valid JSON object
-   - The `id` is automatically generated if not provided
-   - Save the `id` value as you'll need it for all subsequent API requests
+
+   Notes:
+   - `name` and `route` are required fields.
+   - `route` must be unique and cannot be changed after creation.
+   - `metadata` must be a valid JSON object.
+   - Save the `id` value for subsequent API requests.
 
 5. **Verify the installation**
-   
+
    List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 4):
+
    ```bash
    curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
    ```
 
 6. **Make your first AI request**
-   
-   Replace `YOUR_DOMAIN_ID` with your actual domain ID:
+
    ```bash
    curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
      -H "Content-Type: application/json" \
@@ -150,19 +171,16 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
      }'
    ```
 
-### API Endpoints
+## API Endpoints
 
-Cube AI exposes all services through Traefik reverse proxy. 
+Cube AI exposes all services through a Traefik reverse proxy. All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
 
-All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
-
-#### Proxy Endpoints (OpenAI-Compatible)
+### Proxy Endpoints (OpenAI-Compatible)
 
 **Base URL:** `https://localhost/proxy/`
 
-Replace `{domainID}` with your actual domain ID obtained from step 4 in the Getting Started guide.
+Replace `{domainID}` with your domain ID from the Getting Started section.
 
-### OpenAI-Compatible Endpoints
 | Method | Path                              | Description             |
 |--------|-----------------------------------|-------------------------|
 | GET    | `/{domainID}/v1/models`           | List available models   |
@@ -172,24 +190,24 @@ Replace `{domainID}` with your actual domain ID obtained from step 4 in the Gett
 | POST   | `/{domainID}/api/generate`        | Generate completions    |
 | POST   | `/{domainID}/api/chat`            | Chat completions        |
 
+Example:
 
-**Example:**
 ```bash
-# Using OpenAI-compatible endpoint
+# OpenAI-compatible endpoint
 curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"tinyllama:1.1b","messages":[{"role":"user","content":"Hello"}]}'
 
-# Using Ollama API endpoint
+# Ollama API endpoint
 curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
-#### Auth Endpoints
+### Auth Endpoints
+
 **Base URL:** `https://localhost/users`
 
-### User Registration & Authentication
 | Method | Path                          | Description                            |
 |--------|-------------------------------|----------------------------------------|
 | POST   | `/users`                      | Register new user account              |
@@ -198,8 +216,8 @@ curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
 | POST   | `/password/reset-request`     | Request password reset                 |
 | PUT    | `/password/reset`             | Reset password with token              |
 
+Example:
 
-**Example**
 ```bash
 curl -ksSiX POST https://localhost/users/tokens/issue \
   -H "Content-Type: application/json" \
@@ -209,12 +227,10 @@ curl -ksSiX POST https://localhost/users/tokens/issue \
   }'
 ```
 
----
+### Domains Endpoints
 
-#### Domains Endpoints
 **Base URL:** `https://localhost/domains`
 
-### Domain Management
 | Method | Path                          | Description                            |
 |--------|-------------------------------|----------------------------------------|
 | POST   | `/domains`                    | Create new domain                      |
@@ -224,9 +240,9 @@ curl -ksSiX POST https://localhost/users/tokens/issue \
 | POST   | `/domains/{domainID}/enable`  | Enable a domain                        |
 | POST   | `/domains/{domainID}/disable` | Disable a domain                       |
 | POST   | `/domains/{domainID}/freeze`  | Freeze a domain                        |
- 
 
-**Example**
+Example:
+
 ```bash
 curl -ksSiX POST https://localhost/domains \
   -H "Content-Type: application/json" \
@@ -241,13 +257,11 @@ curl -ksSiX POST https://localhost/domains \
   }'
 ```
 
----
-
 ## Configuration
 
 ### vLLM Backend
 
-Configure vLLM settings through environment:
+Configure vLLM settings through the environment:
 
 ```bash
 make up-vllm
@@ -267,4 +281,4 @@ Project documentation is hosted at [Cube AI docs repository](https://github.com/
 
 ## License
 
-Cube AI is published under permissive open-source [Apache-2.0](LICENSE) license.
+Cube AI is published under the permissive [Apache-2.0](LICENSE) license.
