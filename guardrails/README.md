@@ -16,7 +16,6 @@ The service is configured via environment variables (unset variables use default
 
 ## Features
 
-- **Guarded chat**: OpenAI-compatible chat-style responses via `/guardrails/messages`.
 - **Config management**: CRUD for guardrail configs with versioning.
 - **Runtime reload**: Swap active configurations without restarting the service.
 - **Migrations**: Database schema migrations run on startup.
@@ -28,7 +27,6 @@ Base path: `/guardrails`
 
 | Method | Path | Description |
 | --- | --- | --- |
-| POST | `/guardrails/messages` | Guarded chat completion |
 | GET | `/guardrails/health` | Health check |
 | GET | `/guardrails` | Service info and endpoint list |
 | POST | `/guardrails/configs` | Create config |
