@@ -58,7 +58,7 @@
         "matchers": [
           {
             "condition": "path",
-            "pattern": "/guardrails/.*",
+            "pattern": "^.*guardrails/.*",
             "is_regex": true
           }
         ],

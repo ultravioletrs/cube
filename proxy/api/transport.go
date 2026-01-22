@@ -22,6 +22,7 @@ import (
 	"github.com/ultravioletrs/cube/agent/audit"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/endpoint"
+	"github.com/ultravioletrs/cube/proxy/middleware"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
@@ -75,12 +76,10 @@ func MakeHandler(
 		encodeDeleteRouteResponse,
 	)).ServeHTTP)
 
-	if guardrailsEnabled {
-		mux.Handle("/api/*", guardrailsHandler(proxyTransport, rter))
-	}
-
 	mux.Route("/{domainID}", func(r chi.Router) {
-		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
+		// Use both standard auth middleware and model auth middleware
+		// The model auth middleware will check for X-Model-Authorization if Authorization is missing
+		r.Use(middleware.ModelAuthMiddleware(authn), authn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)
 
 		r.Get("/attestation/policy", kithttp.NewServer(
@@ -168,19 +167,16 @@ func singleJoiningSlash(a, b string) string {
 	return a + b
 }
 
-func guardrailsHandler(transport http.RoundTripper, rter *router.Router) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Guardrails-Request") != "true" {
-			http.Error(w, "Unauthorized", http.StatusUnauthorized)
-
-			return
-		}
-
-		serveReverseProxy(w, r, transport, rter)
-	}
-}
-
 func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router) {
+	// Log request headers for debugging
+	for name, values := range r.Header {
+		for _, value := range values {
+			// Use a simple print for now as we don't have a logger passed to this function
+			// In a real production scenario, we should use the service logger
+			println("Header:", name, "=", value)
+		}
+	}
+
 	targetURL, stripPrefix, err := rter.DetermineTarget(r)
 	if err != nil {
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
