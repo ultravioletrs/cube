@@ -12,8 +12,7 @@
           }
         ],
         "priority": 15,
-        "strip_prefix": "",
-        "auth_required": true
+        "strip_prefix": ""
       },
       {
         "name": "audit",
