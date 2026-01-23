@@ -72,6 +72,23 @@ func (s *service) UpdateAttestationPolicy(ctx context.Context, _ *authn.Session,
 
 // CreateRoute implements Service.
 func (s *service) CreateRoute(ctx context.Context, _ *authn.Session, route *router.RouteRule) error {
+	// Validate route configuration
+	if err := router.ValidateRoute(route); err != nil {
+		return err
+	}
+
+	// Get existing routes to check for conflicts
+	existingRoutes, err := s.repo.ListRoutes(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list existing routes: %w", err)
+	}
+
+	// Check for conflicts
+	if err := router.DetectConflict(route, existingRoutes); err != nil {
+		return err
+	}
+
+	// Create route in database
 	if err := s.repo.CreateRoute(ctx, route); err != nil {
 		return err
 	}
@@ -87,6 +104,36 @@ func (s *service) GetRoute(ctx context.Context, _ *authn.Session, name string) (
 
 // UpdateRoute implements Service.
 func (s *service) UpdateRoute(ctx context.Context, _ *authn.Session, route *router.RouteRule) error {
+	// Check if this is a system route
+	if router.IsSystemRoute(route.Name) {
+		return router.ErrSystemRouteProtected
+	}
+
+	// Validate route configuration
+	if err := router.ValidateRoute(route); err != nil {
+		return err
+	}
+
+	// Get existing routes to check for conflicts (excluding the route being updated)
+	existingRoutes, err := s.repo.ListRoutes(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list existing routes: %w", err)
+	}
+
+	// Filter out the route being updated from conflict detection
+	var otherRoutes []router.RouteRule
+	for _, r := range existingRoutes {
+		if r.Name != route.Name {
+			otherRoutes = append(otherRoutes, r)
+		}
+	}
+
+	// Check for conflicts with other routes
+	if err := router.DetectConflict(route, otherRoutes); err != nil {
+		return err
+	}
+
+	// Update route in database
 	if err := s.repo.UpdateRoute(ctx, route); err != nil {
 		return err
 	}
@@ -97,6 +144,12 @@ func (s *service) UpdateRoute(ctx context.Context, _ *authn.Session, route *rout
 
 // DeleteRoute implements Service.
 func (s *service) DeleteRoute(ctx context.Context, _ *authn.Session, name string) error {
+	// Check if this is a system route
+	if router.IsSystemRoute(name) {
+		return router.ErrSystemRouteProtected
+	}
+
+	// Delete route from database
 	if err := s.repo.DeleteRoute(ctx, name); err != nil {
 		return err
 	}

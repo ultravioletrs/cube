@@ -84,9 +84,13 @@ func decodeCreateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 }
 
 func encodeCreateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(http.StatusCreated)
 
-	return nil
+	// Return success message
+	return json.NewEncoder(w).Encode(map[string]string{
+		"message": "route created successfully",
+	})
 }
 
 func decodeGetRouteRequest(ctx context.Context, r *http.Request) (any, error) {
@@ -135,9 +139,13 @@ func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 }
 
 func encodeUpdateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(http.StatusOK)
 
-	return nil
+	// Return success message
+	return json.NewEncoder(w).Encode(map[string]string{
+		"message": "route updated successfully",
+	})
 }
 
 func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error) {
@@ -158,9 +166,13 @@ func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error)
 }
 
 func encodeDeleteRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", ContentType)
+	w.WriteHeader(http.StatusOK)
 
-	return nil
+	// Return success message
+	return json.NewEncoder(w).Encode(map[string]string{
+		"message": "route deleted successfully",
+	})
 }
 
 func decodeListRoutesRequest(ctx context.Context, _ *http.Request) (any, error) {

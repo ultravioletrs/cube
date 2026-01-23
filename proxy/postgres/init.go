@@ -38,6 +38,15 @@ func Migration() *migrate.MemoryMigrationSource {
 					`DROP TABLE IF EXISTS routes`,
 				},
 			},
+			{
+				Id: "add_strip_prefix_to_routes",
+				Up: []string{
+					`ALTER TABLE routes ADD COLUMN IF NOT EXISTS strip_prefix VARCHAR(255) NOT NULL DEFAULT ''`,
+				},
+				Down: []string{
+					`ALTER TABLE routes DROP COLUMN IF EXISTS strip_prefix`,
+				},
+			},
 		},
 	}
 }
