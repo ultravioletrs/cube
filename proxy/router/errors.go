@@ -18,4 +18,5 @@ var (
 	ErrInvalidPriority       = errors.New("invalid priority: must be between 0 and 1000")
 	ErrNoMatchers            = errors.New("route must have at least one matcher or be a default rule")
 	ErrMultipleDefaultRoutes = errors.New("only one default route is allowed")
+	ErrInvalidStripPrefix    = errors.New("strip_prefix must start with /")
 )

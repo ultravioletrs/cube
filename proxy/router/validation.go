@@ -10,10 +10,12 @@ import (
 	"strings"
 )
 
-// System routes that cannot be deleted or modified.
-var systemRoutes = map[string]bool{
-	"attestation": true,
-	"health":      true,
+// getSystemRoutes returns the map of system routes that cannot be deleted or modified.
+func getSystemRoutes() map[string]bool {
+	return map[string]bool{
+		"attestation": true,
+		"health":      true,
+	}
 }
 
 // ValidateRouteName checks if a route name is valid.
@@ -155,7 +157,7 @@ func ValidateRoute(route *RouteRule) error {
 	if route.StripPrefix != "" {
 		// Strip prefix should start with /
 		if !strings.HasPrefix(route.StripPrefix, "/") {
-			return fmt.Errorf("strip_prefix must start with /")
+			return ErrInvalidStripPrefix
 		}
 	}
 
@@ -164,7 +166,7 @@ func ValidateRoute(route *RouteRule) error {
 
 // IsSystemRoute checks if a route is a protected system route.
 func IsSystemRoute(name string) bool {
-	return systemRoutes[name]
+	return getSystemRoutes()[name]
 }
 
 // DetectConflict checks if a new route conflicts with existing routes.

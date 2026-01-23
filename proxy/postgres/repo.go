@@ -61,7 +61,8 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) e
 		return err
 	}
 
-	_, err = r.db.ExecContext(ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix)
+	_, err = r.db.ExecContext(
+		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix)
 
 	return err
 }
@@ -79,7 +80,8 @@ func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRu
 
 	row := r.db.QueryRowxContext(ctx, q, name)
 
-	err := row.Scan(&id, &route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix, nil, nil)
+	err := row.Scan(
+		&id, &route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +109,8 @@ func (r *repository) UpdateRoute(ctx context.Context, route *router.RouteRule) e
 		return err
 	}
 
-	_, err = r.db.ExecContext(ctx, q, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix, route.Name)
+	_, err = r.db.ExecContext(
+		ctx, q, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix, route.Name)
 
 	return err
 }
@@ -139,7 +142,8 @@ func (r *repository) ListRoutes(ctx context.Context) ([]router.RouteRule, error)
 			route        router.RouteRule
 		)
 
-		if err := rows.Scan(&route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix); err != nil {
+		if err := rows.Scan(
+			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix); err != nil {
 			return nil, err
 		}
 

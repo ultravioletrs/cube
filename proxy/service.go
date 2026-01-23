@@ -122,6 +122,7 @@ func (s *service) UpdateRoute(ctx context.Context, _ *authn.Session, route *rout
 
 	// Filter out the route being updated from conflict detection
 	var otherRoutes []router.RouteRule
+
 	for _, r := range existingRoutes {
 		if r.Name != route.Name {
 			otherRoutes = append(otherRoutes, r)
