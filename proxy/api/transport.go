@@ -208,19 +208,25 @@ func makeProxyHandler(
 	}
 }
 
-// copyAttestationHeaders copies attestation-related headers from the upstream response
+// copyAttestationHeaders copies attestation and TLS-related headers from the upstream response
 // to the response writer for audit logging purposes.
 func copyAttestationHeaders(w http.ResponseWriter, resp *http.Response) {
-	attestationHeaders := []string{
+	auditHeaders := []string{
+		// TLS details
+		"X-TLS-Version",
+		"X-TLS-Cipher-Suite",
+		"X-TLS-Peer-Cert-Issuer",
+		// Attestation details
 		"X-Attestation-Type",
 		"X-Attestation-OK",
 		"X-Attestation-Error",
 		"X-Attestation-Nonce",
+		"X-Attestation-Report",
 		"X-ATLS-Handshake",
 		"X-ATLS-Handshake-Ms",
 	}
 
-	for _, h := range attestationHeaders {
+	for _, h := range auditHeaders {
 		if v := resp.Header.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
@@ -334,19 +340,25 @@ func forwardRequest(
 	return respBody, resp.StatusCode, resp.Header, nil
 }
 
-// copyAttestationHeadersFromMap copies attestation-related headers from a header map
+// copyAttestationHeadersFromMap copies attestation and TLS-related headers from a header map
 // to the response writer for audit logging purposes.
 func copyAttestationHeadersFromMap(w http.ResponseWriter, headers http.Header) {
-	attestationHeaders := []string{
+	auditHeaders := []string{
+		// TLS details
+		"X-TLS-Version",
+		"X-TLS-Cipher-Suite",
+		"X-TLS-Peer-Cert-Issuer",
+		// Attestation details
 		"X-Attestation-Type",
 		"X-Attestation-OK",
 		"X-Attestation-Error",
 		"X-Attestation-Nonce",
+		"X-Attestation-Report",
 		"X-ATLS-Handshake",
 		"X-ATLS-Handshake-Ms",
 	}
 
-	for _, h := range attestationHeaders {
+	for _, h := range auditHeaders {
 		if v := headers.Get(h); v != "" {
 			w.Header().Set(h, v)
 		}
