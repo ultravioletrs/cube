@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	kitendpoint "github.com/go-kit/kit/endpoint"
 	kithttp "github.com/go-kit/kit/transport/http"
+	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ultravioletrs/cube/agent/audit"
 	"github.com/ultravioletrs/cube/proxy"
@@ -168,15 +169,6 @@ func singleJoiningSlash(a, b string) string {
 }
 
 func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router) {
-	// Log request headers for debugging
-	for name, values := range r.Header {
-		for _, value := range values {
-			// Use a simple print for now as we don't have a logger passed to this function
-			// In a real production scenario, we should use the service logger
-			println("Header:", name, "=", value)
-		}
-	}
-
 	targetURL, stripPrefix, err := rter.DetermineTarget(r)
 	if err != nil {
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
@@ -200,11 +192,13 @@ func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.Ro
 
 	prxy.Director = func(req *http.Request) {
 		if domainID := chi.URLParam(req, "domainID"); domainID != "" {
-			prefix := "/" + domainID
+			if err := uuid.Validate(domainID); err == nil {
+				prefix := "/" + domainID
 
-			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
-			if req.URL.RawPath != "" {
-				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
+				req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
+				if req.URL.RawPath != "" {
+					req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
+				}
 			}
 		}
 

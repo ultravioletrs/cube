@@ -5,7 +5,7 @@ import logging
 import re
 from typing import Any, Dict
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Header, HTTPException, Request
 
 from src.drivers.rest.dependencies import get_runtime
 from src.drivers.rest.routers.schemas import (
@@ -48,7 +48,7 @@ def clean_response(response) -> str:
 
 
 @router.post("/messages", tags=["chat"])
-async def chat_completion(req: ChatRequest, authorization: str = Header(None)) -> Dict[str, Any]:
+async def chat_completion(request: Request, req: ChatRequest, authorization: str = Header(None)) -> Dict[str, Any]:
     runtime = get_runtime()
 
     if not runtime.is_ready():
@@ -63,15 +63,17 @@ async def chat_completion(req: ChatRequest, authorization: str = Header(None)) -
         # Convert Pydantic models to dicts
         messages = [{"role": m.role, "content": m.content} for m in req.messages]
 
-        llm_params = {"model": req.model, "temperature": req.temperature, "max_tokens": req.max_tokens, "headers": {
-            "X-Cube-Authorization": authorization,
-            "X-Model-Authorization": authorization,
-            "X-Guardrails-Request": "true"
-        }}
+        llm_params = {
+            "model": req.model,
+            "temperature": req.temperature,
+            "max_tokens": req.max_tokens,
+            "headers": {
+                "X-Model-Authorization": authorization,
+                "X-Guardrails-Request": "true"
+            }
+        }
 
-
-        print(llm_params)
-        # Generate response using runtime
+        logger.debug(f"llm_params with headers: X-Model-Authorization present={authorization is not None}")
         res = await runtime.generate(
             messages=messages,
             options={
@@ -84,6 +86,7 @@ async def chat_completion(req: ChatRequest, authorization: str = Header(None)) -
                     "print_llm_calls_outputs": True,
                 },
                 "llm_params": llm_params,
+                "llm": llm_params,
                 "output_vars": ["relevant_chunks", "triggered_input_rail", "triggered_output_rail"],
                 "return_context": True,
                 "llm_output": True
