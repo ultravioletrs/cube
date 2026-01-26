@@ -7,7 +7,10 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/asn1"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strconv"
 	"sync"
@@ -109,6 +112,17 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	// Add attestation result to response headers for audit middleware to pick up
 	// (context doesn't flow back from RoundTrip, so we use headers)
 	if resp != nil {
+		// Always set TLS details when available (for audit logging)
+		if result.TLSVersion != "" {
+			resp.Header.Set("X-TLS-Version", result.TLSVersion)
+		}
+		if result.CipherSuite != "" {
+			resp.Header.Set("X-TLS-Cipher-Suite", result.CipherSuite)
+		}
+		if result.PeerCertIssuer != "" {
+			resp.Header.Set("X-TLS-Peer-Cert-Issuer", result.PeerCertIssuer)
+		}
+
 		// Always set attestation headers when aTLS is configured (even if not actually used)
 		// This allows the audit log to show the expected vs actual state
 		if atlsExpected || result.ATLSHandshake {
@@ -121,6 +135,12 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 			}
 			if result.AttestationNonce != "" {
 				resp.Header.Set("X-Attestation-Nonce", result.AttestationNonce)
+			}
+			// Include attestation report if available
+			if len(result.Report) > 0 {
+				if reportJSON, err := json.Marshal(result.Report); err == nil {
+					resp.Header.Set("X-Attestation-Report", string(reportJSON))
+				}
 			}
 		}
 	}
@@ -151,10 +171,15 @@ func (t *InstrumentedTransport) extractTLSDetails(result *AttestationResult, sta
 	}
 }
 
+// Platform-specific OIDs for attestation certificate extensions.
+var (
+	snpvTPMOID = asn1.ObjectIdentifier{2, 99999, 1, 0}
+	azureOID   = asn1.ObjectIdentifier{2, 99999, 1, 1}
+	tdxOID     = asn1.ObjectIdentifier{2, 99999, 1, 2}
+)
+
 // extractAttestationFromCert extracts attestation report data from certificate extensions.
 func extractAttestationFromCert(cert *x509.Certificate, platformType string) map[string]any {
-	// This is a simplified extraction - the actual attestation report
-	// is verified during the TLS handshake by VerifyPeerCertificate
 	report := make(map[string]any)
 
 	report["platform"] = platformType
@@ -164,9 +189,10 @@ func extractAttestationFromCert(cert *x509.Certificate, platformType string) map
 	report["cert_not_before"] = cert.NotBefore.UTC().Format(time.RFC3339)
 	report["cert_not_after"] = cert.NotAfter.UTC().Format(time.RFC3339)
 	report["cert_subject"] = cert.Subject.String()
+	report["cert_issuer"] = cert.Issuer.String()
+	report["cert_serial"] = hex.EncodeToString(cert.SerialNumber.Bytes())
 
-	// Platform-specific report fields would be extracted here
-	// For now, we indicate that verification happened
+	// Platform-specific technology name
 	switch platformType {
 	case "SNP", "SNPvTPM":
 		report["technology"] = "AMD SEV-SNP"
@@ -176,6 +202,40 @@ func extractAttestationFromCert(cert *x509.Certificate, platformType string) map
 		report["technology"] = "Azure Confidential Computing"
 	default:
 		report["technology"] = "Unknown"
+	}
+
+	// Extract attestation extension from certificate
+	for _, ext := range cert.Extensions {
+		var extPlatform string
+		var extOIDStr string
+
+		switch {
+		case ext.Id.Equal(snpvTPMOID):
+			extPlatform = "SNPvTPM"
+			extOIDStr = "2.99999.1.0"
+		case ext.Id.Equal(azureOID):
+			extPlatform = "Azure"
+			extOIDStr = "2.99999.1.1"
+		case ext.Id.Equal(tdxOID):
+			extPlatform = "TDX"
+			extOIDStr = "2.99999.1.2"
+		default:
+			continue
+		}
+
+		// Found attestation extension
+		report["attestation_extension_oid"] = extOIDStr
+		report["attestation_extension_platform"] = extPlatform
+		report["attestation_extension_critical"] = ext.Critical
+		report["attestation_extension_size"] = len(ext.Value)
+
+		// Include the raw attestation data as base64 for verification/debugging
+		// The actual report is binary (protobuf for SNP/TDX, JWT for Azure)
+		report["attestation_raw_base64"] = base64.StdEncoding.EncodeToString(ext.Value)
+
+		// For SNP/TDX, we could parse the protobuf here if we import the cocos libraries
+		// For now, we include the raw data and basic metadata
+		break
 	}
 
 	return report

@@ -69,6 +69,7 @@ type Event struct {
 	// Security & Compliance
 	TLSVersion      string   `json:"tls_version,omitempty"`
 	CipherSuite     string   `json:"cipher_suite,omitempty"`
+	PeerCertIssuer  string   `json:"peer_cert_issuer,omitempty"`
 	ContentFiltered bool     `json:"content_filtered"`
 	PIIDetected     bool     `json:"pii_detected"`
 	ComplianceTags  []string `json:"compliance_tags,omitempty"`
@@ -331,6 +332,17 @@ func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Hea
 		return
 	}
 
+	// Extract TLS connection details (available for any TLS connection)
+	if tlsVersion := headers.Get("X-TLS-Version"); tlsVersion != "" {
+		event.TLSVersion = tlsVersion
+	}
+	if cipherSuite := headers.Get("X-TLS-Cipher-Suite"); cipherSuite != "" {
+		event.CipherSuite = cipherSuite
+	}
+	if peerCertIssuer := headers.Get("X-TLS-Peer-Cert-Issuer"); peerCertIssuer != "" {
+		event.PeerCertIssuer = peerCertIssuer
+	}
+
 	// Check for attestation type header (indicates aTLS was configured)
 	if atlsType := headers.Get("X-Attestation-Type"); atlsType != "" {
 		event.AttestationType = atlsType
@@ -359,6 +371,14 @@ func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Hea
 		if handshakeMs := headers.Get("X-ATLS-Handshake-Ms"); handshakeMs != "" {
 			if ms, err := strconv.ParseFloat(handshakeMs, 64); err == nil {
 				event.ATLSHandshakeMs = ms
+			}
+		}
+
+		// Capture attestation report (JSON encoded)
+		if reportJSON := headers.Get("X-Attestation-Report"); reportJSON != "" {
+			var report map[string]interface{}
+			if err := json.Unmarshal([]byte(reportJSON), &report); err == nil {
+				event.AttestationReport = report
 			}
 		}
 	}
@@ -395,12 +415,21 @@ func (am *auditMiddleware) logAuditEvent(ctx context.Context, event *Event) {
 		slog.Bool("content_filtered", event.ContentFiltered),
 	)
 
+	// Add TLS connection details
 	if event.TLSVersion != "" {
-		logAttrs = append(logAttrs, slog.String("tls_version", event.TLSVersion))
+		logAttrs = append(logAttrs,
+			slog.String("tls_version", event.TLSVersion),
+		)
+		if event.CipherSuite != "" {
+			logAttrs = append(logAttrs, slog.String("cipher_suite", event.CipherSuite))
+		}
+		if event.PeerCertIssuer != "" {
+			logAttrs = append(logAttrs, slog.String("peer_cert_issuer", event.PeerCertIssuer))
+		}
 	}
 
-	// Add attestation details if aTLS was used
-	if event.ATLSHandshake {
+	// Add attestation details if aTLS was configured or used
+	if event.ATLSHandshake || event.AttestationType != "" {
 		logAttrs = append(logAttrs,
 			slog.Bool("atls_handshake", event.ATLSHandshake),
 			slog.Float64("atls_handshake_ms", event.ATLSHandshakeMs),
