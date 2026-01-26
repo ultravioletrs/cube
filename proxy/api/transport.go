@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -28,6 +29,13 @@ import (
 
 const ContentType = "application/json"
 
+// GuardrailsConfig holds configuration for the guardrails sidecar service.
+type GuardrailsConfig struct {
+	Enabled  bool
+	URL      string
+	AgentURL string
+}
+
 func MakeHandler(
 	svc proxy.Service,
 	instanceID string,
@@ -36,6 +44,7 @@ func MakeHandler(
 	idp supermq.IDProvider,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
+	guardrailsCfg GuardrailsConfig,
 ) http.Handler {
 	endpoints := endpoint.MakeEndpoints(svc)
 
@@ -132,6 +141,25 @@ func makeProxyHandler(
 	}
 }
 
+// copyAttestationHeaders copies attestation-related headers from the upstream response
+// to the response writer for audit logging purposes.
+func copyAttestationHeaders(w http.ResponseWriter, resp *http.Response) {
+	attestationHeaders := []string{
+		"X-Attestation-Type",
+		"X-Attestation-OK",
+		"X-Attestation-Error",
+		"X-Attestation-Nonce",
+		"X-ATLS-Handshake",
+		"X-ATLS-Handshake-Ms",
+	}
+
+	for _, h := range attestationHeaders {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+}
+
 func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 	w.Header().Set("Content-Type", ContentType)
 
@@ -167,6 +195,7 @@ func singleJoiningSlash(a, b string) string {
 func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router) {
 	targetURL, stripPrefix, err := rter.DetermineTarget(r)
 	if err != nil {
+		log.Printf("Failed to determine target: %v", err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 
 		return
@@ -174,6 +203,7 @@ func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.Ro
 
 	target, err := url.Parse(targetURL)
 	if err != nil {
+		log.Printf("Invalid target URL %s: %v", targetURL, err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 
 		return
@@ -182,8 +212,15 @@ func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.Ro
 	prxy := httputil.NewSingleHostReverseProxy(target)
 	prxy.Transport = transport
 
-	prxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, _ error) {
+	prxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
+		log.Printf("Proxy error: %v", err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
+	}
+
+	// Add ModifyResponse hook to inject attestation headers for audit logging
+	prxy.ModifyResponse = func(resp *http.Response) error {
+		copyAttestationHeaders(w, resp)
+		return nil
 	}
 
 	prxy.Director = func(req *http.Request) {
