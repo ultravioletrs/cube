@@ -37,7 +37,6 @@ func MakeHandler(
 	idp supermq.IDProvider,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
-	guardrailsEnabled bool,
 ) http.Handler {
 	endpoints := endpoint.MakeEndpoints(svc)
 
@@ -78,9 +77,7 @@ func MakeHandler(
 	)).ServeHTTP)
 
 	mux.Route("/{domainID}", func(r chi.Router) {
-		// Use both standard auth middleware and model auth middleware
-		// The model auth middleware will check for X-Model-Authorization if Authorization is missing
-		r.Use(middleware.ModelAuthMiddleware(authn), authn.Middleware(), api.RequestIDMiddleware(idp))
+		r.Use(middleware.ModelAuthMiddleware(), authn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)
 
 		r.Get("/attestation/policy", kithttp.NewServer(

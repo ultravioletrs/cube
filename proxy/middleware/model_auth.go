@@ -6,8 +6,6 @@ package middleware
 import (
 	"net/http"
 	"strings"
-
-	mgauthn "github.com/absmach/supermq/pkg/authn"
 )
 
 const (
@@ -17,13 +15,7 @@ const (
 	bearerPrefix        = "Bearer "
 )
 
-// ModelAuthMiddleware creates an HTTP middleware that checks for X-Model-Authorization
-// header on guardrails requests and copies it to the Authorization header if present.
-// This allows the guardrails service to authenticate requests using the original
-// user's token when making callbacks to the proxy/agent.
-//
-// The middleware only activates when X-Guardrails-Request header is set to "true".
-func ModelAuthMiddleware(authn mgauthn.AuthNMiddleware) func(http.Handler) http.Handler {
+func ModelAuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Header.Get(guardrailsReqHeader) != "true" {
