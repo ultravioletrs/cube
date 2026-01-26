@@ -172,6 +172,14 @@ func makeProxyHandler(
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		}
 
+		// Add ModifyResponse hook to inject attestation headers for audit logging
+		prxy.ModifyResponse = func(resp *http.Response) error {
+			// Copy attestation headers from response to the response writer
+			// This ensures they are captured by the audit middleware
+			copyAttestationHeaders(w, resp)
+			return nil
+		}
+
 		originalDirector := prxy.Director
 		prxy.Director = func(req *http.Request) {
 			originalDirector(req)
@@ -197,6 +205,25 @@ func makeProxyHandler(
 
 		// Proceed to proxy
 		prxy.ServeHTTP(w, r)
+	}
+}
+
+// copyAttestationHeaders copies attestation-related headers from the upstream response
+// to the response writer for audit logging purposes.
+func copyAttestationHeaders(w http.ResponseWriter, resp *http.Response) {
+	attestationHeaders := []string{
+		"X-Attestation-Type",
+		"X-Attestation-OK",
+		"X-Attestation-Error",
+		"X-Attestation-Nonce",
+		"X-ATLS-Handshake",
+		"X-ATLS-Handshake-Ms",
+	}
+
+	for _, h := range attestationHeaders {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
 	}
 }
 
@@ -263,13 +290,16 @@ func guardrailsHandler(
 		guardrailsURL := cfg.URL + "/guardrails/messages"
 		log.Printf("guardrailsHandler: Forwarding to guardrails - URL: %s", guardrailsURL)
 
-		guardrailsBody, guardrailsStatus, err := forwardRequest(ctx, client, guardrailsURL, bodyBytes)
+		guardrailsBody, guardrailsStatus, respHeaders, err := forwardRequest(ctx, client, guardrailsURL, bodyBytes)
 		if err != nil {
 			log.Printf(" guardrailsHandler: Failed to call guardrails: %v", err)
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 
 			return
 		}
+
+		// Copy attestation headers for audit logging
+		copyAttestationHeadersFromMap(w, respHeaders)
 
 		w.Header().Set("Content-Type", ContentType)
 		w.WriteHeader(guardrailsStatus)
@@ -282,24 +312,43 @@ func forwardRequest(
 	client *http.Client,
 	railsURL string,
 	body []byte,
-) (b []byte, status int, err error) {
+) (b []byte, status int, headers http.Header, err error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, railsURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
 	req.Header.Set("Content-Type", ContentType)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 
-	return respBody, resp.StatusCode, nil
+	return respBody, resp.StatusCode, resp.Header, nil
+}
+
+// copyAttestationHeadersFromMap copies attestation-related headers from a header map
+// to the response writer for audit logging purposes.
+func copyAttestationHeadersFromMap(w http.ResponseWriter, headers http.Header) {
+	attestationHeaders := []string{
+		"X-Attestation-Type",
+		"X-Attestation-OK",
+		"X-Attestation-Error",
+		"X-Attestation-Nonce",
+		"X-ATLS-Handshake",
+		"X-ATLS-Handshake-Ms",
+	}
+
+	for _, h := range attestationHeaders {
+		if v := headers.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
 }

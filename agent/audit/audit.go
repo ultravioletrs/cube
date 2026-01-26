@@ -331,10 +331,14 @@ func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Hea
 		return
 	}
 
-	// Check for aTLS handshake indicator
+	// Check for attestation type header (indicates aTLS was configured)
 	if atlsType := headers.Get("X-Attestation-Type"); atlsType != "" {
-		event.ATLSHandshake = true
 		event.AttestationType = atlsType
+
+		// Check if an actual aTLS handshake occurred
+		if atlsHandshake := headers.Get("X-ATLS-Handshake"); atlsHandshake == "true" {
+			event.ATLSHandshake = true
+		}
 
 		// Parse attestation OK status
 		if atlsOK := headers.Get("X-Attestation-OK"); atlsOK == "true" {

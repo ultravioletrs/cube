@@ -70,9 +70,12 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 
 	handshakeDuration := time.Since(start)
 
+	// Check if aTLS is expected based on configuration
+	atlsExpected := t.attestationType != "" && t.attestationType != "NoCC"
+
 	// Capture attestation result
 	result := &AttestationResult{
-		ATLSHandshake:     t.attestationType != "" && t.attestationType != "NoCC",
+		ATLSHandshake:     false, // Will be set to true only if we have actual TLS state
 		HandshakeDuration: handshakeDuration,
 		AttestationType:   t.attestationType,
 	}
@@ -80,15 +83,22 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	// Extract TLS connection state if available
 	if resp != nil && resp.TLS != nil {
 		t.extractTLSDetails(result, resp.TLS, req)
+		// Only mark as aTLS handshake if we actually have TLS and aTLS was expected
+		result.ATLSHandshake = atlsExpected
 	}
 
-	// Determine attestation status based on response
+	// Determine attestation status based on response and TLS state
 	if err != nil {
 		result.AttestationOK = false
 		result.AttestationError = err.Error()
 	} else if result.ATLSHandshake {
 		// If we got a successful response with aTLS, attestation passed
+		// (the TLS handshake would have failed if attestation failed)
 		result.AttestationOK = true
+	} else if atlsExpected && resp != nil && resp.TLS == nil {
+		// aTLS was expected but no TLS connection - this is an error
+		result.AttestationOK = false
+		result.AttestationError = "aTLS expected but connection is not TLS"
 	}
 
 	// Store the result
@@ -96,20 +106,22 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	t.lastResult = result
 	t.mu.Unlock()
 
-	// Add attestation result to request context for downstream use
-	if req.Context() != nil && resp != nil {
-		// Store in response header for audit middleware to pick up
-		// (context doesn't flow back from RoundTrip)
-		if result.ATLSHandshake {
+	// Add attestation result to response headers for audit middleware to pick up
+	// (context doesn't flow back from RoundTrip, so we use headers)
+	if resp != nil {
+		// Always set attestation headers when aTLS is configured (even if not actually used)
+		// This allows the audit log to show the expected vs actual state
+		if atlsExpected || result.ATLSHandshake {
 			resp.Header.Set("X-Attestation-Type", result.AttestationType)
 			resp.Header.Set("X-Attestation-OK", boolToString(result.AttestationOK))
+			resp.Header.Set("X-ATLS-Handshake", boolToString(result.ATLSHandshake))
+			resp.Header.Set("X-ATLS-Handshake-Ms", floatToString(float64(result.HandshakeDuration.Nanoseconds())/1e6))
 			if result.AttestationError != "" {
 				resp.Header.Set("X-Attestation-Error", result.AttestationError)
 			}
 			if result.AttestationNonce != "" {
 				resp.Header.Set("X-Attestation-Nonce", result.AttestationNonce)
 			}
-			resp.Header.Set("X-ATLS-Handshake-Ms", floatToString(float64(result.HandshakeDuration.Nanoseconds()) / 1e6))
 		}
 	}
 
