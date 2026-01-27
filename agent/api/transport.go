@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package api provides HTTP transport layer for the agent service.
-package api //nolint:revive // api is a standard package name for HTTP handlers
+package api
 
 import (
 	"context"
