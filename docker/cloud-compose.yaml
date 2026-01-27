@@ -14,6 +14,7 @@ volumes:
   supermq-domains-db-volume:
   supermq-domains-redis-volume:
   cube-proxy-db-volume:
+  cube-guardrails-db-volume:
 
 networks:
   cube-cloud-network:
@@ -583,6 +584,7 @@ services:
       - auth
       - fluent-bit
       - cube-proxy-db
+      - guardrails
     environment:
       UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
       UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
@@ -609,6 +611,12 @@ services:
       UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
       UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
       UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
+      UV_CUBE_GUARDRAILS_ENABLED: ${UV_CUBE_GUARDRAILS_ENABLED}
+      UV_CUBE_GUARDRAILS_URL: ${UV_CUBE_GUARDRAILS_URL}
+      # Agent maTLS Configuration
+      UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
+      UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.pem}
     volumes:
       - type: bind
         source: ./config.json
@@ -630,6 +638,72 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
+      # Agent mTLS client certificates
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_CERT:-/etc/cube/certs/client.crt}
+        target: /etc/cube/agent-certs/client.crt
+        read_only: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_KEY:-/etc/cube/certs/client.key}
+        target: /etc/cube/agent-certs/client.key
+        read_only: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_SERVER_CA_CERTS:-/etc/cube/certs/ca.pem}
+        target: /etc/cube/agent-certs/ca.pem
+        read_only: true
+      # Attestation policy
+      - type: bind
+        source: ${UV_CUBE_AGENT_ATTESTATION_POLICY:-./attestation-policy.json}
+        target: /etc/cube/attestation-policy.json
+        read_only: true
     labels:
       logging: "cube-proxy"
       service: "proxy"
+
+  cube-guardrails-db:
+    image: postgres:16.2-alpine
+    container_name: cube-cloud-cube-guardrails-db
+    profiles: ["cloud"]
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${UV_GUARDRAILS_DB_USER}
+      POSTGRES_PASSWORD: ${UV_GUARDRAILS_DB_PASS}
+      POSTGRES_DB: ${UV_GUARDRAILS_DB_NAME}
+    networks:
+      - cube-cloud-network
+    volumes:
+      - cube-guardrails-db-volume:/var/lib/postgresql/data
+
+  guardrails:
+    container_name: cube-cloud-guardrails
+    profiles: ["cloud"]
+    image: ghcr.io/ultravioletrs/cube/guardrails:latest
+    networks:
+      - cube-cloud-network
+    restart: unless-stopped
+    depends_on:
+      - cube-guardrails-db
+    environment:
+      - PYTHONPATH=/app
+      - UVICORN_HOST=0.0.0.0
+      - UVICORN_PORT=8001
+      - UVICORN_LOG_LEVEL=info
+      - TRANSFORMERS_CACHE=/app/cache
+      - HF_HOME=/app/cache
+      - XDG_CACHE_HOME=/app/cache
+      - UV_GUARDRAILS_DB_HOST=${UV_GUARDRAILS_DB_HOST}
+      - UV_GUARDRAILS_DB_PORT=${UV_GUARDRAILS_DB_PORT}
+      - UV_GUARDRAILS_DB_USER=${UV_GUARDRAILS_DB_USER}
+      - UV_GUARDRAILS_DB_PASS=${UV_GUARDRAILS_DB_PASS}
+      - UV_GUARDRAILS_DB_NAME=${UV_GUARDRAILS_DB_NAME}
+    volumes:
+      - ../guardrails/rails:/app/rails:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/guardrails/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      logging: "guardrails"
+      service: "guardrails"

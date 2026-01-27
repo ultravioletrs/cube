@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-      - cube-92
     paths:
       - "docker/cloud-compose.yaml"
       - "docker/supermq-compose.yaml"
@@ -95,8 +94,11 @@ jobs:
             sed -i "s|__SMQ_EMAIL_USERNAME__|${{ secrets.SMQ_EMAIL_USERNAME }}|g" .env
             sed -i "s|__SMQ_EMAIL_PASSWORD__|${{ secrets.SMQ_EMAIL_PASSWORD }}|g" .env
             sed -i "s|__SMQ_EMAIL_FROM_ADDRESS__|${{ secrets.SMQ_EMAIL_FROM_ADDRESS }}|g" .env
+            sed -i "s|admin@example.com|${{ secrets.CUBE_ADMIN_EMAIL }}|g" .env
+            sed -i "s|"m2N2Lfno"|"${{ secrets.CUBE_ADMIN_PASSWORD }}"|g" .env
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
-            sed -i "s|__CUBE_AGENT_URL__|https://${{ secrets.CUBE_SERVER_IP }}:6193|g" .env
+            sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" .env
+            sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" config.json
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
@@ -117,7 +119,7 @@ jobs:
             docker compose -f cloud-compose.yaml --profile cloud ps 2>&1
 
             echo "=== Verifying Critical Services ==="
-            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy fluent-bit"
+            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy guardrails fluent-bit"
             ALL_RUNNING=true
 
             for SERVICE in $SERVICES; do

@@ -6,7 +6,7 @@ models:
     engine: ollama
     model: llama3.2:latest
     parameters:
-      base_url: http://cube-agent:8901
+      base_url: __CUBE_INTERNAL_AGENT_URL__
 
 default_llm_call_parameters:
   temperature: 0.001

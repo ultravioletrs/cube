@@ -3,7 +3,7 @@
     "routes": [
       {
         "name": "attestation",
-        "target_url": "https://10.172.192.41:6193",
+        "target_url": "__CUBE_INTERNAL_AGENT_URL__",
         "matchers": [
           {
             "condition": "path",
@@ -41,7 +41,7 @@
       },
       {
         "name": "agent",
-        "target_url": "https://10.172.192.41:6193",
+        "target_url": "__CUBE_INTERNAL_AGENT_URL__",
         "default_rule": true
       }
     ]
