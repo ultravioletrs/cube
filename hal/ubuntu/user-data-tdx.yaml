@@ -105,20 +105,24 @@ runcmd:
   - systemctl restart sshd
   - sleep 2
   # TDX Setup for Ubuntu 24.04+
-  # Ubuntu 24.04 (Noble) has TDX guest support built into the kernel
-  # No additional kernel installation or module loading is required
-  # The kernel CONFIG_INTEL_TDX_GUEST is enabled by default
+  # Install TDX kernel modules and configure module loading
   - |
-    # Verify TDX guest support
-    if [ -e /sys/firmware/tdx ]; then
+    KERNEL_VERSION=$(uname -r)
+    echo "Installing TDX modules for kernel ${KERNEL_VERSION}..."
+    apt-get update
+    apt-get install -y linux-modules-extra-${KERNEL_VERSION} || apt-get install -y linux-modules-extra-generic || echo "Module package install failed"
+    # Configure TDX module to load at boot
+    mkdir -p /etc/modules-load.d
+    echo "tdx_guest" > /etc/modules-load.d/tdx.conf
+    # Load TDX guest module immediately
+    modprobe tdx_guest 2>/dev/null || echo "tdx_guest module not available (will load after reboot)"
+    # Verify TDX device
+    if [ -e /dev/tdx_guest ]; then
+      echo "TDX: /dev/tdx_guest device available"
+    elif [ -e /sys/firmware/tdx ]; then
       echo "TDX: Running inside a TDX Trust Domain"
-      echo "TDX attestation available via /dev/tdx_guest or configfs"
-    elif grep -q tdx_guest /proc/modules 2>/dev/null; then
-      echo "TDX: Guest module loaded"
-    elif grep -q "tdx" /proc/cpuinfo 2>/dev/null; then
-      echo "TDX: CPU supports TDX"
     else
-      echo "TDX: Not detected (may be running in non-TDX mode)"
+      echo "TDX: Module configured, will be available after reboot"
     fi
   - mkdir -p /etc/cube
   - mkdir -p /etc/cube/certs

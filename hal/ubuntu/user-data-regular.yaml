@@ -2,8 +2,7 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 #
-# Base cloud-init configuration for Cube AI VMs
-# This file is included by CVM-specific configurations (TDX/SNP)
+# Cloud-init configuration for regular (non-CVM) VMs
 
 package_update: true
 package_upgrade: false
@@ -93,20 +92,43 @@ write_files:
       /usr/local/bin/ollama pull starcoder2:3b
       /usr/local/bin/ollama pull nomic-embed-text:v1.5
     permissions: '0755'
-  - path: /usr/local/bin/setup-certs.sh
-    content: |
-      #!/bin/bash
-      # Generate certificates for Cube Agent mTLS
-      mkdir -p /etc/cube/certs
-      # Generate CA certificate
-      openssl req -x509 -newkey rsa:4096 -keyout /etc/cube/certs/ca.key -out /etc/cube/certs/ca.crt -days 365 -nodes -subj "/CN=Cube-CA"
-      # Generate server certificate
-      openssl req -newkey rsa:4096 -keyout /etc/cube/certs/server.key -out /etc/cube/certs/server.csr -nodes -subj "/CN=cube-agent"
-      openssl x509 -req -in /etc/cube/certs/server.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/server.crt -days 365
-      # Generate client certificate for mTLS
-      openssl req -newkey rsa:4096 -keyout /etc/cube/certs/client.key -out /etc/cube/certs/client.csr -nodes -subj "/CN=cube-client"
-      openssl x509 -req -in /etc/cube/certs/client.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/client.crt -days 365
-      # Set permissions
-      chmod 600 /etc/cube/certs/*.key
-      chmod 644 /etc/cube/certs/*.crt
-    permissions: '0755'
+
+runcmd:
+  - echo 'ultraviolet:password' | chpasswd
+  - |
+    cat > /etc/ssh/sshd_config.d/60-cloudimg-settings.conf << 'SSHEOF'
+    PasswordAuthentication yes
+    SSHEOF
+  - systemctl restart sshd
+  - sleep 2
+  - mkdir -p /etc/cube
+  - mkdir -p /etc/cube/certs
+  - |
+    # Generate CA certificate
+    openssl req -x509 -newkey rsa:4096 -keyout /etc/cube/certs/ca.key -out /etc/cube/certs/ca.crt -days 365 -nodes -subj "/CN=Cube-CA"
+    # Generate server certificate
+    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/server.key -out /etc/cube/certs/server.csr -nodes -subj "/CN=cube-agent"
+    openssl x509 -req -in /etc/cube/certs/server.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/server.crt -days 365
+    # Generate client certificate for mTLS
+    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/client.key -out /etc/cube/certs/client.csr -nodes -subj "/CN=cube-client"
+    openssl x509 -req -in /etc/cube/certs/client.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/client.crt -days 365
+    # Set permissions
+    chmod 600 /etc/cube/certs/*.key
+    chmod 644 /etc/cube/certs/*.crt
+  - mkdir -p /var/lib/ollama
+  - mkdir -p /home/ollama/.ollama
+  - chown -R ollama:ollama /var/lib/ollama
+  - chown -R ollama:ollama /home/ollama
+  - curl -fsSL https://ollama.com/install.sh | sh
+  - git clone https://github.com/ultravioletrs/cube.git /tmp/cube
+  - cd /tmp/cube && git fetch origin pull/88/head:pr-88 && git checkout pr-88
+  - export HOME=/root
+  - cd /tmp/cube && /usr/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
+  - systemctl daemon-reload
+  - systemctl enable ollama.service
+  - systemctl start ollama.service
+  - systemctl enable cube-agent.service
+  - systemctl start cube-agent.service
+  - nohup /usr/local/bin/pull-ollama-models.sh > /var/log/ollama-pull.log 2>&1 &
+
+final_message: "Cube Agent and Ollama services started."

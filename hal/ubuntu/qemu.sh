@@ -131,7 +131,7 @@ function start_regular() {
     echo "Starting QEMU VM in regular mode (no CVM)..."
 
     create_ovmf_vars_copy
-    create_seed_image "${SCRIPT_DIR}/user-data-tdx.yaml"
+    create_seed_image "${SCRIPT_DIR}/user-data-regular.yaml"
 
     $QEMU_BINARY \
         -name "$VM_NAME" \

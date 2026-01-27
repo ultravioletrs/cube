@@ -11,7 +11,7 @@ Ubuntu 24.04 (Noble) has built-in support for both Intel TDX and AMD SEV-SNP con
 - `qemu.sh` - Main QEMU launch script with TDX/SNP support
 - `user-data-tdx.yaml` - Cloud-init configuration for Intel TDX VMs
 - `user-data-snp.yaml` - Cloud-init configuration for AMD SEV-SNP VMs
-- `user-data-base.yaml` - Base configuration template (reference only)
+- `user-data-regular.yaml` - Cloud-init configuration for regular (non-CVM) VMs
 
 ## Usage
 
