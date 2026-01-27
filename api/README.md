@@ -7,9 +7,11 @@ This directory contains OpenAPI 3.0 specifications for all HTTP endpoints expose
 ### Proxy Service
 
 #### `proxy-routes.yaml`
+
 REST API for managing dynamic routing rules. This enables runtime creation, retrieval, updating, and deletion of route rules that determine how requests are forwarded to backend services.
 
 **Key Endpoints:**
+
 - `POST /api/routes` - Create a new routing rule
 - `GET /api/routes` - List all routing rules
 - `GET /api/routes/{name}` - Get a specific routing rule
@@ -17,16 +19,20 @@ REST API for managing dynamic routing rules. This enables runtime creation, retr
 - `DELETE /api/routes/{name}` - Delete a routing rule
 
 #### `proxy-attestation.yaml`
+
 API for managing attestation policies at the proxy level. Policies define trust and verification requirements for requests.
 
 **Key Endpoints:**
+
 - `POST /attestation/policy` - Update global attestation policy
 - `GET /{domainID}/attestation/policy` - Get attestation policy for a domain
 
 #### `proxy-request-forwarding.yaml`
+
 API for forwarding requests to backend services through the proxy with dynamic routing. Supports all HTTP methods (GET, POST, PUT, DELETE, PATCH).
 
 **Key Endpoints:**
+
 - `GET /{domainID}/{path}` - Forward GET request
 - `POST /{domainID}/{path}` - Forward POST request
 - `PUT /{domainID}/{path}` - Forward PUT request
@@ -87,7 +93,8 @@ These OpenAPI specifications can be used to:
 ### Example: Swagger UI
 
 To view these specs in Swagger UI, serve the files and navigate to:
-```
+
+```bash
 https://editor.swagger.io/?url=<path-to-spec>
 ```
 
