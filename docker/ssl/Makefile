@@ -22,6 +22,10 @@ AUTH_GRPC_SERVER_CN=auth
 AUTH_GRPC_CLIENT_CN=auth-client
 AUTH_GRPC_SERVER_CRT_FILE_NAME=auth-grpc-server
 AUTH_GRPC_CLIENT_CRT_FILE_NAME=auth-grpc-client
+AGENT_CRT_LOCATION = agent
+AGENT_CA_CN = Cube_Agent_CA
+AGENT_SERVER_CN = cube-agent
+AGENT_CLIENT_CN = cube-agent-client
 
 define GRPC_CERT_CONFIG
 [req]
@@ -44,6 +48,28 @@ subjectAltName = @alt_names
 DNS.1 = <<SERVICE_NAME>>
 endef
 
+define AGENT_CERT_CONFIG
+[req]
+req_extensions = v3_req
+distinguished_name = dn
+prompt = no
+
+[dn]
+CN = <<SERVICE_NAME>>
+C  = RS
+ST = RS
+L  = BELGRADE
+O  = SUPERMQ
+OU = SUPERMQ
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = <<SERVICE_NAME>>
+DNS.2 = localhost
+endef
+
 define ANNOUNCE_BODY
 Version $(VERSION) of $(PACKAGE_NAME) has been released.
 
@@ -51,7 +77,7 @@ It can be downloaded from $(DOWNLOAD_URL).
 
 etc, etc.
 endef
-all: clean_certs ca server_cert things_grpc_certs auth_grpc_certs
+all: clean_certs ca server_cert things_grpc_certs auth_grpc_certs agent_certs
 
 # CA name and key is "ca".
 ca:
@@ -164,6 +190,53 @@ auth_grpc_certs:
 			-extensions v3_req
 
 	rm -rf  $(CRT_LOCATION)/$(AUTH_GRPC_CLIENT_CRT_FILE_NAME).csr $(CRT_LOCATION)/$(AUTH_GRPC_CLIENT_CRT_FILE_NAME).conf
+
+agent_certs: agent_ca agent_server_cert agent_client_cert
+
+agent_ca:
+	# Create agent directory if it doesn't exist
+	mkdir -p $(AGENT_CRT_LOCATION)
+	# Generate Agent CA certificate and key
+	openssl req -newkey rsa:2048 -x509 -nodes -sha512 -days 1095 \
+				-keyout $(AGENT_CRT_LOCATION)/ca.key -out $(AGENT_CRT_LOCATION)/ca.crt \
+				-subj "/CN=$(AGENT_CA_CN)/O=$(O)/OU=$(OU_CA)/emailAddress=$(EA)"
+
+agent_server_cert:
+	# Create agent server config with SAN
+	$(file > $(AGENT_CRT_LOCATION)/agent-server.conf,$(subst <<SERVICE_NAME>>,$(AGENT_SERVER_CN),$(AGENT_CERT_CONFIG)) )
+	# Create agent server key and CSR
+	openssl req -new -sha256 -newkey rsa:4096 -nodes \
+				-keyout $(AGENT_CRT_LOCATION)/agent-key.pem \
+				-out $(AGENT_CRT_LOCATION)/agent-server.csr \
+				-config $(AGENT_CRT_LOCATION)/agent-server.conf \
+				-extensions v3_req
+	# Sign agent server CSR with agent CA
+	openssl x509 -req -days 730 \
+				-in $(AGENT_CRT_LOCATION)/agent-server.csr \
+				-CA $(AGENT_CRT_LOCATION)/ca.crt \
+				-CAkey $(AGENT_CRT_LOCATION)/ca.key \
+				-CAcreateserial \
+				-out $(AGENT_CRT_LOCATION)/agent-cert.pem \
+				-extfile $(AGENT_CRT_LOCATION)/agent-server.conf \
+				-extensions v3_req
+	# Remove CSR and config
+	rm -rf $(AGENT_CRT_LOCATION)/agent-server.csr $(AGENT_CRT_LOCATION)/agent-server.conf
+
+agent_client_cert:
+	# Create agent client key and CSR
+	openssl req -new -sha256 -newkey rsa:4096 -nodes \
+				-keyout $(AGENT_CRT_LOCATION)/client-key.pem \
+				-out $(AGENT_CRT_LOCATION)/agent-client.csr \
+				-subj "/CN=$(AGENT_CLIENT_CN)/O=$(O)/OU=$(OU_CRT)/emailAddress=$(EA)"
+	# Sign agent client CSR with agent CA
+	openssl x509 -req -days 730 \
+				-in $(AGENT_CRT_LOCATION)/agent-client.csr \
+				-CA $(AGENT_CRT_LOCATION)/ca.crt \
+				-CAkey $(AGENT_CRT_LOCATION)/ca.key \
+				-CAcreateserial \
+				-out $(AGENT_CRT_LOCATION)/client-cert.pem
+	# Remove CSR
+	rm $(AGENT_CRT_LOCATION)/agent-client.csr
 	
 clean_certs:
 	rm -r $(CRT_LOCATION)/*.crt
