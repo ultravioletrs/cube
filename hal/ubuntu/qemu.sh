@@ -1,13 +1,17 @@
 #!/bin/bash
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
+#
+# QEMU launch script for Ubuntu cloud images with CVM (TDX/SNP) support
 
+set -e
+
+# Default configuration
 BASE_IMAGE_URL="https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img"
 BASE_IMAGE="ubuntu-base.qcow2"
 CUSTOM_IMAGE="ubuntu-custom.qcow2"
 DISK_SIZE="35G"
 SEED_IMAGE="seed.img"
-USER_DATA="user-data"
 META_DATA="meta-data"
 VM_NAME="cube-ai-vm"
 RAM="16384M"
@@ -17,264 +21,277 @@ PASSWORD="password"
 QEMU_BINARY="qemu-system-x86_64"
 OVMF_CODE="/usr/share/OVMF/OVMF_CODE.fd"
 OVMF_VARS="/usr/share/OVMF/OVMF_VARS.fd"
-OVMF_VARS_COPY="OVMF_VARS.fd"  # Per-VM copy of OVMF vars
-ENABLE_CVM="${ENABLE_CVM:-auto}"  # Options: auto, tdx, none
+OVMF_VARS_COPY="OVMF_VARS.fd"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if ! command -v wget &> /dev/null; then
-  echo "wget is not installed. Please install it and try again."
-  exit 1
-fi
+# CVM mode: auto, tdx, snp, none
+ENABLE_CVM="${ENABLE_CVM:-auto}"
 
-if ! command -v cloud-localds &> /dev/null; then
-  echo "cloud-localds is not installed. Please install it and try again."
-  exit 1
-fi
+function check_dependencies() {
+    local missing=()
 
-if ! command -v qemu-system-x86_64 &> /dev/null; then
-  echo "qemu-system-x86_64 is not installed. Please install it and try again."
-  exit 1
-fi
+    if ! command -v wget &> /dev/null; then
+        missing+=("wget")
+    fi
 
-if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 1>&2
-   exit 1
-fi
+    if ! command -v cloud-localds &> /dev/null; then
+        missing+=("cloud-localds (cloud-image-utils)")
+    fi
 
-if [ ! -f $BASE_IMAGE ]; then
-  echo "Downloading base Ubuntu image..."
-  wget -q $BASE_IMAGE_URL -O $BASE_IMAGE
-fi
+    if ! command -v qemu-system-x86_64 &> /dev/null; then
+        missing+=("qemu-system-x86_64")
+    fi
 
-echo "Creating custom QEMU image..."
-qemu-img create -f qcow2 -b $BASE_IMAGE -F qcow2 $CUSTOM_IMAGE $DISK_SIZE
+    if [ ${#missing[@]} -ne 0 ]; then
+        echo "Missing dependencies: ${missing[*]}"
+        echo "Please install them and try again."
+        exit 1
+    fi
+}
 
-# Create a writable copy of OVMF_VARS for this VM instance
-if [ ! -f $OVMF_VARS_COPY ]; then
-  echo "Creating OVMF vars copy..."
-  cp $OVMF_VARS $OVMF_VARS_COPY
-fi
+function check_root() {
+    if [[ $EUID -ne 0 ]]; then
+        echo "This script must be run as root" 1>&2
+        exit 1
+    fi
+}
 
-# We don't upgrade the system since this changes initramfs
-cat <<'EOF' > $USER_DATA
-#cloud-config
-package_update: true
-package_upgrade: false
+function detect_cvm_support() {
+    local tdx_available=false
+    local snp_available=false
 
-users:
-  - name: ultraviolet
-    plain_text_passwd: password
-    lock_passwd: false
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    shell: /bin/bash
-  - name: ollama
-    system: true
-    home: /var/lib/ollama
-    shell: /usr/sbin/nologin
+    # Check for TDX host support
+    if dmesg 2>/dev/null | grep -q "virt/tdx: module initialized"; then
+        tdx_available=true
+        echo "TDX host support detected (module initialized)"
+    elif grep -q tdx /proc/cpuinfo 2>/dev/null; then
+        tdx_available=true
+        echo "TDX CPU support detected"
+    fi
 
-ssh_pwauth: true
+    # Check for SEV-SNP host support
+    if [ -e /dev/sev ]; then
+        snp_available=true
+        echo "SEV device detected"
+    fi
+    if dmesg 2>/dev/null | grep -q "SEV-SNP supported"; then
+        snp_available=true
+        echo "SEV-SNP host support detected"
+    elif grep -q sev /proc/cpuinfo 2>/dev/null; then
+        snp_available=true
+        echo "SEV CPU support detected"
+    fi
 
-packages:
-  - curl
-  - git
-  - golang-go
-  - build-essential
+    # Return detected support
+    if [ "$tdx_available" = true ]; then
+        echo "tdx"
+    elif [ "$snp_available" = true ]; then
+        echo "snp"
+    else
+        echo "none"
+    fi
+}
 
-write_files:
-  - path: /etc/cube/agent.env
-    content: |
-      UV_CUBE_AGENT_LOG_LEVEL=info
-      UV_CUBE_AGENT_HOST=0.0.0.0
-      UV_CUBE_AGENT_PORT=7001
-      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
-      UV_CUBE_AGENT_TARGET_URL=http://localhost:11434
-      UV_CUBE_AGENT_SERVER_CERT=/etc/cube/certs/server.crt
-      UV_CUBE_AGENT_SERVER_KEY=/etc/cube/certs/server.key
-      UV_CUBE_AGENT_SERVER_CA_CERTS=/etc/cube/certs/ca.crt
-      UV_CUBE_AGENT_CA_URL=https://prism.ultraviolet.rs/am-certs
-    permissions: '0644'
-  - path: /etc/systemd/system/ollama.service
-    content: |
-      [Unit]
-      Description=Ollama Service
-      After=network-online.target
-      Wants=network-online.target
+function download_base_image() {
+    if [ ! -f "$BASE_IMAGE" ]; then
+        echo "Downloading base Ubuntu image..."
+        wget -q --show-progress "$BASE_IMAGE_URL" -O "$BASE_IMAGE"
+    else
+        echo "Base image already exists: $BASE_IMAGE"
+    fi
+}
 
-      [Service]
-      Type=simple
-      User=ollama
-      Group=ollama
-      Environment="OLLAMA_HOST=0.0.0.0:11434"
-      ExecStart=/usr/local/bin/ollama serve
-      Restart=always
-      RestartSec=3
+function create_custom_image() {
+    echo "Creating custom QEMU image..."
+    qemu-img create -f qcow2 -b "$BASE_IMAGE" -F qcow2 "$CUSTOM_IMAGE" "$DISK_SIZE"
+}
 
-      [Install]
-      WantedBy=multi-user.target
-    permissions: '0644'
-  - path: /etc/systemd/system/cube-agent.service
-    content: |
-      [Unit]
-      Description=Cube Agent Service
-      After=network-online.target ollama.service
-      Wants=network-online.target
+function create_ovmf_vars_copy() {
+    if [ ! -f "$OVMF_VARS_COPY" ]; then
+        echo "Creating OVMF vars copy..."
+        cp "$OVMF_VARS" "$OVMF_VARS_COPY"
+    fi
+}
 
-      [Service]
-      Type=simple
-      EnvironmentFile=/etc/cube/agent.env
-      ExecStart=/usr/local/bin/cube-agent
-      Restart=on-failure
-      RestartSec=5
-      StartLimitBurst=5
-      StartLimitIntervalSec=60
+function create_seed_image() {
+    local user_data_file="$1"
 
-      [Install]
-      WantedBy=multi-user.target
-    permissions: '0644'
-  - path: /usr/local/bin/pull-ollama-models.sh
-    content: |
-      #!/bin/bash
-      # Wait for ollama to be ready
-      for i in $(seq 1 60); do
-        if curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
-          break
-        fi
-        sleep 2
-      done
-      # Pull models
-      /usr/local/bin/ollama pull tinyllama:1.1b
-      /usr/local/bin/ollama pull starcoder2:3b
-      /usr/local/bin/ollama pull nomic-embed-text:v1.5
-    permissions: '0755'
+    echo "Creating seed image with $user_data_file..."
 
-runcmd:
-  - echo 'ultraviolet:password' | chpasswd
-  - |
-    cat > /etc/ssh/sshd_config.d/60-cloudimg-settings.conf << 'SSHEOF'
-    PasswordAuthentication yes
-    SSHEOF
-  - systemctl restart sshd
-  - sleep 2
-  - |
-    # Install TDX-capable kernel from Ubuntu's intel-tdx PPA
-    add-apt-repository -y ppa:kobuk-team/intel-tdx || echo "PPA add failed, trying canonical tdx"
-    apt-get update || true
-    apt-get install -y linux-image-generic linux-modules-extra-generic || echo "Kernel install failed"
-    # Try to load TDX guest module
-    modprobe tdx_guest 2>/dev/null || echo "tdx_guest module not yet available (may need reboot)"
-    # Add to modules to load at boot
-    mkdir -p /etc/modules-load.d
-    echo "tdx_guest" > /etc/modules-load.d/tdx.conf
-  - mkdir -p /etc/cube
-  - mkdir -p /etc/cube/certs
-  - |
-    # Generate CA certificate
-    openssl req -x509 -newkey rsa:4096 -keyout /etc/cube/certs/ca.key -out /etc/cube/certs/ca.crt -days 365 -nodes -subj "/CN=Cube-CA"
-    # Generate server certificate
-    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/server.key -out /etc/cube/certs/server.csr -nodes -subj "/CN=cube-agent"
-    openssl x509 -req -in /etc/cube/certs/server.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/server.crt -days 365
-    # Generate client certificate for mTLS
-    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/client.key -out /etc/cube/certs/client.csr -nodes -subj "/CN=cube-client"
-    openssl x509 -req -in /etc/cube/certs/client.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/client.crt -days 365
-    # Set permissions
-    chmod 600 /etc/cube/certs/*.key
-    chmod 644 /etc/cube/certs/*.crt
-  - mkdir -p /var/lib/ollama
-  - mkdir -p /home/ollama/.ollama
-  - chown -R ollama:ollama /var/lib/ollama
-  - chown -R ollama:ollama /home/ollama
-  - curl -fsSL https://ollama.com/install.sh | sh
-  - git clone https://github.com/ultravioletrs/cube.git /tmp/cube
-  - cd /tmp/cube && git fetch origin pull/88/head:pr-88 && git checkout pr-88
-  - export HOME=/root
-  - cd /tmp/cube && /usr/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
-  - systemctl daemon-reload
-  - systemctl enable ollama.service
-  - systemctl start ollama.service
-  - systemctl enable cube-agent.service
-  - systemctl start cube-agent.service
-  - nohup /usr/local/bin/pull-ollama-models.sh > /var/log/ollama-pull.log 2>&1 &
-
-final_message: "Cube Agent and Ollama services started."
-EOF
-
-cat <<EOF > $META_DATA
+    # Create meta-data
+    cat <<EOF > "$META_DATA"
 instance-id: iid-${VM_NAME}
 local-hostname: $VM_NAME
 EOF
 
-echo "Creating ubuntu seed image..."
-cloud-localds $SEED_IMAGE $USER_DATA $META_DATA
+    cloud-localds "$SEED_IMAGE" "$user_data_file" "$META_DATA"
+}
 
-# Detect TDX support
-TDX_AVAILABLE=false
-if [ "$ENABLE_CVM" = "auto" ] || [ "$ENABLE_CVM" = "tdx" ]; then
-  # Check if TDX is initialized on the host (for creating guest VMs)
-  if dmesg | grep -q "virt/tdx: module initialized"; then
-    TDX_AVAILABLE=true
-    echo "TDX host support detected"
-  elif grep -q tdx /proc/cpuinfo; then
-    TDX_AVAILABLE=true
-    echo "TDX CPU support detected"
-  else
-    echo "TDX not available on host"
-  fi
-fi
+function start_regular() {
+    echo "Starting QEMU VM in regular mode (no CVM)..."
 
-# Override if explicitly set
-if [ "$ENABLE_CVM" = "tdx" ]; then
-  TDX_AVAILABLE=true
-  echo "TDX mode forced via ENABLE_CVM=tdx"
-elif [ "$ENABLE_CVM" = "none" ]; then
-  TDX_AVAILABLE=false
-  echo "CVM disabled via ENABLE_CVM=none"
-fi
+    create_ovmf_vars_copy
+    create_seed_image "${SCRIPT_DIR}/user-data-tdx.yaml"
 
-# Build QEMU command based on TDX availability
-QEMU_CMD="$QEMU_BINARY"
-QEMU_OPTS="-name $VM_NAME"
-QEMU_OPTS="$QEMU_OPTS -m $RAM"
-QEMU_OPTS="$QEMU_OPTS -smp $CPU"
-QEMU_OPTS="$QEMU_OPTS -enable-kvm"
-QEMU_OPTS="$QEMU_OPTS -boot d"
-QEMU_OPTS="$QEMU_OPTS -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001"
-QEMU_OPTS="$QEMU_OPTS -nographic"
-QEMU_OPTS="$QEMU_OPTS -no-reboot"
-QEMU_OPTS="$QEMU_OPTS -drive file=$SEED_IMAGE,media=cdrom"
-QEMU_OPTS="$QEMU_OPTS -drive file=$CUSTOM_IMAGE,if=none,id=disk0,format=qcow2"
-QEMU_OPTS="$QEMU_OPTS -device virtio-scsi-pci,id=scsi,disable-legacy=on"
-QEMU_OPTS="$QEMU_OPTS -device scsi-hd,drive=disk0"
+    $QEMU_BINARY \
+        -name "$VM_NAME" \
+        -m "$RAM" \
+        -smp "$CPU" \
+        -enable-kvm \
+        -boot d \
+        -cpu host \
+        -machine q35 \
+        -drive if=pflash,format=raw,unit=0,file="$OVMF_CODE",readonly=on \
+        -drive if=pflash,format=raw,unit=1,file="$OVMF_VARS_COPY" \
+        -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001 \
+        -device virtio-net-pci,netdev=vmnic,romfile= \
+        -nographic \
+        -no-reboot \
+        -drive file="$SEED_IMAGE",media=cdrom \
+        -drive file="$CUSTOM_IMAGE",if=none,id=disk0,format=qcow2 \
+        -device virtio-scsi-pci,id=scsi,disable-legacy=on \
+        -device scsi-hd,drive=disk0
+}
 
-if [ "$TDX_AVAILABLE" = true ]; then
-  echo "Starting QEMU VM with Intel TDX (Confidential VM)..."
-  # Update the -name option to include process and debug-threads
-  QEMU_OPTS=$(echo "$QEMU_OPTS" | sed "s/-name $VM_NAME/-name $VM_NAME,process=$VM_NAME,debug-threads=on/")
-  # Remove -m and add memory-backend-memfd for TDX (critical!)
-  QEMU_OPTS=$(echo "$QEMU_OPTS" | sed "s/-m $RAM//")
-  QEMU_OPTS="$QEMU_OPTS -object memory-backend-memfd,id=ram1,size=$RAM,share=true,prealloc=false"
-  QEMU_OPTS="$QEMU_OPTS -m $RAM"
-  QEMU_OPTS="$QEMU_OPTS -cpu host,pmu=off"
-  # TDX guest object with quote generation socket
-  QEMU_OPTS="$QEMU_OPTS -object {\"qom-type\":\"tdx-guest\",\"id\":\"tdx0\",\"quote-generation-socket\":{\"type\":\"vsock\",\"cid\":\"2\",\"port\":\"4050\"}}"
-  QEMU_OPTS="$QEMU_OPTS -machine q35,confidential-guest-support=tdx0,memory-backend=ram1,kernel-irqchip=split,hpet=off"
-  # Use -bios for TDX boot
-  QEMU_OPTS="$QEMU_OPTS -bios /usr/share/ovmf/OVMF.fd"
-  # Disk boot (Ubuntu cloud image)
-  QEMU_OPTS="$QEMU_OPTS -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile="
-  QEMU_OPTS="$QEMU_OPTS -nodefaults"
-  QEMU_OPTS="$QEMU_OPTS -nographic"
-  QEMU_OPTS="$QEMU_OPTS -serial mon:stdio"
-  QEMU_OPTS="$QEMU_OPTS -monitor pty"
-else
-  echo "Starting QEMU VM in regular mode (no CVM)..."
-  QEMU_OPTS="$QEMU_OPTS -drive if=pflash,format=raw,unit=0,file=$OVMF_CODE,readonly=on"
-  QEMU_OPTS="$QEMU_OPTS -drive if=pflash,format=raw,unit=1,file=$OVMF_VARS_COPY"
-  QEMU_OPTS="$QEMU_OPTS -cpu host"
-  QEMU_OPTS="$QEMU_OPTS -machine q35"
-  QEMU_OPTS="$QEMU_OPTS -device virtio-net-pci,netdev=vmnic,romfile="
-fi
+function start_tdx() {
+    echo "Starting QEMU VM with Intel TDX (Confidential VM)..."
 
-# Execute QEMU (use eval to handle complex quoting)
-echo "Full QEMU command:"
-echo "$QEMU_CMD $QEMU_OPTS"
-echo ""
-$QEMU_CMD $QEMU_OPTS
+    create_seed_image "${SCRIPT_DIR}/user-data-tdx.yaml"
+
+    $QEMU_BINARY \
+        -name "$VM_NAME,process=$VM_NAME,debug-threads=on" \
+        -m "$RAM" \
+        -smp "$CPU" \
+        -enable-kvm \
+        -cpu host,pmu=off \
+        -object memory-backend-memfd,id=ram1,size="$RAM",share=true,prealloc=false \
+        -object '{"qom-type":"tdx-guest","id":"tdx0","quote-generation-socket":{"type":"vsock","cid":"2","port":"4050"}}' \
+        -machine q35,confidential-guest-support=tdx0,memory-backend=ram1,kernel-irqchip=split,hpet=off \
+        -bios /usr/share/ovmf/OVMF.fd \
+        -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001 \
+        -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
+        -nodefaults \
+        -nographic \
+        -serial mon:stdio \
+        -monitor pty \
+        -no-reboot \
+        -drive file="$SEED_IMAGE",media=cdrom \
+        -drive file="$CUSTOM_IMAGE",if=none,id=disk0,format=qcow2 \
+        -device virtio-scsi-pci,id=scsi,disable-legacy=on,iommu_platform=true \
+        -device scsi-hd,drive=disk0 \
+        -device vhost-vsock-pci,guest-cid=3
+}
+
+function start_snp() {
+    echo "Starting QEMU VM with AMD SEV-SNP (Confidential VM)..."
+
+    local QEMU_OVMF_CODE="${QEMU_OVMF_CODE:-/var/cube-ai/OVMF.fd}"
+
+    create_seed_image "${SCRIPT_DIR}/user-data-snp.yaml"
+
+    $QEMU_BINARY \
+        -name "$VM_NAME" \
+        -m "$RAM" \
+        -smp "$CPU" \
+        -cpu EPYC-v4 \
+        -machine q35 \
+        -enable-kvm \
+        -drive if=pflash,format=raw,unit=0,file="$QEMU_OVMF_CODE",readonly=on \
+        -object memory-backend-memfd-private,id=ram1,size="$RAM",share=true \
+        -machine memory-encryption=sev0,memory-backend=ram1,kvm-type=protected \
+        -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1,discard=none \
+        -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001 \
+        -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
+        -nographic \
+        -no-reboot \
+        -drive file="$SEED_IMAGE",media=cdrom \
+        -drive file="$CUSTOM_IMAGE",if=none,id=disk0,format=qcow2 \
+        -device virtio-scsi-pci,id=scsi,disable-legacy=on \
+        -device scsi-hd,drive=disk0 \
+        -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198
+}
+
+function print_help() {
+    cat <<EOF
+Usage: $0 [command] [options]
+
+Commands:
+  start         Start the QEMU VM (auto-detect CVM support)
+  start_tdx     Start the QEMU VM with Intel TDX enabled
+  start_snp     Start the QEMU VM with AMD SEV-SNP enabled
+  start_regular Start the QEMU VM without CVM (regular KVM)
+  detect        Detect available CVM support on this host
+  help          Show this help message
+
+Environment Variables:
+  ENABLE_CVM    Force CVM mode: auto (default), tdx, snp, none
+  RAM           VM RAM size (default: 16384M)
+  CPU           Number of vCPUs (default: 8)
+  DISK_SIZE     Disk size (default: 35G)
+
+Examples:
+  $0 start              # Auto-detect and start with best available CVM
+  $0 start_tdx          # Force TDX mode
+  $0 start_snp          # Force SNP mode
+  ENABLE_CVM=none $0 start  # Disable CVM, use regular KVM
+EOF
+}
+
+function main() {
+    check_dependencies
+    check_root
+    download_base_image
+    create_custom_image
+
+    local cmd="${1:-help}"
+
+    case "$cmd" in
+        start)
+            local detected
+            if [ "$ENABLE_CVM" = "auto" ]; then
+                detected=$(detect_cvm_support)
+            else
+                detected="$ENABLE_CVM"
+            fi
+
+            case "$detected" in
+                tdx)
+                    echo "CVM mode: TDX"
+                    start_tdx
+                    ;;
+                snp)
+                    echo "CVM mode: SNP"
+                    start_snp
+                    ;;
+                none|*)
+                    echo "CVM mode: None (regular KVM)"
+                    start_regular
+                    ;;
+            esac
+            ;;
+        start_tdx)
+            start_tdx
+            ;;
+        start_snp)
+            start_snp
+            ;;
+        start_regular)
+            start_regular
+            ;;
+        detect)
+            echo "Detecting CVM support..."
+            detected=$(detect_cvm_support)
+            echo "Detected: $detected"
+            ;;
+        help|--help|-h)
+            print_help
+            ;;
+        *)
+            echo "Unknown command: $cmd"
+            print_help
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
