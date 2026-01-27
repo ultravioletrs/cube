@@ -9,7 +9,7 @@ func Migration() *migrate.MemoryMigrationSource {
 	return &migrate.MemoryMigrationSource{
 		Migrations: []*migrate.Migration{
 			{
-				Id: "create_attestation_policy_table",
+				Id: "20250101000001_create_attestation_policy_table",
 				Up: []string{
 					`CREATE TABLE IF NOT EXISTS attestation_policy (
 						id SERIAL PRIMARY KEY,
@@ -21,7 +21,7 @@ func Migration() *migrate.MemoryMigrationSource {
 				},
 			},
 			{
-				Id: "create_routes_table",
+				Id: "20250101000002_create_routes_table",
 				Up: []string{
 					`CREATE TABLE IF NOT EXISTS routes (
 						id SERIAL PRIMARY KEY,
@@ -39,7 +39,7 @@ func Migration() *migrate.MemoryMigrationSource {
 				},
 			},
 			{
-				Id: "add_strip_prefix_to_routes",
+				Id: "20260101000003_add_strip_prefix_to_routes",
 				Up: []string{
 					`ALTER TABLE routes ADD COLUMN IF NOT EXISTS strip_prefix VARCHAR(255) NOT NULL DEFAULT ''`,
 				},
