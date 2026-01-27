@@ -37,7 +37,7 @@ type Event struct {
 	EventType string    `json:"event_type"`
 
 	// Authentication & Authorization
-	Session         authn.Session `json:"session,omitempty"`
+	Session         authn.Session `json:"session,omitzero"`
 	AuthMethod      string        `json:"auth_method,omitempty"`
 	AttestationType string        `json:"attestation_type,omitempty"`
 	AttestationOK   bool          `json:"attestation_ok,omitempty"`
@@ -75,18 +75,18 @@ type Event struct {
 	ComplianceTags  []string `json:"compliance_tags,omitempty"`
 
 	// aTLS & Attestation (extends Auth section above)
-	ATLSHandshake     bool                   `json:"atls_handshake"`
-	ATLSHandshakeMs   float64                `json:"atls_handshake_ms,omitempty"`
-	AttestationError  string                 `json:"attestation_error,omitempty"`
-	AttestationNonce  string                 `json:"attestation_nonce,omitempty"`
-	AttestationReport map[string]interface{} `json:"attestation_report,omitempty"`
+	ATLSHandshake     bool           `json:"atls_handshake"`
+	ATLSHandshakeMs   float64        `json:"atls_handshake_ms,omitempty"`
+	AttestationError  string         `json:"attestation_error,omitempty"`
+	AttestationNonce  string         `json:"attestation_nonce,omitempty"`
+	AttestationReport map[string]any `json:"attestation_report,omitempty"`
 
 	// Error handling
 	Error     string `json:"error,omitempty"`
 	ErrorCode string `json:"error_code,omitempty"`
 
 	// Additional metadata
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // AuditMiddleware provides structured audit logging.
@@ -277,7 +277,7 @@ func (am *auditMiddleware) createAuditEvent(
 }
 
 func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) {
-	var requestData map[string]interface{}
+	var requestData map[string]any
 	if err := json.Unmarshal(requestBody, &requestData); err != nil {
 		return
 	}
@@ -295,11 +295,11 @@ func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) 
 	}
 
 	// Estimate input tokens (rough approximation)
-	if messages, ok := requestData["messages"].([]interface{}); ok {
+	if messages, ok := requestData["messages"].([]any); ok {
 		totalChars := 0
 
 		for _, msg := range messages {
-			if msgMap, ok := msg.(map[string]interface{}); ok {
+			if msgMap, ok := msg.(map[string]any); ok {
 				if content, ok := msgMap["content"].(string); ok {
 					totalChars += len(content)
 				}
@@ -333,53 +333,52 @@ func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Hea
 	}
 
 	// Extract TLS connection details (available for any TLS connection)
-	if tlsVersion := headers.Get("X-TLS-Version"); tlsVersion != "" {
+	// Using canonical header names (Go's http package canonicalizes headers)
+	if tlsVersion := headers.Get("X-Tls-Version"); tlsVersion != "" {
 		event.TLSVersion = tlsVersion
 	}
-	if cipherSuite := headers.Get("X-TLS-Cipher-Suite"); cipherSuite != "" {
+
+	if cipherSuite := headers.Get("X-Tls-Cipher-Suite"); cipherSuite != "" {
 		event.CipherSuite = cipherSuite
 	}
-	if peerCertIssuer := headers.Get("X-TLS-Peer-Cert-Issuer"); peerCertIssuer != "" {
+
+	if peerCertIssuer := headers.Get("X-Tls-Peer-Cert-Issuer"); peerCertIssuer != "" {
 		event.PeerCertIssuer = peerCertIssuer
 	}
 
 	// Check for attestation type header (indicates aTLS was configured)
-	if atlsType := headers.Get("X-Attestation-Type"); atlsType != "" {
-		event.AttestationType = atlsType
+	am.extractAttestationDetails(headers, event)
+}
 
-		// Check if an actual aTLS handshake occurred
-		if atlsHandshake := headers.Get("X-ATLS-Handshake"); atlsHandshake == "true" {
-			event.ATLSHandshake = true
+// extractAttestationDetails extracts aTLS/attestation information from response headers.
+func (am *auditMiddleware) extractAttestationDetails(headers http.Header, event *Event) {
+	atlsType := headers.Get("X-Attestation-Type")
+	if atlsType == "" {
+		return
+	}
+
+	event.AttestationType = atlsType
+	event.ATLSHandshake = headers.Get("X-Atls-Handshake") == "true"
+	event.AttestationOK = headers.Get("X-Attestation-Ok") == "true"
+
+	if atlsError := headers.Get("X-Attestation-Error"); atlsError != "" {
+		event.AttestationError = atlsError
+	}
+
+	if atlsNonce := headers.Get("X-Attestation-Nonce"); atlsNonce != "" {
+		event.AttestationNonce = atlsNonce
+	}
+
+	if handshakeMs := headers.Get("X-Atls-Handshake-Ms"); handshakeMs != "" {
+		if ms, err := strconv.ParseFloat(handshakeMs, 64); err == nil {
+			event.ATLSHandshakeMs = ms
 		}
+	}
 
-		// Parse attestation OK status
-		if atlsOK := headers.Get("X-Attestation-OK"); atlsOK == "true" {
-			event.AttestationOK = true
-		}
-
-		// Capture attestation error if any
-		if atlsError := headers.Get("X-Attestation-Error"); atlsError != "" {
-			event.AttestationError = atlsError
-		}
-
-		// Capture attestation nonce
-		if atlsNonce := headers.Get("X-Attestation-Nonce"); atlsNonce != "" {
-			event.AttestationNonce = atlsNonce
-		}
-
-		// Capture handshake timing
-		if handshakeMs := headers.Get("X-ATLS-Handshake-Ms"); handshakeMs != "" {
-			if ms, err := strconv.ParseFloat(handshakeMs, 64); err == nil {
-				event.ATLSHandshakeMs = ms
-			}
-		}
-
-		// Capture attestation report (JSON encoded)
-		if reportJSON := headers.Get("X-Attestation-Report"); reportJSON != "" {
-			var report map[string]interface{}
-			if err := json.Unmarshal([]byte(reportJSON), &report); err == nil {
-				event.AttestationReport = report
-			}
+	if reportJSON := headers.Get("X-Attestation-Report"); reportJSON != "" {
+		var report map[string]any
+		if err := json.Unmarshal([]byte(reportJSON), &report); err == nil {
+			event.AttestationReport = report
 		}
 	}
 }
@@ -420,9 +419,11 @@ func (am *auditMiddleware) logAuditEvent(ctx context.Context, event *Event) {
 		logAttrs = append(logAttrs,
 			slog.String("tls_version", event.TLSVersion),
 		)
+
 		if event.CipherSuite != "" {
 			logAttrs = append(logAttrs, slog.String("cipher_suite", event.CipherSuite))
 		}
+
 		if event.PeerCertIssuer != "" {
 			logAttrs = append(logAttrs, slog.String("peer_cert_issuer", event.PeerCertIssuer))
 		}
@@ -436,9 +437,11 @@ func (am *auditMiddleware) logAuditEvent(ctx context.Context, event *Event) {
 			slog.Bool("attestation_ok", event.AttestationOK),
 			slog.String("attestation_type", event.AttestationType),
 		)
+
 		if event.AttestationError != "" {
 			logAttrs = append(logAttrs, slog.String("attestation_error", event.AttestationError))
 		}
+
 		if event.AttestationNonce != "" {
 			logAttrs = append(logAttrs, slog.String("attestation_nonce", event.AttestationNonce))
 		}

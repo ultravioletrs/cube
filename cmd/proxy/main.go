@@ -343,5 +343,6 @@ func deriveAttestationType(securityStr string) string {
 		// aTLS or maTLS is enabled - actual platform type comes from cert extensions
 		return "aTLS"
 	}
+
 	return "NoCC"
 }
