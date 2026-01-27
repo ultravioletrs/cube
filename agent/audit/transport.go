@@ -17,16 +17,47 @@ import (
 	"time"
 )
 
+const (
+	// Header names for attestation data.
+	headerTLSVersion        = "X-Tls-Version"
+	headerTLSCipherSuite    = "X-Tls-Cipher-Suite"
+	headerTLSPeerCertIssuer = "X-Tls-Peer-Cert-Issuer"
+	headerAttestationType   = "X-Attestation-Type"
+	headerAttestationOK     = "X-Attestation-Ok"
+	headerAttestationError  = "X-Attestation-Error"
+	headerAttestationNonce  = "X-Attestation-Nonce"
+	headerAttestationReport = "X-Attestation-Report"
+	headerATLSHandshake     = "X-Atls-Handshake"
+	headerATLSHandshakeMs   = "X-Atls-Handshake-Ms"
+
+	// Common string constants.
+	strTrue    = "true"
+	strFalse   = "false"
+	strUnknown = "Unknown"
+)
+
+// Platform-specific OIDs for attestation certificate extensions.
+// These are defined by the cocos aTLS implementation.
+//
+//nolint:gochecknoglobals // OIDs are constants that need to be compared by value
+var (
+	snpvTPMOID = asn1.ObjectIdentifier{2, 99999, 1, 0}
+	azureOID   = asn1.ObjectIdentifier{2, 99999, 1, 1}
+	tdxOID     = asn1.ObjectIdentifier{2, 99999, 1, 2}
+)
+
 // AttestationContextKey is the context key for attestation results.
 type attestationContextKey struct{}
 
 // AttestationContextKey is exported for use in middleware.
+//
+//nolint:gochecknoglobals // Context keys must be package-level variables
 var AttestationContextKey = attestationContextKey{}
 
 // AttestationResult holds the results of an aTLS handshake and attestation verification.
 type AttestationResult struct {
 	// Handshake details
-	ATLSHandshake   bool          `json:"atls_handshake"`
+	ATLSHandshake     bool          `json:"atls_handshake"`
 	HandshakeDuration time.Duration `json:"handshake_duration"`
 
 	// Attestation verification
@@ -34,7 +65,7 @@ type AttestationResult struct {
 	AttestationError string `json:"attestation_error,omitempty"`
 
 	// Platform details
-	AttestationType string `json:"attestation_type,omitempty"` // SNP, TDX, Azure, NoCC
+	AttestationType  string `json:"attestation_type,omitempty"` // SNP, TDX, Azure, NoCC
 	AttestationNonce string `json:"attestation_nonce,omitempty"`
 
 	// Report details (platform-specific)
@@ -85,20 +116,21 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 
 	// Extract TLS connection state if available
 	if resp != nil && resp.TLS != nil {
-		t.extractTLSDetails(result, resp.TLS, req)
+		t.extractTLSDetails(result, resp.TLS)
 		// Only mark as aTLS handshake if we actually have TLS and aTLS was expected
 		result.ATLSHandshake = atlsExpected
 	}
 
 	// Determine attestation status based on response and TLS state
-	if err != nil {
+	switch {
+	case err != nil:
 		result.AttestationOK = false
 		result.AttestationError = err.Error()
-	} else if result.ATLSHandshake {
+	case result.ATLSHandshake:
 		// If we got a successful response with aTLS, attestation passed
 		// (the TLS handshake would have failed if attestation failed)
 		result.AttestationOK = true
-	} else if atlsExpected && resp != nil && resp.TLS == nil {
+	case atlsExpected && resp != nil && resp.TLS == nil:
 		// aTLS was expected but no TLS connection - this is an error
 		result.AttestationOK = false
 		result.AttestationError = "aTLS expected but connection is not TLS"
@@ -112,44 +144,71 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	// Add attestation result to response headers for audit middleware to pick up
 	// (context doesn't flow back from RoundTrip, so we use headers)
 	if resp != nil {
-		// Always set TLS details when available (for audit logging)
-		if result.TLSVersion != "" {
-			resp.Header.Set("X-TLS-Version", result.TLSVersion)
-		}
-		if result.CipherSuite != "" {
-			resp.Header.Set("X-TLS-Cipher-Suite", result.CipherSuite)
-		}
-		if result.PeerCertIssuer != "" {
-			resp.Header.Set("X-TLS-Peer-Cert-Issuer", result.PeerCertIssuer)
-		}
-
-		// Always set attestation headers when aTLS is configured (even if not actually used)
-		// This allows the audit log to show the expected vs actual state
-		if atlsExpected || result.ATLSHandshake {
-			resp.Header.Set("X-Attestation-Type", result.AttestationType)
-			resp.Header.Set("X-Attestation-OK", boolToString(result.AttestationOK))
-			resp.Header.Set("X-ATLS-Handshake", boolToString(result.ATLSHandshake))
-			resp.Header.Set("X-ATLS-Handshake-Ms", floatToString(float64(result.HandshakeDuration.Nanoseconds())/1e6))
-			if result.AttestationError != "" {
-				resp.Header.Set("X-Attestation-Error", result.AttestationError)
-			}
-			if result.AttestationNonce != "" {
-				resp.Header.Set("X-Attestation-Nonce", result.AttestationNonce)
-			}
-			// Include attestation report if available
-			if len(result.Report) > 0 {
-				if reportJSON, err := json.Marshal(result.Report); err == nil {
-					resp.Header.Set("X-Attestation-Report", string(reportJSON))
-				}
-			}
-		}
+		t.setResponseHeaders(resp, result, atlsExpected)
 	}
 
 	return resp, err
 }
 
+// GetLastResult returns the last attestation result (thread-safe).
+func (t *InstrumentedTransport) GetLastResult() *AttestationResult {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.lastResult == nil {
+		return nil
+	}
+
+	// Return a copy
+	result := *t.lastResult
+
+	return &result
+}
+
+// setResponseHeaders adds attestation result to response headers for audit middleware.
+func (t *InstrumentedTransport) setResponseHeaders(resp *http.Response, result *AttestationResult, atlsExpected bool) {
+	// Always set TLS details when available (for audit logging)
+	if result.TLSVersion != "" {
+		resp.Header.Set(headerTLSVersion, result.TLSVersion)
+	}
+
+	if result.CipherSuite != "" {
+		resp.Header.Set(headerTLSCipherSuite, result.CipherSuite)
+	}
+
+	if result.PeerCertIssuer != "" {
+		resp.Header.Set(headerTLSPeerCertIssuer, result.PeerCertIssuer)
+	}
+
+	// Always set attestation headers when aTLS is configured (even if not actually used)
+	// This allows the audit log to show the expected vs actual state
+	if !atlsExpected && !result.ATLSHandshake {
+		return
+	}
+
+	resp.Header.Set(headerAttestationType, result.AttestationType)
+	resp.Header.Set(headerAttestationOK, boolToString(result.AttestationOK))
+	resp.Header.Set(headerATLSHandshake, boolToString(result.ATLSHandshake))
+	resp.Header.Set(headerATLSHandshakeMs, floatToString(float64(result.HandshakeDuration.Nanoseconds())/1e6))
+
+	if result.AttestationError != "" {
+		resp.Header.Set(headerAttestationError, result.AttestationError)
+	}
+
+	if result.AttestationNonce != "" {
+		resp.Header.Set(headerAttestationNonce, result.AttestationNonce)
+	}
+
+	// Include attestation report if available
+	if len(result.Report) > 0 {
+		if reportJSON, jsonErr := json.Marshal(result.Report); jsonErr == nil {
+			resp.Header.Set(headerAttestationReport, string(reportJSON))
+		}
+	}
+}
+
 // extractTLSDetails extracts TLS connection details from the connection state.
-func (t *InstrumentedTransport) extractTLSDetails(result *AttestationResult, state *tls.ConnectionState, _ *http.Request) {
+func (t *InstrumentedTransport) extractTLSDetails(result *AttestationResult, state *tls.ConnectionState) {
 	result.TLSVersion = tlsVersionString(state.Version)
 	result.CipherSuite = tls.CipherSuiteName(state.CipherSuite)
 	result.ServerName = state.ServerName
@@ -170,13 +229,6 @@ func (t *InstrumentedTransport) extractTLSDetails(result *AttestationResult, sta
 		result.Report = extractAttestationFromCert(cert, t.attestationType)
 	}
 }
-
-// Platform-specific OIDs for attestation certificate extensions.
-var (
-	snpvTPMOID = asn1.ObjectIdentifier{2, 99999, 1, 0}
-	azureOID   = asn1.ObjectIdentifier{2, 99999, 1, 1}
-	tdxOID     = asn1.ObjectIdentifier{2, 99999, 1, 2}
-)
 
 // extractAttestationFromCert extracts attestation report data from certificate extensions.
 func extractAttestationFromCert(cert *x509.Certificate, platformType string) map[string]any {
@@ -201,13 +253,15 @@ func extractAttestationFromCert(cert *x509.Certificate, platformType string) map
 	case "Azure":
 		report["technology"] = "Azure Confidential Computing"
 	default:
-		report["technology"] = "Unknown"
+		report["technology"] = strUnknown
 	}
 
 	// Extract attestation extension from certificate
 	for _, ext := range cert.Extensions {
-		var extPlatform string
-		var extOIDStr string
+		var (
+			extPlatform string
+			extOIDStr   string
+		)
 
 		switch {
 		case ext.Id.Equal(snpvTPMOID):
@@ -241,20 +295,6 @@ func extractAttestationFromCert(cert *x509.Certificate, platformType string) map
 	return report
 }
 
-// GetLastResult returns the last attestation result (thread-safe).
-func (t *InstrumentedTransport) GetLastResult() *AttestationResult {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	if t.lastResult == nil {
-		return nil
-	}
-
-	// Return a copy
-	result := *t.lastResult
-	return &result
-}
-
 // Helper functions
 
 func tlsVersionString(version uint16) string {
@@ -268,15 +308,16 @@ func tlsVersionString(version uint16) string {
 	case tls.VersionTLS10:
 		return "TLS1.0"
 	default:
-		return "Unknown"
+		return strUnknown
 	}
 }
 
 func boolToString(b bool) string {
 	if b {
-		return "true"
+		return strTrue
 	}
-	return "false"
+
+	return strFalse
 }
 
 func floatToString(f float64) string {
@@ -293,5 +334,6 @@ func AttestationFromContext(ctx context.Context) *AttestationResult {
 	if result, ok := ctx.Value(AttestationContextKey).(*AttestationResult); ok {
 		return result
 	}
+
 	return nil
 }

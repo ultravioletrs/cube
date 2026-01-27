@@ -1,7 +1,8 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-package api
+// Package api provides HTTP transport layer for the proxy service.
+package api //nolint:revive // api is a standard package name for HTTP handlers
 
 import (
 	"bytes"
@@ -177,6 +178,7 @@ func makeProxyHandler(
 			// Copy attestation headers from response to the response writer
 			// This ensures they are captured by the audit middleware
 			copyAttestationHeaders(w, resp)
+
 			return nil
 		}
 
