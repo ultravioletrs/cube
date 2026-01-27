@@ -68,12 +68,12 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
             "temperature": req.temperature,
             "max_tokens": req.max_tokens,
             "headers": {
-                "X-Model-Authorization": authorization,
+                "Authorization": authorization,
                 "X-Guardrails-Request": "true"
             }
         }
 
-        logger.debug(f"llm_params with headers: X-Model-Authorization present={authorization is not None}")
+        logger.debug(f"llm_params prepared for model: {req.model}, auth_present={authorization is not None}")
         res = await runtime.generate(
             messages=messages,
             options={

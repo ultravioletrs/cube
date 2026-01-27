@@ -28,7 +28,7 @@ Usage:
            options={
                "llm_params": {
                    "headers": {
-                       "X-Model-Authorization": "Bearer <token>"
+                       "Authorization": "Bearer <token>"
                    }
                }
            }
@@ -114,7 +114,9 @@ class ExtendedOllama(ChatOllama):
         )
 
         # Extract text from ChatResult
-        return result.generations[0].text
+        if result.generations:
+            return result.generations[0].text
+        return ""
 
     def _extract_ollama_options(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         ollama_option_keys = {

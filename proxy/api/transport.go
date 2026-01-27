@@ -23,7 +23,6 @@ import (
 	"github.com/ultravioletrs/cube/agent/audit"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/endpoint"
-	"github.com/ultravioletrs/cube/proxy/middleware"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
@@ -77,7 +76,7 @@ func MakeHandler(
 	)).ServeHTTP)
 
 	mux.Route("/{domainID}", func(r chi.Router) {
-		r.Use(middleware.ModelAuthMiddleware(), authn.Middleware(), api.RequestIDMiddleware(idp))
+		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)
 
 		r.Get("/attestation/policy", kithttp.NewServer(
