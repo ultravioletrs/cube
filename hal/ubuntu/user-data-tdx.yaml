@@ -1,0 +1,153 @@
+#cloud-config
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+#
+# Cloud-init configuration for Intel TDX (Trust Domain Extensions) VMs
+# Ubuntu 24.04+ has TDX guest support built into the kernel
+
+package_update: true
+package_upgrade: false
+
+users:
+  - name: ultraviolet
+    plain_text_passwd: password
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+  - name: ollama
+    system: true
+    home: /var/lib/ollama
+    shell: /usr/sbin/nologin
+
+ssh_pwauth: true
+
+packages:
+  - curl
+  - git
+  - golang-go
+  - build-essential
+
+write_files:
+  - path: /etc/cube/agent.env
+    content: |
+      UV_CUBE_AGENT_LOG_LEVEL=info
+      UV_CUBE_AGENT_HOST=0.0.0.0
+      UV_CUBE_AGENT_PORT=7001
+      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+      UV_CUBE_AGENT_TARGET_URL=http://localhost:11434
+      UV_CUBE_AGENT_SERVER_CERT=/etc/cube/certs/server.crt
+      UV_CUBE_AGENT_SERVER_KEY=/etc/cube/certs/server.key
+      UV_CUBE_AGENT_SERVER_CA_CERTS=/etc/cube/certs/ca.crt
+      UV_CUBE_AGENT_CA_URL=https://prism.ultraviolet.rs/am-certs
+      # TDX-specific settings
+      AGENT_OS_TYPE=tdx
+    permissions: '0644'
+  - path: /etc/systemd/system/ollama.service
+    content: |
+      [Unit]
+      Description=Ollama Service
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=ollama
+      Group=ollama
+      Environment="OLLAMA_HOST=0.0.0.0:11434"
+      ExecStart=/usr/local/bin/ollama serve
+      Restart=always
+      RestartSec=3
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+  - path: /etc/systemd/system/cube-agent.service
+    content: |
+      [Unit]
+      Description=Cube Agent Service
+      After=network-online.target ollama.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      EnvironmentFile=/etc/cube/agent.env
+      ExecStart=/usr/local/bin/cube-agent
+      Restart=on-failure
+      RestartSec=5
+      StartLimitBurst=5
+      StartLimitIntervalSec=60
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+  - path: /usr/local/bin/pull-ollama-models.sh
+    content: |
+      #!/bin/bash
+      # Wait for ollama to be ready
+      for i in $(seq 1 60); do
+        if curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
+          break
+        fi
+        sleep 2
+      done
+      # Pull models
+      /usr/local/bin/ollama pull tinyllama:1.1b
+      /usr/local/bin/ollama pull starcoder2:3b
+      /usr/local/bin/ollama pull nomic-embed-text:v1.5
+    permissions: '0755'
+
+runcmd:
+  - echo 'ultraviolet:password' | chpasswd
+  - |
+    cat > /etc/ssh/sshd_config.d/60-cloudimg-settings.conf << 'SSHEOF'
+    PasswordAuthentication yes
+    SSHEOF
+  - systemctl restart sshd
+  - sleep 2
+  # TDX Setup for Ubuntu 24.04+
+  # Ubuntu 24.04 (Noble) has TDX guest support built into the kernel
+  # No additional kernel installation or module loading is required
+  # The kernel CONFIG_INTEL_TDX_GUEST is enabled by default
+  - |
+    # Verify TDX guest support
+    if [ -e /sys/firmware/tdx ]; then
+      echo "TDX: Running inside a TDX Trust Domain"
+      echo "TDX attestation available via /dev/tdx_guest or configfs"
+    elif grep -q tdx_guest /proc/modules 2>/dev/null; then
+      echo "TDX: Guest module loaded"
+    elif grep -q "tdx" /proc/cpuinfo 2>/dev/null; then
+      echo "TDX: CPU supports TDX"
+    else
+      echo "TDX: Not detected (may be running in non-TDX mode)"
+    fi
+  - mkdir -p /etc/cube
+  - mkdir -p /etc/cube/certs
+  - |
+    # Generate CA certificate
+    openssl req -x509 -newkey rsa:4096 -keyout /etc/cube/certs/ca.key -out /etc/cube/certs/ca.crt -days 365 -nodes -subj "/CN=Cube-CA"
+    # Generate server certificate
+    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/server.key -out /etc/cube/certs/server.csr -nodes -subj "/CN=cube-agent"
+    openssl x509 -req -in /etc/cube/certs/server.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/server.crt -days 365
+    # Generate client certificate for mTLS
+    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/client.key -out /etc/cube/certs/client.csr -nodes -subj "/CN=cube-client"
+    openssl x509 -req -in /etc/cube/certs/client.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/client.crt -days 365
+    # Set permissions
+    chmod 600 /etc/cube/certs/*.key
+    chmod 644 /etc/cube/certs/*.crt
+  - mkdir -p /var/lib/ollama
+  - mkdir -p /home/ollama/.ollama
+  - chown -R ollama:ollama /var/lib/ollama
+  - chown -R ollama:ollama /home/ollama
+  - curl -fsSL https://ollama.com/install.sh | sh
+  - git clone https://github.com/ultravioletrs/cube.git /tmp/cube
+  - cd /tmp/cube && git fetch origin pull/88/head:pr-88 && git checkout pr-88
+  - export HOME=/root
+  - cd /tmp/cube && /usr/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
+  - systemctl daemon-reload
+  - systemctl enable ollama.service
+  - systemctl start ollama.service
+  - systemctl enable cube-agent.service
+  - systemctl start cube-agent.service
+  - nohup /usr/local/bin/pull-ollama-models.sh > /var/log/ollama-pull.log 2>&1 &
+
+final_message: "Cube Agent (TDX) and Ollama services started."
