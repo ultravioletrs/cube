@@ -159,14 +159,24 @@ func (t *InstrumentedTransport) GetLastResult() *AttestationResult {
 		return nil
 	}
 
-	// Return a copy
 	result := *t.lastResult
+
+	if t.lastResult.Report != nil {
+		result.Report = make(map[string]any, len(t.lastResult.Report))
+		for k, v := range t.lastResult.Report {
+			result.Report[k] = v
+		}
+	}
 
 	return &result
 }
 
 // setResponseHeaders adds attestation result to response headers for audit middleware.
 func (t *InstrumentedTransport) setResponseHeaders(resp *http.Response, result *AttestationResult, atlsExpected bool) {
+	if resp.Header == nil {
+		resp.Header = make(http.Header)
+	}
+
 	// Always set TLS details when available (for audit logging)
 	if result.TLSVersion != "" {
 		resp.Header.Set(headerTLSVersion, result.TLSVersion)
