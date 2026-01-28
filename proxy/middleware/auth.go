@@ -57,6 +57,10 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 		"/api/create",
 		"/api/copy",
 		"/api/delete",
+		// Guardrails admin endpoints
+		"/guardrails/configs",
+		"/guardrails/versions",
+		"/guardrails/reload",
 	}
 
 	permission := membershipPerm

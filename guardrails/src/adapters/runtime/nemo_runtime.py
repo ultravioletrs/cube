@@ -7,12 +7,17 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 from nemoguardrails import LLMRails, RailsConfig
+from nemoguardrails.llm.providers import register_llm_provider
 
 from src.adapters.exceptions import ConfigLoadError
+from src.adapters.llm.extended_ollama import ExtendedOllama
 from src.domain.entities import MaterializedGuardrail
 from src.ports.runtime import GuardrailRuntime
 
 logger = logging.getLogger(__name__)
+
+register_llm_provider("CubeLLM", ExtendedOllama)
+logger.info("CubeLLM LLM provider registered successfully")
 
 
 class NemoRuntime(GuardrailRuntime):

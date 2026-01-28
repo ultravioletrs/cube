@@ -210,16 +210,9 @@ func main() {
 		return
 	}
 
-	guardrailsCfg := api.GuardrailsConfig{
-		Enabled:  cfg.GuardrailsEnabled,
-		URL:      cfg.GuardrailsURL,
-		AgentURL: cfg.AgentURL,
-	}
-
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter, guardrailsCfg,
-		),
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter),
 		logger)
 
 	if cfg.SendTelemetry {

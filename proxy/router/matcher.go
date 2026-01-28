@@ -46,7 +46,9 @@ type PathMatcher struct {
 }
 
 func (m *PathMatcher) Match(r *http.Request) bool {
-	return matchString(r.URL.Path, m.Pattern, m.IsRegex)
+	matched := matchString(r.URL.Path, m.Pattern, m.IsRegex)
+
+	return matched
 }
 
 // MethodMatcher matches against the HTTP method.
@@ -68,8 +70,9 @@ type HeaderMatcher struct {
 
 func (m *HeaderMatcher) Match(r *http.Request) bool {
 	headerValue := r.Header.Get(m.Field)
+	matched := matchString(headerValue, m.Pattern, m.IsRegex)
 
-	return matchString(headerValue, m.Pattern, m.IsRegex)
+	return matched
 }
 
 // QueryParamMatcher matches against a query parameter value.
@@ -154,8 +157,6 @@ func matchString(value, pattern string, isRegex bool) bool {
 	if isRegex {
 		matched, err := regexp.MatchString(pattern, value)
 		if err != nil {
-			log.Printf("Invalid regex pattern %s: %v", pattern, err)
-
 			return false
 		}
 

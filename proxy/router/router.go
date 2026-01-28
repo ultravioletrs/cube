@@ -5,7 +5,6 @@ package router
 
 import (
 	"errors"
-	"log"
 	"net/http"
 	"sort"
 	"sync"
@@ -93,23 +92,17 @@ func (r *Router) DetermineTarget(req *http.Request) (targetURL, stripPrefix stri
 		}
 
 		if route.compiledMatcher != nil && route.compiledMatcher.Match(req) {
-			log.Printf("Request matched route: %s -> %s", route.Name, route.TargetURL)
-
 			return route.TargetURL, route.StripPrefix, nil
 		}
 	}
 
 	for _, route := range r.routes {
 		if route.DefaultRule {
-			log.Printf("Request matched default route: %s -> %s", route.Name, route.TargetURL)
-
 			return route.TargetURL, route.StripPrefix, nil
 		}
 	}
 
 	if r.defaultURL != "" {
-		log.Printf("Request using config default URL: %s", r.defaultURL)
-
 		return r.defaultURL, "", nil
 	}
 

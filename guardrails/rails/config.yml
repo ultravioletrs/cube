@@ -3,13 +3,12 @@
 
 models:
   - type: main
-    engine: ollama
-    model: llama3.2:latest
+    engine: CubeLLM
+    model: llama3.2:3b
     parameters:
       base_url: __CUBE_INTERNAL_AGENT_URL__
-
-default_llm_call_parameters:
-  temperature: 0.001
+      headers:
+        X-Guardrails-Request: "true"
 
 instructions:
   - type: general
@@ -93,15 +92,19 @@ rails:
           - MEDICAL_LICENSE
   input:
     flows:
-      - self check input
       - mask sensitive data on input
   output:
     flows:
-      - self check output
       - mask sensitive data on output
   retrieval:
     flows:
       - mask sensitive data on retrieval
+  dialog:
+    # Whether to try to use a single LLM call for generating the user intent, next step and bot message.
+    single_call:
+      enabled: False
+      fallback_to_multiple_calls: True
+
 tracing:
   enabled: true
   adapters:
