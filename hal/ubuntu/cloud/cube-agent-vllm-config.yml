@@ -1,0 +1,265 @@
+#cloud-config
+# Cube AI Cloud-Init Configuration - vLLM Backend
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+#
+# This cloud-init configuration sets up a Cube AI agent with vLLM backend
+# for high-performance inference on Ubuntu-based confidential VMs.
+#
+# vLLM Features:
+#   - Continuous batching for higher throughput
+#   - PagedAttention for efficient memory management
+#   - OpenAI-compatible API
+#   - Tensor parallelism for multi-GPU setups
+#
+# Usage:
+#   - GCP: Reference this file in terraform.tfvars as cloud_init_config
+#   - Azure: Reference this file in terraform.tfvars as cloud_init_config
+#
+# Recommended VM sizes:
+#   - GCP: n1-standard-8 with nvidia-tesla-t4 or better
+#   - Azure: Standard_NC6s_v3 (NVIDIA V100) or better
+
+package_update: true
+package_upgrade: false
+
+users:
+  - name: cubeadmin
+    plain_text_passwd: changeme
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: [docker]
+  - name: vllm
+    system: true
+    home: /var/lib/vllm
+    shell: /usr/sbin/nologin
+
+ssh_pwauth: true
+
+packages:
+  - curl
+  - git
+  - python3
+  - python3-pip
+  - python3-venv
+  - build-essential
+  - ca-certificates
+  - jq
+  - nvidia-driver-535
+  - nvidia-cuda-toolkit
+
+write_files:
+  # Cube Agent environment configuration for vLLM
+  - path: /etc/cube/agent.env.template
+    content: |
+      # Cube Agent Configuration for vLLM Backend
+      # Copy to /etc/cube/agent.env and customize
+
+      # Logging
+      UV_CUBE_AGENT_LOG_LEVEL=info
+
+      # Network binding
+      UV_CUBE_AGENT_HOST=0.0.0.0
+      UV_CUBE_AGENT_PORT=7001
+
+      # Instance identification
+      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+
+      # vLLM Backend URL
+      UV_CUBE_AGENT_TARGET_URL=http://localhost:8000
+
+      # TLS Configuration (optional - uncomment for production)
+      # UV_CUBE_AGENT_SERVER_CERT=/etc/cube/certs/server.crt
+      # UV_CUBE_AGENT_SERVER_KEY=/etc/cube/certs/server.key
+      # UV_CUBE_AGENT_SERVER_CA_CERTS=/etc/cube/certs/ca.crt
+
+      # Attestation Manager URL (optional)
+      # UV_CUBE_AGENT_CA_URL=https://prism.ultraviolet.rs/am-certs
+    permissions: '0644'
+
+  # Default agent.env for vLLM
+  - path: /etc/cube/agent.env
+    content: |
+      UV_CUBE_AGENT_LOG_LEVEL=info
+      UV_CUBE_AGENT_HOST=0.0.0.0
+      UV_CUBE_AGENT_PORT=7001
+      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+      UV_CUBE_AGENT_TARGET_URL=http://localhost:8000
+    permissions: '0644'
+
+  # vLLM environment configuration
+  - path: /etc/cube/vllm.env
+    content: |
+      # vLLM Configuration
+      # Model to serve (HuggingFace model ID)
+      VLLM_MODEL=${CUBE_VLLM_MODEL:-meta-llama/Llama-2-7b-hf}
+
+      # Server configuration
+      VLLM_HOST=0.0.0.0
+      VLLM_PORT=8000
+
+      # GPU configuration
+      VLLM_TENSOR_PARALLEL_SIZE=${CUBE_VLLM_GPU_COUNT:-1}
+
+      # Memory configuration
+      VLLM_GPU_MEMORY_UTILIZATION=0.9
+
+      # HuggingFace token (for gated models)
+      # HF_TOKEN=your_token_here
+    permissions: '0644'
+
+  # vLLM systemd service
+  - path: /etc/systemd/system/vllm.service
+    content: |
+      [Unit]
+      Description=vLLM Inference Server
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=vllm
+      Group=vllm
+      EnvironmentFile=/etc/cube/vllm.env
+      WorkingDirectory=/var/lib/vllm
+      ExecStart=/var/lib/vllm/venv/bin/python -m vllm.entrypoints.openai.api_server \
+        --model ${VLLM_MODEL} \
+        --host ${VLLM_HOST} \
+        --port ${VLLM_PORT} \
+        --tensor-parallel-size ${VLLM_TENSOR_PARALLEL_SIZE} \
+        --gpu-memory-utilization ${VLLM_GPU_MEMORY_UTILIZATION}
+      Restart=on-failure
+      RestartSec=10
+      StartLimitBurst=3
+      StartLimitIntervalSec=60
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  # Cube Agent systemd service
+  - path: /etc/systemd/system/cube-agent.service
+    content: |
+      [Unit]
+      Description=Cube Agent Service
+      After=network-online.target vllm.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      EnvironmentFile=/etc/cube/agent.env
+      ExecStart=/usr/local/bin/cube-agent
+      Restart=on-failure
+      RestartSec=5
+      StartLimitBurst=5
+      StartLimitIntervalSec=60
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  # TLS certificate generation script
+  - path: /usr/local/bin/generate-cube-certs.sh
+    content: |
+      #!/bin/bash
+      # Generate self-signed certificates for Cube Agent
+      # For production, replace with certificates from your CA
+
+      CERT_DIR="/etc/cube/certs"
+      mkdir -p "$CERT_DIR"
+
+      # Generate CA certificate
+      openssl req -x509 -newkey rsa:4096 \
+        -keyout "$CERT_DIR/ca.key" \
+        -out "$CERT_DIR/ca.crt" \
+        -days 365 -nodes \
+        -subj "/CN=Cube-CA"
+
+      # Generate server certificate
+      openssl req -newkey rsa:4096 \
+        -keyout "$CERT_DIR/server.key" \
+        -out "$CERT_DIR/server.csr" \
+        -nodes -subj "/CN=cube-agent"
+
+      openssl x509 -req \
+        -in "$CERT_DIR/server.csr" \
+        -CA "$CERT_DIR/ca.crt" \
+        -CAkey "$CERT_DIR/ca.key" \
+        -CAcreateserial \
+        -out "$CERT_DIR/server.crt" \
+        -days 365
+
+      # Generate client certificate for mTLS
+      openssl req -newkey rsa:4096 \
+        -keyout "$CERT_DIR/client.key" \
+        -out "$CERT_DIR/client.csr" \
+        -nodes -subj "/CN=cube-client"
+
+      openssl x509 -req \
+        -in "$CERT_DIR/client.csr" \
+        -CA "$CERT_DIR/ca.crt" \
+        -CAkey "$CERT_DIR/ca.key" \
+        -CAcreateserial \
+        -out "$CERT_DIR/client.crt" \
+        -days 365
+
+      # Set permissions
+      chmod 600 "$CERT_DIR"/*.key
+      chmod 644 "$CERT_DIR"/*.crt
+      rm -f "$CERT_DIR"/*.csr
+
+      echo "Certificates generated in $CERT_DIR"
+    permissions: '0755'
+
+runcmd:
+  # Configure SSH for password authentication
+  - |
+    cat > /etc/ssh/sshd_config.d/60-cloudimg-settings.conf << 'SSHEOF'
+    PasswordAuthentication yes
+    SSHEOF
+  - systemctl restart sshd
+
+  # Create Cube directories
+  - mkdir -p /etc/cube/certs
+  - mkdir -p /var/log/cube
+  - mkdir -p /var/lib/vllm
+
+  # Generate self-signed certificates (for development)
+  - /usr/local/bin/generate-cube-certs.sh
+
+  # Set up vLLM user and directories
+  - chown -R vllm:vllm /var/lib/vllm
+
+  # Install vLLM in virtual environment
+  - |
+    sudo -u vllm python3 -m venv /var/lib/vllm/venv
+    sudo -u vllm /var/lib/vllm/venv/bin/pip install --upgrade pip
+    sudo -u vllm /var/lib/vllm/venv/bin/pip install vllm
+
+  # Install Cube Agent from latest release
+  - |
+    CUBE_VERSION="${CUBE_AGENT_VERSION:-latest}"
+    if [ "$CUBE_VERSION" = "latest" ]; then
+      DOWNLOAD_URL=$(curl -s https://api.github.com/repos/ultravioletrs/cube/releases/latest | jq -r '.assets[] | select(.name | contains("linux") and contains("amd64")) | .browser_download_url' | head -1)
+    else
+      DOWNLOAD_URL="https://github.com/ultravioletrs/cube/releases/download/${CUBE_VERSION}/cube-agent-linux-amd64"
+    fi
+    if [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ]; then
+      curl -fsSL "$DOWNLOAD_URL" -o /usr/local/bin/cube-agent
+      chmod +x /usr/local/bin/cube-agent
+    else
+      echo "Could not find release, building from source..."
+      apt-get install -y golang-go
+      git clone https://github.com/ultravioletrs/cube.git /tmp/cube
+      cd /tmp/cube && /usr/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
+    fi
+
+  # Enable and start services
+  - systemctl daemon-reload
+  - systemctl enable vllm.service
+  - systemctl start vllm.service
+  - systemctl enable cube-agent.service
+  - systemctl start cube-agent.service
+
+final_message: "Cube AI (vLLM) deployment complete. Cube Agent running on port 7001, vLLM on port 8000."
