@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/absmach/callhome/pkg/client"
 	"github.com/absmach/supermq"
@@ -216,9 +217,14 @@ func main() {
 		AgentURL: cfg.AgentURL,
 	}
 
+	// Wrap agent transport with instrumented transport for aTLS audit logging
+	agentTransport := agentClient.Transport()
+	attestationType := deriveAttestationType(agentClient.Secure())
+	instrumentedTransport := audit.NewInstrumentedTransport(agentTransport, attestationType)
+
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, agentClient.Transport(), rter, guardrailsCfg,
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, instrumentedTransport, rter, guardrailsCfg,
 		),
 		logger)
 
@@ -328,4 +334,17 @@ func initRouter(configPath string) (*router.Router, error) {
 	}
 
 	return router.New(fileCfg.Router), nil
+}
+
+// deriveAttestationType determines the attestation type from the security string.
+// The actual platform type (SNP, TDX, Azure) is extracted from certificate extensions
+// during the TLS handshake; this function identifies if aTLS is enabled.
+func deriveAttestationType(securityStr string) string {
+	lower := strings.ToLower(securityStr)
+	if strings.Contains(lower, "atls") {
+		// aTLS or maTLS is enabled - actual platform type comes from cert extensions
+		return "aTLS"
+	}
+
+	return "NoCC"
 }
