@@ -30,7 +30,8 @@ paths:
         Generates an attestation report from the agent. This endpoint is routed to the agent service
         through the proxy's dynamic routing system.
         
-        Supports multiple attestation types including SEV-SNP, TDX, vTPM, and combined SNP+vTPM.
+        The attestation type is automatically determined by the agent's running environment
+        (e.g., SEV-SNP, TDX, or vTPM).
         Reports can be returned as JSON (when supported) or binary format.
       operationId: generateAttestation
       tags:
@@ -472,8 +473,6 @@ components:
   schemas:
     AttestationRequest:
       type: object
-      required:
-        - attestation_type
       properties:
         report_data:
           type: string
@@ -491,20 +490,7 @@ components:
             Must be base64-encoded 32 bytes or less.
             Used when attestation_type includes vTPM support.
           example: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-        attestation_type:
-          type: string
-          description: |
-            The type of attestation to generate.
-            - snp: AMD SEV-SNP attestation
-            - tdx: Intel TDX attestation
-            - vtpm: vTPM attestation
-            - snpvtpm: Combined SEV-SNP and vTPM attestation
-          enum:
-            - snp
-            - tdx
-            - vtpm
-            - snpvtpm
-          example: "snp"
+
         to_json:
           type: boolean
           description: |
