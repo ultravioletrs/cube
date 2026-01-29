@@ -15,13 +15,26 @@
           "type": "date"
         },
         "trace_id": {
-          "type": "keyword"
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
         },
         "request_id": {
           "type": "keyword"
         },
         "event_type": {
           "type": "keyword"
+        },
+        "user_id": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
         },
         "session": {
           "properties": {
@@ -79,8 +92,16 @@
         "upstream_ms": {
           "type": "float"
         },
+        "upstream_duration_ms": {
+          "type": "float"
+        },
         "model": {
-          "type": "keyword"
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
         },
         "input_tokens": {
           "type": "integer"
