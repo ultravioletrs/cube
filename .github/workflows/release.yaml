@@ -1,0 +1,142 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+name: Build Release Artifacts
+
+on:
+  release:
+    types: [published]
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build artifacts for'
+        required: true
+        type: string
+
+env:
+  GO_VERSION: '1.25.x'
+
+jobs:
+  build-binaries:
+    name: Build ${{ matrix.service }} (${{ matrix.os }}/${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [proxy, agent]
+        os: [linux]
+        arch: [amd64, arm64]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Fetch tags
+        run: git fetch --prune --unshallow --tags
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: "go.sum"
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            VERSION="${{ github.event.inputs.tag }}"
+          else
+            VERSION="${{ github.ref_name }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION}"
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          COMMIT=$(git rev-parse HEAD)
+          TIME=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+          BINARY_NAME=cube-${{ matrix.service }}
+
+          go build -ldflags "-s -w \
+            -X 'github.com/absmach/supermq.BuildTime=${TIME}' \
+            -X 'github.com/absmach/supermq.Version=${VERSION}' \
+            -X 'github.com/absmach/supermq.Commit=${COMMIT}'" \
+            -o ${BINARY_NAME} cmd/${{ matrix.service }}/main.go
+
+          # Create archive
+          ARCHIVE_NAME=cube-${{ matrix.service }}_${{ steps.version.outputs.version }}_${{ matrix.os }}_${{ matrix.arch }}
+          tar -czvf ${ARCHIVE_NAME}.tar.gz ${BINARY_NAME}
+          echo "artifact=${ARCHIVE_NAME}.tar.gz" >> $GITHUB_OUTPUT
+        id: build
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cube-${{ matrix.service }}_${{ matrix.os }}_${{ matrix.arch }}
+          path: cube-${{ matrix.service }}*
+          retention-days: 1
+
+  upload-release-assets:
+    name: Upload Release Assets
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    if: github.event_name == 'release'
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: false
+
+      - name: Upload release assets
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for dir in artifacts/*/; do
+            for file in "$dir"*.tar.gz; do
+              if [ -f "$file" ]; then
+                echo "Uploading: $file"
+                gh release upload "${{ github.ref_name }}" "$file" --repo "${{ github.repository }}" --clobber
+              fi
+            done
+          done
+
+  checksums:
+    name: Generate Checksums
+    runs-on: ubuntu-latest
+    needs: build-binaries
+    if: github.event_name == 'release'
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+          merge-multiple: false
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f -name "*.tar.gz" -exec sha256sum {} \; | sed 's|./[^/]*/||' > checksums.txt
+          cat checksums.txt
+
+      - name: Upload checksums
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" artifacts/checksums.txt --repo "${{ github.repository }}" --clobber
