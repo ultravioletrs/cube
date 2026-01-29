@@ -61,7 +61,7 @@ define OLLAMA_INSTALL_MODEL_SCRIPT
 	echo '}' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
 	echo 'sleep 10' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh
 	$(if $(BR2_PACKAGE_OLLAMA_MODELS), \
-		echo 'pull_model tinyllama:1.1b' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh && \
+		echo 'pull_model llama3.2:3b' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh && \
 		echo 'pull_model starcoder2:3b' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh && \
 		echo 'pull_model nomic-embed-text:v1.5' >> $(TARGET_DIR)/usr/libexec/ollama/pull-models.sh)
 	$(if $(call qstrip,$(BR2_PACKAGE_OLLAMA_CUSTOM_MODELS)), \
