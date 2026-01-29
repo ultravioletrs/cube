@@ -71,7 +71,9 @@ func (s *service) UpdateAttestationPolicy(ctx context.Context, _ *authn.Session,
 }
 
 // CreateRoute implements Service.
-func (s *service) CreateRoute(ctx context.Context, _ *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
+func (s *service) CreateRoute(
+	ctx context.Context, _ *authn.Session, route *router.RouteRule,
+) (*router.RouteRule, error) {
 	if err := router.ValidateRoute(route); err != nil {
 		return nil, err
 	}
@@ -103,7 +105,9 @@ func (s *service) GetRoute(ctx context.Context, _ *authn.Session, name string) (
 }
 
 // UpdateRoute implements Service.
-func (s *service) UpdateRoute(ctx context.Context, _ *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
+func (s *service) UpdateRoute(
+	ctx context.Context, _ *authn.Session, route *router.RouteRule,
+) (*router.RouteRule, error) {
 	if router.IsSystemRoute(route.Name) {
 		return nil, router.ErrSystemRouteProtected
 	}

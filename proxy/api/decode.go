@@ -121,6 +121,7 @@ func encodeGetRouteResponse(_ context.Context, w http.ResponseWriter, response a
 	if resp.Route == nil {
 		w.Header().Set("Content-Type", ContentType)
 		w.WriteHeader(http.StatusNotFound)
+
 		return json.NewEncoder(w).Encode(map[string]string{
 			"error": "route not found",
 		})

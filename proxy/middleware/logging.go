@@ -40,7 +40,9 @@ func (l *loggingMiddleware) Secure() string {
 }
 
 // GetAttestationPolicy implements proxy.Service.
-func (l *loggingMiddleware) GetAttestationPolicy(ctx context.Context, session *authn.Session) (policy []byte, err error) {
+func (l *loggingMiddleware) GetAttestationPolicy(
+	ctx context.Context, session *authn.Session,
+) (policy []byte, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("GetAttestationPolicy", "took", time.Since(begin), "error", err)
 	}(time.Now())
@@ -49,26 +51,35 @@ func (l *loggingMiddleware) GetAttestationPolicy(ctx context.Context, session *a
 }
 
 // UpdateAttestationPolicy implements proxy.Service.
-func (l *loggingMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) (err error) {
+func (l *loggingMiddleware) UpdateAttestationPolicy(
+	ctx context.Context, session *authn.Session, policy []byte,
+) (err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("UpdateAttestationPolicy", "took", time.Since(begin), "error", err)
 	}(time.Now())
+
 	return l.svc.UpdateAttestationPolicy(ctx, session, policy)
 }
 
 // CreateRoute implements proxy.Service.
-func (l *loggingMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (createdRoute *router.RouteRule, err error) {
+func (l *loggingMiddleware) CreateRoute(
+	ctx context.Context, session *authn.Session, route *router.RouteRule,
+) (createdRoute *router.RouteRule, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("CreateRoute", "took", time.Since(begin), "error", err)
 	}(time.Now())
+
 	return l.svc.CreateRoute(ctx, session, route)
 }
 
 // UpdateRoute implements proxy.Service.
-func (l *loggingMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (updatedRoute *router.RouteRule, err error) {
+func (l *loggingMiddleware) UpdateRoute(
+	ctx context.Context, session *authn.Session, route *router.RouteRule,
+) (updatedRoute *router.RouteRule, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("UpdateRoute", "took", time.Since(begin), "error", err)
 	}(time.Now())
+
 	return l.svc.UpdateRoute(ctx, session, route)
 }
 
@@ -77,6 +88,7 @@ func (l *loggingMiddleware) DeleteRoute(ctx context.Context, session *authn.Sess
 	defer func(begin time.Time) {
 		l.logger.Info("DeleteRoute", "took", time.Since(begin), "error", err)
 	}(time.Now())
+
 	return l.svc.DeleteRoute(ctx, session, name)
 }
 
@@ -87,13 +99,17 @@ func (l *loggingMiddleware) GetRoute(
 	defer func(begin time.Time) {
 		l.logger.Info("GetRoute", "took", time.Since(begin), "error", err)
 	}(time.Now())
+
 	return l.svc.GetRoute(ctx, session, name)
 }
 
 // ListRoutes implements proxy.Service.
-func (l *loggingMiddleware) ListRoutes(ctx context.Context, session *authn.Session) (rules []router.RouteRule, err error) {
+func (l *loggingMiddleware) ListRoutes(
+	ctx context.Context, session *authn.Session,
+) (rules []router.RouteRule, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("ListRoutes", "took", time.Since(begin), "error", err)
 	}(time.Now())
+
 	return l.svc.ListRoutes(ctx, session)
 }
