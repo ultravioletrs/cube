@@ -45,7 +45,7 @@ func MakeHandler(
 	idp supermq.IDProvider,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
-	guardrailsCfg GuardrailsConfig,
+	_ GuardrailsConfig,
 ) http.Handler {
 	endpoints := endpoint.MakeEndpoints(svc)
 
@@ -227,6 +227,7 @@ func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.Ro
 	// Add ModifyResponse hook to inject attestation headers for audit logging
 	prxy.ModifyResponse = func(resp *http.Response) error {
 		copyAttestationHeaders(w, resp)
+
 		return nil
 	}
 
@@ -270,29 +271,4 @@ func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.Ro
 	}
 
 	prxy.ServeHTTP(w, r)
-}
-
-// copyAttestationHeadersFromMap copies attestation and TLS-related headers from a header map
-// to the response writer for audit logging purposes.
-func copyAttestationHeadersFromMap(w http.ResponseWriter, headers http.Header) {
-	auditHeaders := []string{
-		// TLS details
-		"X-TLS-Version",
-		"X-TLS-Cipher-Suite",
-		"X-TLS-Peer-Cert-Issuer",
-		// Attestation details
-		"X-Attestation-Type",
-		"X-Attestation-OK",
-		"X-Attestation-Error",
-		"X-Attestation-Nonce",
-		"X-Attestation-Report",
-		"X-ATLS-Handshake",
-		"X-ATLS-Handshake-Ms",
-	}
-
-	for _, h := range auditHeaders {
-		if v := headers.Get(h); v != "" {
-			w.Header().Set(h, v)
-		}
-	}
 }
