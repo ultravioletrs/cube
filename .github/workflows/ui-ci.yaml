@@ -4,8 +4,7 @@
 name: Build and Publish Cube AI UI Docker Image
 
 on:
-  schedule:
-    - cron: '0 8 * * 6'
+  workflow_dispatch:
   push:
     branches: [main]
 
