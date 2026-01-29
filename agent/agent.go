@@ -149,7 +149,7 @@ func (a *agentService) Attestation(
 		}
 
 		return rawQuote, nil
-	case attestation.SNPvTPM:
+	case attestation.SNPvTPM, attestation.Azure:
 		vTPMQuote, err := a.provider.Attestation(reportData[:], nonce[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
@@ -160,6 +160,10 @@ func (a *agentService) Attestation(
 		}
 
 		return vTPMQuote, nil
+	case attestation.VTPM:
+		return []byte{}, errors.New("plain vTPM attestation is not supported")
+	case attestation.NoCC:
+		return []byte{}, errors.New("no confidential computing platform detected")
 	default:
 		return []byte{}, ErrAttestationType
 	}
