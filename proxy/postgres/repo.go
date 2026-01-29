@@ -45,7 +45,7 @@ func (r *repository) UpdateAttestationPolicy(ctx context.Context, policy []byte)
 }
 
 // CreateRoute implements proxy.Repository.
-func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) error {
+func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) (*router.RouteRule, error) {
 	q := `INSERT INTO routes (name, target_url, matchers, priority, default_rule, strip_prefix)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (name) DO UPDATE SET
@@ -54,17 +54,33 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) e
 			priority = EXCLUDED.priority,
 			default_rule = EXCLUDED.default_rule,
 			strip_prefix = EXCLUDED.strip_prefix,
-			updated_at = CURRENT_TIMESTAMP`
+			updated_at = CURRENT_TIMESTAMP
+		RETURNING name, target_url, matchers, priority, default_rule, strip_prefix`
 
 	matchersJSON, err := json.Marshal(route.Matchers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = r.db.ExecContext(
+	var (
+		returnedMatchersJSON []byte
+		createdRoute         router.RouteRule
+	)
+
+	row := r.db.QueryRowxContext(
 		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix)
 
-	return err
+	if err := row.Scan(
+		&createdRoute.Name, &createdRoute.TargetURL, &returnedMatchersJSON,
+		&createdRoute.Priority, &createdRoute.DefaultRule, &createdRoute.StripPrefix); err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(returnedMatchersJSON, &createdRoute.Matchers); err != nil {
+		return nil, err
+	}
+
+	return &createdRoute, nil
 }
 
 // GetRoute implements proxy.Repository.
@@ -94,7 +110,7 @@ func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRu
 }
 
 // UpdateRoute implements proxy.Repository.
-func (r *repository) UpdateRoute(ctx context.Context, route *router.RouteRule) error {
+func (r *repository) UpdateRoute(ctx context.Context, route *router.RouteRule) (*router.RouteRule, error) {
 	q := `UPDATE routes SET
 		target_url = $1,
 		matchers = $2,
@@ -102,17 +118,33 @@ func (r *repository) UpdateRoute(ctx context.Context, route *router.RouteRule) e
 		default_rule = $4,
 		strip_prefix = $5,
 		updated_at = CURRENT_TIMESTAMP
-		WHERE name = $6`
+		WHERE name = $6
+		RETURNING name, target_url, matchers, priority, default_rule, strip_prefix`
 
 	matchersJSON, err := json.Marshal(route.Matchers)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	_, err = r.db.ExecContext(
+	var (
+		returnedMatchersJSON []byte
+		updatedRoute         router.RouteRule
+	)
+
+	row := r.db.QueryRowxContext(
 		ctx, q, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix, route.Name)
 
-	return err
+	if err := row.Scan(
+		&updatedRoute.Name, &updatedRoute.TargetURL, &returnedMatchersJSON,
+		&updatedRoute.Priority, &updatedRoute.DefaultRule, &updatedRoute.StripPrefix); err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(returnedMatchersJSON, &updatedRoute.Matchers); err != nil {
+		return nil, err
+	}
+
+	return &updatedRoute, nil
 }
 
 // DeleteRoute implements proxy.Repository.

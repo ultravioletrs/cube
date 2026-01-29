@@ -48,7 +48,7 @@ func (t *tracingMiddleware) UpdateAttestationPolicy(ctx context.Context, session
 }
 
 // CreateRoute implements proxy.Service.
-func (t *tracingMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+func (t *tracingMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
 	ctx, span := t.tracer.Start(ctx, "CreateRoute")
 	defer span.End()
 
@@ -56,7 +56,7 @@ func (t *tracingMiddleware) CreateRoute(ctx context.Context, session *authn.Sess
 }
 
 // UpdateRoute implements proxy.Service.
-func (t *tracingMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+func (t *tracingMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
 	ctx, span := t.tracer.Start(ctx, "UpdateRoute")
 	defer span.End()
 
