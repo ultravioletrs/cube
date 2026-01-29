@@ -5,7 +5,6 @@ package agent
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -14,13 +13,15 @@ import (
 	"time"
 
 	"github.com/absmach/supermq/pkg/errors"
-	"github.com/google/go-sev-guest/abi"
+	"github.com/google/go-sev-guest/proto/sevsnp"
 	tdxabi "github.com/google/go-tdx-guest/abi"
 	"github.com/google/go-tdx-guest/proto/tdx"
+	"github.com/google/go-tpm-tools/proto/attest"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/quoteprovider"
 	"github.com/ultravioletrs/cocos/pkg/attestation/vtpm"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -32,8 +33,6 @@ var (
 	ErrAttestationType = errors.New("invalid attestation type")
 	// ErrUnauthorized indicates that authentication failed.
 	ErrUnauthorized = errors.New("unauthorized")
-	// ErrAttestationTooSmall indicates that the attestation report is too small.
-	ErrAttestationTooSmall = errors.New("attestation contents too small")
 	// ErrAttestationUnmarshal indicates that the attestation report could not be unmarshaled.
 	ErrAttestationUnmarshal = errors.New("failed to unmarshal the attestation report")
 )
@@ -63,7 +62,7 @@ type agentService struct {
 type Service interface {
 	Proxy() http.Handler
 	Attestation(
-		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType, toJSON bool,
+		reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, toJSON bool,
 	) ([]byte, error)
 }
 
@@ -125,49 +124,46 @@ func (a *agentService) Proxy() http.Handler {
 }
 
 func (a *agentService) Attestation(
-	reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, attType attestation.PlatformType, toJSON bool,
+	reportData [quoteprovider.Nonce]byte, nonce [vtpm.Nonce]byte, toJSON bool,
 ) ([]byte, error) {
-	switch attType {
-	case attestation.SNP, attestation.TDX:
+	switch a.ccPlatform {
+	case attestation.SNP:
 		rawQuote, err := a.provider.TeeAttestation(reportData[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
 		}
 
 		if toJSON {
-			return a.attestationToJSON(rawQuote)
+			return a.snpAttestationToJSON(rawQuote)
 		}
 
 		return rawQuote, nil
-	case attestation.VTPM:
-		vTPMQuote, err := a.provider.VTpmAttestation(nonce[:])
+	case attestation.TDX:
+		rawQuote, err := a.provider.TeeAttestation(reportData[:])
 		if err != nil {
-			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
+			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
 		}
 
 		if toJSON {
-			return a.attestationToJSON(vTPMQuote)
+			return a.tdxAttestationToJSON(rawQuote)
 		}
 
-		return vTPMQuote, nil
-	case attestation.SNPvTPM:
+		return rawQuote, nil
+	case attestation.SNPvTPM, attestation.Azure:
 		vTPMQuote, err := a.provider.Attestation(reportData[:], nonce[:])
 		if err != nil {
 			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
 		}
 
 		if toJSON {
-			// SNPvTPM can be either SNP or TDX, check the actual platform
-			if a.ccPlatform == attestation.TDX {
-				return a.tdxAttestationToJSON(vTPMQuote)
-			}
-
-			return a.attestationToJSON(vTPMQuote)
+			return a.snpVtpmAttestationToJSON(vTPMQuote)
 		}
 
 		return vTPMQuote, nil
-	case attestation.Azure, attestation.NoCC:
-		return []byte{}, ErrAttestationType
+	case attestation.VTPM:
+		return []byte{}, errors.New("plain vTPM attestation is not supported")
+	case attestation.NoCC:
+		return []byte{}, errors.New("no confidential computing platform detected")
 	default:
 		return []byte{}, ErrAttestationType
 	}
@@ -178,22 +174,31 @@ func (a *agentService) modifyHeaders(req *http.Request) {
 	req.Header.Del("Authorization")
 }
 
-func (a *agentService) attestationToJSON(report []byte) ([]byte, error) {
-	if len(report) < abi.ReportSize {
-		return nil,
-			fmt.Errorf("%w (0x%x bytes). Want at least 0x%x bytes", ErrAttestationTooSmall, len(report), abi.ReportSize)
+func (a *agentService) snpAttestationToJSON(report []byte) ([]byte, error) {
+	attestationPB := &sevsnp.Attestation{}
+	if err := proto.Unmarshal(report, attestationPB); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal SNP attestation protobuf: %w", err)
 	}
 
-	attestationPB, err := abi.ReportCertsToProto(report[:abi.ReportSize])
-	if err != nil {
-		return nil, err
+	return protojson.MarshalOptions{
+		Multiline: true,
+		Indent:    "\t",
+	}.Marshal(attestationPB)
+}
+
+func (a *agentService) snpVtpmAttestationToJSON(report []byte) ([]byte, error) {
+	attestationPB := &attest.Attestation{}
+	if err := proto.Unmarshal(report, attestationPB); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal SNPvTPM attestation protobuf: %w", err)
 	}
 
-	return json.MarshalIndent(attestationPB, "", "\t")
+	return protojson.MarshalOptions{
+		Multiline: true,
+		Indent:    "\t",
+	}.Marshal(attestationPB)
 }
 
 func (a *agentService) tdxAttestationToJSON(vTPMQuote []byte) ([]byte, error) {
-	// For TDX with vTPM (SNPvTPM case), use TDX-specific conversion
 	res, err := tdxabi.QuoteToProto(vTPMQuote)
 	if err != nil {
 		return nil, errors.Wrap(ErrAttestationFailed, err)
@@ -204,7 +209,10 @@ func (a *agentService) tdxAttestationToJSON(vTPMQuote []byte) ([]byte, error) {
 		return nil, errors.Wrap(ErrAttestationFailed, errors.New("failed to convert to tdx.QuoteV4"))
 	}
 
-	return protojson.Marshal(quote)
+	return protojson.MarshalOptions{
+		Multiline: true,
+		Indent:    "\t",
+	}.Marshal(quote)
 }
 
 func setTLSConfig(config *Config) (*tls.Config, error) {
