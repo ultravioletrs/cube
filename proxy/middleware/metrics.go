@@ -55,7 +55,7 @@ func (m *metricsMiddleware) UpdateAttestationPolicy(ctx context.Context, session
 // CreateRoute implements proxy.Service.
 func (m *metricsMiddleware) CreateRoute(
 	ctx context.Context, session *authn.Session, route *router.RouteRule,
-) (err error) {
+) (*router.RouteRule, error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "create_route").Add(1)
 		m.latency.With("method", "create_route").Observe(time.Since(begin).Seconds())
@@ -67,7 +67,7 @@ func (m *metricsMiddleware) CreateRoute(
 // UpdateRoute implements proxy.Service.
 func (m *metricsMiddleware) UpdateRoute(
 	ctx context.Context, session *authn.Session, route *router.RouteRule,
-) (err error) {
+) (*router.RouteRule, error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "update_route").Add(1)
 		m.latency.With("method", "update_route").Observe(time.Since(begin).Seconds())

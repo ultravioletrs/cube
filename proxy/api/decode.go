@@ -83,14 +83,16 @@ func decodeCreateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 	}, nil
 }
 
-func encodeCreateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+func encodeCreateRouteResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.CreateRouteResponse)
+	if !ok {
+		return errInvalidRequestType
+	}
+
 	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(http.StatusCreated)
 
-	// Return success message
-	return json.NewEncoder(w).Encode(map[string]string{
-		"message": "route created successfully",
-	})
+	return json.NewEncoder(w).Encode(resp.Route)
 }
 
 func decodeGetRouteRequest(ctx context.Context, r *http.Request) (any, error) {
@@ -116,6 +118,14 @@ func encodeGetRouteResponse(_ context.Context, w http.ResponseWriter, response a
 		return errInvalidRequestType
 	}
 
+	if resp.Route == nil {
+		w.Header().Set("Content-Type", ContentType)
+		w.WriteHeader(http.StatusNotFound)
+		return json.NewEncoder(w).Encode(map[string]string{
+			"error": "route not found",
+		})
+	}
+
 	w.Header().Set("Content-Type", ContentType)
 
 	return json.NewEncoder(w).Encode(resp.Route)
@@ -138,14 +148,16 @@ func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 	}, nil
 }
 
-func encodeUpdateRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+func encodeUpdateRouteResponse(_ context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.UpdateRouteResponse)
+	if !ok {
+		return errInvalidRequestType
+	}
+
 	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(http.StatusOK)
 
-	// Return success message
-	return json.NewEncoder(w).Encode(map[string]string{
-		"message": "route updated successfully",
-	})
+	return json.NewEncoder(w).Encode(resp.Route)
 }
 
 func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error) {
@@ -194,5 +206,14 @@ func encodeListRoutesResponse(_ context.Context, w http.ResponseWriter, response
 
 	w.Header().Set("Content-Type", ContentType)
 
-	return json.NewEncoder(w).Encode(resp.Routes)
+	routes := resp.Routes
+	if routes == nil {
+		routes = []router.RouteRule{}
+	}
+
+	return json.NewEncoder(w).Encode(map[string]any{
+		"total":  len(routes),
+		"limit":  10,
+		"routes": routes,
+	})
 }

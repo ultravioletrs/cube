@@ -281,39 +281,67 @@ func (_c *Service_UpdateAttestationPolicy_Call) RunAndReturn(run func(ctx contex
 }
 
 // CreateRoute provides a mock function with given fields: ctx, session, route
-func (_m *Service) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+func (_m *Service) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
 	ret := _m.Called(ctx, session, route)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CreateRoute")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+	var r0 *router.RouteRule
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) (*router.RouteRule, error)); ok {
+		return rf(ctx, session, route)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) *router.RouteRule); ok {
 		r0 = rf(ctx, session, route)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*router.RouteRule)
+		}
 	}
 
-	return r0
+	if len(ret) > 1 {
+		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+			r1 = rf(ctx, session, route)
+		} else {
+			r1 = ret.Error(1)
+		}
+	}
+
+	return r0, r1
 }
 
 // UpdateRoute provides a mock function with given fields: ctx, session, route
-func (_m *Service) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+func (_m *Service) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
 	ret := _m.Called(ctx, session, route)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateRoute")
 	}
 
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+	var r0 *router.RouteRule
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) (*router.RouteRule, error)); ok {
+		return rf(ctx, session, route)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) *router.RouteRule); ok {
 		r0 = rf(ctx, session, route)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*router.RouteRule)
+		}
 	}
 
-	return r0
+	if len(ret) > 1 {
+		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+			r1 = rf(ctx, session, route)
+		} else {
+			r1 = ret.Error(1)
+		}
+	}
+
+	return r0, r1
 }
 
 // DeleteRoute provides a mock function with given fields: ctx, session, name

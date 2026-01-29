@@ -145,18 +145,18 @@ func (am *authMiddleware) UpdateAttestationPolicy(ctx context.Context, session *
 }
 
 // CreateRoute implements proxy.Service.
-func (am *authMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+func (am *authMiddleware) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
 	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
-		return err
+		return nil, err
 	}
 
 	return am.next.CreateRoute(ctx, session, route)
 }
 
 // UpdateRoute implements proxy.Service.
-func (am *authMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) error {
+func (am *authMiddleware) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
 	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
-		return err
+		return nil, err
 	}
 
 	return am.next.UpdateRoute(ctx, session, route)
