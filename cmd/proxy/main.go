@@ -258,7 +258,7 @@ func newService(
 
 // loadDatabaseRoutes loads routes from the database and updates the in-memory router.
 func loadDatabaseRoutes(ctx context.Context, repo proxy.Repository, rter *router.Router) error {
-	routes, err := repo.ListRoutes(ctx)
+	routes, _, err := repo.ListRoutes(ctx, 0, proxy.MaxLimit)
 	if err != nil {
 		return err
 	}

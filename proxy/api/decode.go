@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	mgauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/ultravioletrs/cube/proxy/endpoint"
@@ -182,20 +183,43 @@ func encodeDeleteRouteResponse(_ context.Context, w http.ResponseWriter, _ any) 
 	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(http.StatusOK)
 
-	// Return success message
 	return json.NewEncoder(w).Encode(map[string]string{
 		"message": "route deleted successfully",
 	})
 }
 
-func decodeListRoutesRequest(ctx context.Context, _ *http.Request) (any, error) {
+func decodeListRoutesRequest(ctx context.Context, r *http.Request) (any, error) {
 	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 	if !ok {
 		return nil, errUnauthorized
 	}
 
+	offsetStr := r.URL.Query().Get("offset")
+	limitStr := r.URL.Query().Get("limit")
+
+	offset := uint64(0)
+	limit := uint64(10)
+
+	if offsetStr != "" {
+		var err error
+		offset, err = strconv.ParseUint(offsetStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if limitStr != "" {
+		var err error
+		limit, err = strconv.ParseUint(limitStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return endpoint.ListRoutesRequest{
 		Session: &session,
+		Offset:  offset,
+		Limit:   limit,
 	}, nil
 }
 
@@ -213,8 +237,9 @@ func encodeListRoutesResponse(_ context.Context, w http.ResponseWriter, response
 	}
 
 	return json.NewEncoder(w).Encode(map[string]any{
-		"total":  len(routes),
-		"limit":  10,
+		"total":  resp.Total,
+		"offset": resp.Offset,
+		"limit":  resp.Limit,
 		"routes": routes,
 	})
 }

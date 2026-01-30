@@ -78,7 +78,7 @@ func (s *service) CreateRoute(
 		return nil, err
 	}
 
-	existingRoutes, err := s.repo.ListRoutes(ctx)
+	existingRoutes, _, err := s.repo.ListRoutes(ctx, 0, MaxLimit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list existing routes: %w", err)
 	}
@@ -116,7 +116,7 @@ func (s *service) UpdateRoute(
 		return nil, err
 	}
 
-	existingRoutes, err := s.repo.ListRoutes(ctx)
+	existingRoutes, _, err := s.repo.ListRoutes(ctx, 0, MaxLimit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list existing routes: %w", err)
 	}
@@ -162,8 +162,8 @@ func (s *service) DeleteRoute(ctx context.Context, _ *authn.Session, name string
 }
 
 // ListRoutes implements Service.
-func (s *service) ListRoutes(ctx context.Context, _ *authn.Session) ([]router.RouteRule, error) {
-	return s.repo.ListRoutes(ctx)
+func (s *service) ListRoutes(ctx context.Context, _ *authn.Session, offset, limit uint64) ([]router.RouteRule, uint64, error) {
+	return s.repo.ListRoutes(ctx, offset, limit)
 }
 
 // refreshRoutes updates the in-memory router with routes from database.
@@ -172,7 +172,7 @@ func (s *service) refreshRoutes(ctx context.Context) error {
 		return nil // Router not set, skip refresh
 	}
 
-	routes, err := s.repo.ListRoutes(ctx)
+	routes, _, err := s.repo.ListRoutes(ctx, 0, MaxLimit)
 	if err != nil {
 		return err
 	}

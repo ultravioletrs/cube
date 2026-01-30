@@ -166,13 +166,13 @@ func (r *repository) DeleteRoute(ctx context.Context, name string) error {
 }
 
 // ListRoutes implements proxy.Repository.
-func (r *repository) ListRoutes(ctx context.Context) ([]router.RouteRule, error) {
+func (r *repository) ListRoutes(ctx context.Context, offset, limit uint64) ([]router.RouteRule, uint64, error) {
 	q := `SELECT name, target_url, matchers, priority, default_rule, strip_prefix, enabled
-		FROM routes ORDER BY priority DESC, name ASC`
+		FROM routes ORDER BY priority DESC, name ASC OFFSET $1 LIMIT $2`
 
-	rows, err := r.db.QueryxContext(ctx, q)
+	rows, err := r.db.QueryxContext(ctx, q, offset, limit)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -186,19 +186,24 @@ func (r *repository) ListRoutes(ctx context.Context) ([]router.RouteRule, error)
 		)
 
 		if err := rows.Scan(
-			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority,
-			&route.DefaultRule, &route.StripPrefix, &enabled); err != nil {
-			return nil, err
+			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix, &enabled); err != nil {
+			return nil, 0, err
 		}
 
 		route.Enabled = &enabled
 
 		if err := json.Unmarshal(matchersJSON, &route.Matchers); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 
 		routes = append(routes, route)
 	}
 
-	return routes, rows.Err()
+	cq := "SELECT COUNT(*) FROM routes"
+	var total uint64
+	if err := r.db.QueryRowxContext(ctx, cq).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	return routes, total, rows.Err()
 }
