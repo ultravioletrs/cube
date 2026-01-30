@@ -85,7 +85,8 @@ func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRu
 	row := r.db.QueryRowxContext(ctx, q, name)
 
 	err := row.Scan(
-		&id, &route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix, &enabled, nil, nil)
+		&id, &route.Name, &route.TargetURL, &matchersJSON, &route.Priority,
+		&route.DefaultRule, &route.StripPrefix, &enabled, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +154,8 @@ func (r *repository) ListRoutes(ctx context.Context) ([]router.RouteRule, error)
 		)
 
 		if err := rows.Scan(
-			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix, &enabled); err != nil {
+			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority,
+			&route.DefaultRule, &route.StripPrefix, &enabled); err != nil {
 			return nil, err
 		}
 
