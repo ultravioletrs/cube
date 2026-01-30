@@ -6,10 +6,10 @@ info:
   title: Cube Proxy - Request Forwarding API
   description: |
     API for forwarding requests to backend services (including the agent) through the Cube proxy with dynamic routing.
-    
+
     All requests to the agent service, including attestation requests, are routed through this API. The proxy uses
     routing rules to determine the target backend service based on request characteristics.
-    
+
     Supports all HTTP methods (GET, POST, PUT, DELETE, PATCH) and can forward requests to any configured backend service.
   version: 1.0.0
   contact:
@@ -29,7 +29,7 @@ paths:
       description: |
         Generates an attestation report from the agent. This endpoint is routed to the agent service
         through the proxy's dynamic routing system.
-        
+
         The attestation type is automatically determined by the agent's running environment
         (e.g., SEV-SNP, TDX, or vTPM).
         Reports can be returned as JSON (when supported) or binary format.
@@ -50,56 +50,56 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AttestationRequest'
+              $ref: "#/components/schemas/AttestationRequest"
       responses:
-        '200':
+        "200":
           description: Attestation report generated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AttestationResponse'
+                $ref: "#/components/schemas/AttestationResponse"
             application/octet-stream:
               schema:
                 type: string
                 format: binary
                 description: Binary attestation report (when to_json is false and format is binary)
-        '400':
+        "400":
           description: Invalid request parameters
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '502':
+                $ref: "#/components/schemas/Error"
+        "502":
           description: Bad Gateway - agent service unreachable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Attestation generation failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /{domainID}/{path}:
     get:
       summary: Forward GET request to backend service
       description: |
         Forwards a GET request to a backend service based on the routing rules defined for this domain.
-        
+
         Examples of requests that can be forwarded:
         - GET /{domainID}/attestation/policy - Get attestation policy from agent
         - GET /{domainID}/health - Health check on backend service
@@ -131,7 +131,7 @@ paths:
             type: string
             default: "application/json"
       responses:
-        '200':
+        "200":
           description: Request forwarded successfully
           content:
             application/json:
@@ -141,36 +141,36 @@ paths:
               schema:
                 type: string
                 format: binary
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '502':
+                $ref: "#/components/schemas/Error"
+        "502":
           description: Bad Gateway - target service unreachable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     post:
       summary: Forward POST request to backend service
       description: |
         Forwards a POST request to a backend service based on the routing rules defined for this domain.
-        
+
         Examples of requests that can be forwarded:
         - POST /{domainID}/attestation - Generate attestation report from agent
         - POST /{domainID}/api/resources - Create resource in backend
@@ -212,7 +212,7 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Request forwarded successfully
           content:
             application/json:
@@ -222,42 +222,42 @@ paths:
               schema:
                 type: string
                 format: binary
-        '201':
+        "201":
           description: Resource created
           content:
             application/json:
               schema:
                 type: object
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '502':
+                $ref: "#/components/schemas/Error"
+        "502":
           description: Bad Gateway - target service unreachable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     put:
       summary: Forward PUT request to backend service
       description: |
         Forwards a PUT request to a backend service based on the routing rules defined for this domain.
-        
+
         This can be used for updating resources on backend services reachable through the agent or direct connections.
       operationId: forwardPutRequest
       tags:
@@ -296,7 +296,7 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Request forwarded successfully
           content:
             application/json:
@@ -306,36 +306,36 @@ paths:
               schema:
                 type: string
                 format: binary
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '502':
+                $ref: "#/components/schemas/Error"
+        "502":
           description: Bad Gateway - target service unreachable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     delete:
       summary: Forward DELETE request to backend service
       description: |
         Forwards a DELETE request to a backend service based on the routing rules defined for this domain.
-        
+
         This can be used for deleting resources on backend services reachable through the agent or direct connections.
       operationId: forwardDeleteRequest
       tags:
@@ -358,44 +358,44 @@ paths:
             type: string
             default: "/"
       responses:
-        '200':
+        "200":
           description: Request forwarded successfully
           content:
             application/json:
               schema:
                 type: object
-        '204':
+        "204":
           description: No content - resource deleted
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '502':
+                $ref: "#/components/schemas/Error"
+        "502":
           description: Bad Gateway - target service unreachable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     patch:
       summary: Forward PATCH request to backend service
       description: |
         Forwards a PATCH request to a backend service based on the routing rules defined for this domain.
-        
+
         This can be used for partially updating resources on backend services reachable through the agent or direct connections.
       operationId: forwardPatchRequest
       tags:
@@ -434,7 +434,7 @@ paths:
               type: string
               format: binary
       responses:
-        '200':
+        "200":
           description: Request forwarded successfully
           content:
             application/json:
@@ -444,30 +444,30 @@ paths:
               schema:
                 type: string
                 format: binary
-        '400':
+        "400":
           description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '502':
+                $ref: "#/components/schemas/Error"
+        "502":
           description: Bad Gateway - target service unreachable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
 components:
   schemas:

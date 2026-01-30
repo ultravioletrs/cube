@@ -21,6 +21,7 @@ type RouteRule struct {
 	Priority    int            `json:"priority"`               // Higher priority rules are checked first
 	DefaultRule bool           `json:"default_rule"`           // If true, this rule matches when no others do
 	StripPrefix string         `json:"strip_prefix,omitempty"` // Prefix to strip from the path
+	Enabled     *bool          `json:"enabled,omitempty"`      // If false, route is skipped. Defaults to true if not set.
 
 	// Internal compiled matcher (not serialized)
 	compiledMatcher Matcher `json:"-"`
@@ -47,11 +48,14 @@ type Router struct {
 }
 
 func New(config Config) *Router {
-	routes := make(RouteRules, len(config.Routes))
-	copy(routes, config.Routes)
+	routes := make(RouteRules, 0, len(config.Routes))
+	for _, route := range config.Routes {
+		if route.Enabled != nil && !*route.Enabled {
+			continue
+		}
 
-	for i := range routes {
-		routes[i].compiledMatcher = CreateCompositeMatcher(routes[i].Matchers)
+		route.compiledMatcher = CreateCompositeMatcher(route.Matchers)
+		routes = append(routes, route)
 	}
 
 	sort.Sort(routes)
@@ -68,12 +72,14 @@ func (r *Router) UpdateRoutes(newRoutes []RouteRule) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	routes := make(RouteRules, len(newRoutes))
-	copy(routes, newRoutes)
+	routes := make(RouteRules, 0, len(newRoutes))
+	for _, route := range newRoutes {
+		if route.Enabled != nil && !*route.Enabled {
+			continue // Skip disabled routes
+		}
 
-	// Compile matchers for all routes
-	for i := range routes {
-		routes[i].compiledMatcher = CreateCompositeMatcher(routes[i].Matchers)
+		route.compiledMatcher = CreateCompositeMatcher(route.Matchers)
+		routes = append(routes, route)
 	}
 
 	// Sort by priority (descending)

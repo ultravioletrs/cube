@@ -40,30 +40,30 @@ paths:
               type: object
               description: JSON attestation policy document
       responses:
-        '200':
+        "200":
           description: Policy updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UpdatePolicyResponse'
-        '400':
+                $ref: "#/components/schemas/UpdatePolicyResponse"
+        "400":
           description: Invalid policy document
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '401':
+                $ref: "#/components/schemas/Error"
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /{domainID}/attestation/policy:
     get:
@@ -82,7 +82,7 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: Attestation policy
           content:
             application/octet-stream:
@@ -94,24 +94,24 @@ paths:
               schema:
                 type: object
                 description: JSON attestation policy document
-        '401':
+        "401":
           description: Unauthorized
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '403':
+                $ref: "#/components/schemas/Error"
+        "403":
           description: Forbidden
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
+                $ref: "#/components/schemas/Error"
+        "404":
           description: Domain not found or policy not available
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
 components:
   schemas:

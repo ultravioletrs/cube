@@ -47,6 +47,15 @@ func Migration() *migrate.MemoryMigrationSource {
 					`ALTER TABLE routes DROP COLUMN IF EXISTS strip_prefix`,
 				},
 			},
+			{
+				Id: "20260101000004_add_enabled_to_routes",
+				Up: []string{
+					`ALTER TABLE routes ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT true`,
+				},
+				Down: []string{
+					`ALTER TABLE routes DROP COLUMN IF EXISTS enabled`,
+				},
+			},
 		},
 	}
 }

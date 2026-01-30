@@ -25,12 +25,12 @@ paths:
       tags:
         - Health
       responses:
-        '200':
+        "200":
           description: Health status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/HealthResponse'
+                $ref: "#/components/schemas/HealthResponse"
 
   /guardrails:
     get:
@@ -40,12 +40,12 @@ paths:
       tags:
         - Health
       responses:
-        '200':
+        "200":
           description: Service information
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RootResponse'
+                $ref: "#/components/schemas/RootResponse"
 
   /guardrails/configs:
     post:
@@ -59,26 +59,26 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ConfigCreate'
+              $ref: "#/components/schemas/ConfigCreate"
       responses:
-        '200':
+        "200":
           description: Configuration created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigResponse'
-        '400':
+                $ref: "#/components/schemas/ConfigResponse"
+        "400":
           description: Invalid request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '409':
+                $ref: "#/components/schemas/Error"
+        "409":
           description: Configuration already exists
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     get:
       summary: List guardrail configurations
@@ -87,17 +87,17 @@ paths:
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/limit'
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
       responses:
-        '200':
+        "200":
           description: List of configurations
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/ConfigResponse'
+                  $ref: "#/components/schemas/ConfigResponse"
 
   /guardrails/configs/{config_id}:
     get:
@@ -107,20 +107,20 @@ paths:
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/configId'
+        - $ref: "#/components/parameters/configId"
       responses:
-        '200':
+        "200":
           description: Configuration details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigResponse'
-        '404':
+                $ref: "#/components/schemas/ConfigResponse"
+        "404":
           description: Configuration not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     put:
       summary: Update a guardrail configuration
@@ -129,32 +129,32 @@ paths:
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/configId'
+        - $ref: "#/components/parameters/configId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ConfigUpdate'
+              $ref: "#/components/schemas/ConfigUpdate"
       responses:
-        '200':
+        "200":
           description: Configuration updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigResponse'
-        '400':
+                $ref: "#/components/schemas/ConfigResponse"
+        "400":
           description: Invalid request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
+                $ref: "#/components/schemas/Error"
+        "404":
           description: Configuration not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     delete:
       summary: Delete a guardrail configuration
@@ -163,9 +163,9 @@ paths:
       tags:
         - Configs
       parameters:
-        - $ref: '#/components/parameters/configId'
+        - $ref: "#/components/parameters/configId"
       responses:
-        '200':
+        "200":
           description: Configuration deleted successfully
           content:
             application/json:
@@ -178,12 +178,12 @@ paths:
                   config_id:
                     type: string
                     format: uuid
-        '404':
+        "404":
           description: Configuration not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /guardrails/configs/{config_id}/versions:
     post:
@@ -193,32 +193,32 @@ paths:
       tags:
         - Versions
       parameters:
-        - $ref: '#/components/parameters/configId'
+        - $ref: "#/components/parameters/configId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VersionCreate'
+              $ref: "#/components/schemas/VersionCreate"
       responses:
-        '200':
+        "200":
           description: Version created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VersionResponse'
-        '400':
+                $ref: "#/components/schemas/VersionResponse"
+        "400":
           description: Invalid request body
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '404':
+                $ref: "#/components/schemas/Error"
+        "404":
           description: Configuration not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
     get:
       summary: List versions
@@ -227,24 +227,24 @@ paths:
       tags:
         - Versions
       parameters:
-        - $ref: '#/components/parameters/configId'
-        - $ref: '#/components/parameters/offset'
-        - $ref: '#/components/parameters/limit'
+        - $ref: "#/components/parameters/configId"
+        - $ref: "#/components/parameters/offset"
+        - $ref: "#/components/parameters/limit"
       responses:
-        '200':
+        "200":
           description: List of versions
           content:
             application/json:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/VersionResponse'
-        '404':
+                  $ref: "#/components/schemas/VersionResponse"
+        "404":
           description: Configuration not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /guardrails/versions/{version_id}/activate:
     post:
@@ -262,24 +262,24 @@ paths:
             type: string
             format: uuid
       responses:
-        '200':
+        "200":
           description: Version activated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ActivateResponse'
-        '404':
+                $ref: "#/components/schemas/ActivateResponse"
+        "404":
           description: Version not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '500':
+                $ref: "#/components/schemas/Error"
+        "500":
           description: Activation failed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 
   /guardrails/reload:
     post:
@@ -289,12 +289,12 @@ paths:
       tags:
         - Admin
       responses:
-        '200':
+        "200":
           description: Reload status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReloadResponse'
+                $ref: "#/components/schemas/ReloadResponse"
 
 components:
   parameters:
@@ -353,7 +353,7 @@ components:
           type: array
           description: List of chat messages
           items:
-            $ref: '#/components/schemas/ChatMessage'
+            $ref: "#/components/schemas/ChatMessage"
         temperature:
           type: number
           description: Sampling temperature
@@ -374,7 +374,7 @@ components:
           type: integer
           example: 0
         message:
-          $ref: '#/components/schemas/ChatMessage'
+          $ref: "#/components/schemas/ChatMessage"
         finish_reason:
           type: string
           example: stop

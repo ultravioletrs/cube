@@ -190,6 +190,18 @@ Replace `{domainID}` with your domain ID from the Getting Started section.
 | POST   | `/{domainID}/api/generate`        | Generate completions    |
 | POST   | `/{domainID}/api/chat`            | Chat completions        |
 
+### Route Management Endpoints
+
+**Base URL:** `https://localhost/api/routes`
+
+| Method | Path             | Description             |
+|--------|------------------|-------------------------|
+| GET    | `/`              | List all routes         |
+| POST   | `/`              | Create a new route      |
+| GET    | `/{name}`        | Get a route by name     |
+| PUT    | `/{name}`        | Update a route          |
+| DELETE | `/{name}`        | Delete a route          |
+
 Example:
 
 ```bash
@@ -258,6 +270,18 @@ curl -ksSiX POST https://localhost/domains \
 ```
 
 ## Configuration
+
+### Guardrails
+
+To enable or disable guardrails routing:
+
+```bash
+make enable-guardrails
+# or
+make disable-guardrails
+```
+
+This modifies `docker/config.json` to enable/disable the guardrails-related routes.
 
 ### vLLM Backend
 
