@@ -105,11 +105,11 @@ func (l *loggingMiddleware) GetRoute(
 
 // ListRoutes implements proxy.Service.
 func (l *loggingMiddleware) ListRoutes(
-	ctx context.Context, session *authn.Session,
-) (rules []router.RouteRule, err error) {
+	ctx context.Context, session *authn.Session, offset, limit uint64,
+) (rules []router.RouteRule, total uint64, err error) {
 	defer func(begin time.Time) {
-		l.logger.Info("ListRoutes", "took", time.Since(begin), "error", err)
+		l.logger.Info("ListRoutes", "offset", offset, "limit", limit, "took", time.Since(begin), "error", err)
 	}(time.Now())
 
-	return l.svc.ListRoutes(ctx, session)
+	return l.svc.ListRoutes(ctx, session, offset, limit)
 }

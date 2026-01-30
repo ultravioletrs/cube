@@ -86,9 +86,11 @@ func (t *tracingMiddleware) GetRoute(
 }
 
 // ListRoutes implements proxy.Service.
-func (t *tracingMiddleware) ListRoutes(ctx context.Context, session *authn.Session) ([]router.RouteRule, error) {
+func (t *tracingMiddleware) ListRoutes(
+	ctx context.Context, session *authn.Session, offset, limit uint64,
+) ([]router.RouteRule, uint64, error) {
 	ctx, span := t.tracer.Start(ctx, "ListRoutes")
 	defer span.End()
 
-	return t.svc.ListRoutes(ctx, session)
+	return t.svc.ListRoutes(ctx, session, offset, limit)
 }

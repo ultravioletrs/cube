@@ -188,13 +188,15 @@ func (am *authMiddleware) GetRoute(
 }
 
 // ListRoutes implements proxy.Service.
-func (am *authMiddleware) ListRoutes(ctx context.Context, session *authn.Session) ([]router.RouteRule, error) {
+func (am *authMiddleware) ListRoutes(
+	ctx context.Context, session *authn.Session, offset, limit uint64,
+) ([]router.RouteRule, uint64, error) {
 	// Routes are considered administrative - require super admin
 	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return am.next.ListRoutes(ctx, session)
+	return am.next.ListRoutes(ctx, session, offset, limit)
 }
 
 func (am *authMiddleware) checkSuperAdmin(ctx context.Context, adminID string) error {

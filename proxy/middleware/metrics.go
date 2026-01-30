@@ -94,6 +94,13 @@ func (m *metricsMiddleware) GetRoute(
 }
 
 // ListRoutes implements proxy.Service.
-func (m *metricsMiddleware) ListRoutes(ctx context.Context, session *authn.Session) ([]router.RouteRule, error) {
-	return m.svc.ListRoutes(ctx, session)
+func (m *metricsMiddleware) ListRoutes(
+	ctx context.Context, session *authn.Session, offset, limit uint64,
+) (rules []router.RouteRule, total uint64, err error) {
+	defer func(begin time.Time) {
+		m.counter.With("method", "list_routes").Add(1)
+		m.latency.With("method", "list_routes").Observe(time.Since(begin).Seconds())
+	}(time.Now())
+
+	return m.svc.ListRoutes(ctx, session, offset, limit)
 }
