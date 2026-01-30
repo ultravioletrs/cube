@@ -6,3 +6,10 @@ Name=e*
 
 [Network]
 DHCP=yes
+DNS=8.8.8.8
+DNS=8.8.4.4
+DNSSEC=no
+
+[DHCPv4]
+UseDNS=yes
+RouteMetric=100
