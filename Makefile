@@ -17,6 +17,7 @@ OLLAMA_TARGET_URL = http://ollama:11434
 VLLM_TARGET_URL = http://vllm:8000
 
 ENV_FILE = ./docker/.env
+CONFIG_FILE = ./docker/config.json
 
 define compile_service
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
@@ -271,6 +272,22 @@ clean-env:
 		echo "Removed UV_CUBE_AGENT_TARGET_URL from $(ENV_FILE)"; \
 	fi
 
+.PHONY: enable-guardrails
+enable-guardrails:
+	@echo "Enabling guardrails in config.json..."
+	@sed -i '/"name": "guardrails-agent"/,/"enabled":/{s/"enabled": false/"enabled": true/}' $(CONFIG_FILE)
+	@sed -i '/"name": "forward-to-guardrails"/,/"enabled":/{s/"enabled": false/"enabled": true/}' $(CONFIG_FILE)
+	@sed -i '/"name": "guardrails-admin"/,/"enabled":/{s/"enabled": false/"enabled": true/}' $(CONFIG_FILE)
+	@echo "Guardrails enabled"
+
+.PHONY: disable-guardrails
+disable-guardrails:
+	@echo "Disabling guardrails in config.json..."
+	@sed -i '/"name": "guardrails-agent"/,/"enabled":/{s/"enabled": true/"enabled": false/}' $(CONFIG_FILE)
+	@sed -i '/"name": "forward-to-guardrails"/,/"enabled":/{s/"enabled": true/"enabled": false/}' $(CONFIG_FILE)
+	@sed -i '/"name": "guardrails-admin"/,/"enabled":/{s/"enabled": true/"enabled": false/}' $(CONFIG_FILE)
+	@echo "Guardrails disabled"
+
 # Help
 .PHONY: help
 help:
@@ -287,6 +304,8 @@ help:
 	@echo "Configuration Commands:"
 	@echo "  config-ollama      Configure for Ollama backend"
 	@echo "  config-vllm        Configure for vLLM backend"
+	@echo "  enable-guardrails  Enable guardrails routes in config.json"
+	@echo "  disable-guardrails Disable guardrails routes in config.json"
 	@echo "  show-config        Show current configuration"
 	@echo "  clean-env          Clean environment configuration"
 	@echo ""

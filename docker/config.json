@@ -11,7 +11,8 @@
             "pattern": "true"
           }
         ],
-        "priority": 25
+        "priority": 25,
+        "enabled": true
       },
       {
         "name": "attestation",
@@ -24,7 +25,8 @@
           }
         ],
         "priority": 15,
-        "strip_prefix": ""
+        "strip_prefix": "",
+        "enabled": true
       },
       {
         "name": "audit",
@@ -37,7 +39,8 @@
           }
         ],
         "priority": 10,
-        "strip_prefix": "/audit"
+        "strip_prefix": "/audit",
+        "enabled": true
       },
       {
         "name": "forward-to-guardrails",
@@ -50,7 +53,8 @@
           }
         ],
         "priority": 20,
-        "strip_prefix": "/api/chat"
+        "strip_prefix": "/api/chat",
+        "enabled": true
       },
       {
         "name": "guardrails-admin",
@@ -62,12 +66,14 @@
             "is_regex": true
           }
         ],
-        "priority": 15
+        "priority": 15,
+        "enabled": true
       },
       {
         "name": "agent",
         "target_url": "__CUBE_INTERNAL_AGENT_URL__",
-        "default_rule": true
+        "default_rule": true,
+        "enabled": true
       }
     ]
   },
