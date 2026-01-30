@@ -334,7 +334,15 @@ help:
 	@echo "  make up-ollama                       # Start with Ollama (pulls models)"
 	@echo "  make up-cloud                        # Start cloud deployment locally"
 	@echo "  make up-cube-full                    # Start with guardrails"
+	@echo "  make up-cube-lite                    # Start without guardrails"
 	@echo "  make config-vllm && make up          # Configure and start vLLM"
+
+.PHONY: up-cube-full
+up-cube-full: enable-guardrails up
+
+.PHONY: up-cube-lite
+up-cube-lite: disable-guardrails up
+
 
 all: build docker-dev
 
