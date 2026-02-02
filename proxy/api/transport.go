@@ -45,7 +45,6 @@ func MakeHandler(
 	idp supermq.IDProvider,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
-	_ GuardrailsConfig,
 ) http.Handler {
 	endpoints := endpoint.MakeEndpoints(svc)
 

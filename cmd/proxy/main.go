@@ -209,12 +209,6 @@ func main() {
 		return
 	}
 
-	guardrailsCfg := api.GuardrailsConfig{
-		Enabled:  cfg.GuardrailsEnabled,
-		URL:      cfg.GuardrailsURL,
-		AgentURL: cfg.AgentURL,
-	}
-
 	// Wrap agent transport with instrumented transport for aTLS audit logging
 	agentTransport := agentClient.Transport()
 	attestationType := deriveAttestationType(agentClient.Secure())
@@ -222,7 +216,7 @@ func main() {
 
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, instrumentedTransport, rter, guardrailsCfg,
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, instrumentedTransport, rter,
 		),
 		logger)
 
