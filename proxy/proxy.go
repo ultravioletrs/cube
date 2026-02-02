@@ -26,7 +26,8 @@ type Service interface {
 	UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error)
 	DeleteRoute(ctx context.Context, session *authn.Session, name string) error
 	GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error)
-	ListRoutes(ctx context.Context, session *authn.Session, offset, limit uint64) (routes []router.RouteRule, total uint64, err error)
+	ListRoutes(ctx context.Context, session *authn.Session, offset,
+		limit uint64) (routes []router.RouteRule, total uint64, err error)
 }
 
 type Repository interface {

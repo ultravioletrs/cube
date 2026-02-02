@@ -202,6 +202,7 @@ func decodeListRoutesRequest(ctx context.Context, r *http.Request) (any, error) 
 
 	if offsetStr != "" {
 		var err error
+
 		offset, err = strconv.ParseUint(offsetStr, 10, 64)
 		if err != nil {
 			return nil, err
@@ -210,6 +211,7 @@ func decodeListRoutesRequest(ctx context.Context, r *http.Request) (any, error) 
 
 	if limitStr != "" {
 		var err error
+
 		limit, err = strconv.ParseUint(limitStr, 10, 64)
 		if err != nil {
 			return nil, err

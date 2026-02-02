@@ -186,7 +186,8 @@ func (r *repository) ListRoutes(ctx context.Context, offset, limit uint64) ([]ro
 		)
 
 		if err := rows.Scan(
-			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule, &route.StripPrefix, &enabled); err != nil {
+			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule,
+			&route.StripPrefix, &enabled); err != nil {
 			return nil, 0, err
 		}
 
@@ -200,6 +201,7 @@ func (r *repository) ListRoutes(ctx context.Context, offset, limit uint64) ([]ro
 	}
 
 	cq := "SELECT COUNT(*) FROM routes"
+
 	var total uint64
 	if err := r.db.QueryRowxContext(ctx, cq).Scan(&total); err != nil {
 		return nil, 0, err

@@ -162,7 +162,9 @@ func (s *service) DeleteRoute(ctx context.Context, _ *authn.Session, name string
 }
 
 // ListRoutes implements Service.
-func (s *service) ListRoutes(ctx context.Context, _ *authn.Session, offset, limit uint64) ([]router.RouteRule, uint64, error) {
+func (s *service) ListRoutes(
+	ctx context.Context, _ *authn.Session, offset, limit uint64,
+) ([]router.RouteRule, uint64, error) {
 	return s.repo.ListRoutes(ctx, offset, limit)
 }
 
