@@ -4,7 +4,6 @@
 package audit
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/asn1"
@@ -30,9 +29,6 @@ const (
 	headerATLSHandshake     = "X-Atls-Handshake"
 	headerATLSHandshakeMs   = "X-Atls-Handshake-Ms"
 
-	// Common string constants.
-	strTrue    = "true"
-	strFalse   = "false"
 	strUnknown = "Unknown"
 )
 
@@ -45,14 +41,6 @@ var (
 	azureOID   = asn1.ObjectIdentifier{2, 99999, 1, 1}
 	tdxOID     = asn1.ObjectIdentifier{2, 99999, 1, 2}
 )
-
-// AttestationContextKey is the context key for attestation results.
-type attestationContextKey struct{}
-
-// AttestationContextKey is exported for use in middleware.
-//
-//nolint:gochecknoglobals // Context keys must be package-level variables
-var AttestationContextKey = attestationContextKey{}
 
 // AttestationResult holds the results of an aTLS handshake and attestation verification.
 type AttestationResult struct {
@@ -96,27 +84,27 @@ func NewInstrumentedTransport(base http.RoundTripper, attestationType string) *I
 }
 
 // RoundTrip implements http.RoundTripper and captures attestation details.
-func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+func (it *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	start := time.Now()
 
 	// Perform the actual request
-	resp, err := t.base.RoundTrip(req)
+	resp, err := it.base.RoundTrip(req)
 
 	handshakeDuration := time.Since(start)
 
 	// Check if aTLS is expected based on configuration
-	atlsExpected := t.attestationType != "" && t.attestationType != "NoCC"
+	atlsExpected := it.attestationType != "" && it.attestationType != "NoCC"
 
 	// Capture attestation result
 	result := &AttestationResult{
 		ATLSHandshake:     false, // Will be set to true only if we have actual TLS state
 		HandshakeDuration: handshakeDuration,
-		AttestationType:   t.attestationType,
+		AttestationType:   it.attestationType,
 	}
 
 	// Extract TLS connection state if available
 	if resp != nil && resp.TLS != nil {
-		t.extractTLSDetails(result, resp.TLS)
+		it.extractTLSDetails(result, resp.TLS)
 		// Only mark as aTLS handshake if we actually have TLS and aTLS was expected
 		result.ATLSHandshake = atlsExpected
 	}
@@ -137,33 +125,33 @@ func (t *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, er
 	}
 
 	// Store the result
-	t.mu.Lock()
-	t.lastResult = result
-	t.mu.Unlock()
+	it.mu.Lock()
+	it.lastResult = result
+	it.mu.Unlock()
 
 	// Add attestation result to response headers for audit middleware to pick up
 	// (context doesn't flow back from RoundTrip, so we use headers)
 	if resp != nil {
-		t.setResponseHeaders(resp, result, atlsExpected)
+		it.setResponseHeaders(resp, result, atlsExpected)
 	}
 
 	return resp, err
 }
 
 // GetLastResult returns the last attestation result (thread-safe).
-func (t *InstrumentedTransport) GetLastResult() *AttestationResult {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
+func (it *InstrumentedTransport) GetLastResult() *AttestationResult {
+	it.mu.RLock()
+	defer it.mu.RUnlock()
 
-	if t.lastResult == nil {
+	if it.lastResult == nil {
 		return nil
 	}
 
-	result := *t.lastResult
+	result := *it.lastResult
 
-	if t.lastResult.Report != nil {
-		result.Report = make(map[string]any, len(t.lastResult.Report))
-		for k, v := range t.lastResult.Report {
+	if it.lastResult.Report != nil {
+		result.Report = make(map[string]any, len(it.lastResult.Report))
+		for k, v := range it.lastResult.Report {
 			result.Report[k] = v
 		}
 	}
@@ -172,7 +160,7 @@ func (t *InstrumentedTransport) GetLastResult() *AttestationResult {
 }
 
 // setResponseHeaders adds attestation result to response headers for audit middleware.
-func (t *InstrumentedTransport) setResponseHeaders(resp *http.Response, result *AttestationResult, atlsExpected bool) {
+func (it *InstrumentedTransport) setResponseHeaders(resp *http.Response, result *AttestationResult, atlsExpected bool) {
 	if resp.Header == nil {
 		resp.Header = make(http.Header)
 	}
@@ -197,9 +185,11 @@ func (t *InstrumentedTransport) setResponseHeaders(resp *http.Response, result *
 	}
 
 	resp.Header.Set(headerAttestationType, result.AttestationType)
-	resp.Header.Set(headerAttestationOK, boolToString(result.AttestationOK))
-	resp.Header.Set(headerATLSHandshake, boolToString(result.ATLSHandshake))
-	resp.Header.Set(headerATLSHandshakeMs, floatToString(float64(result.HandshakeDuration.Nanoseconds())/1e6))
+	resp.Header.Set(headerAttestationOK, strconv.FormatBool(result.AttestationOK))
+	resp.Header.Set(headerATLSHandshake, strconv.FormatBool(result.ATLSHandshake))
+
+	ms := float64(result.HandshakeDuration.Nanoseconds()) / 1e6
+	resp.Header.Set(headerATLSHandshakeMs, strconv.FormatFloat(ms, 'f', 3, 64))
 
 	if result.AttestationError != "" {
 		resp.Header.Set(headerAttestationError, result.AttestationError)
@@ -218,7 +208,7 @@ func (t *InstrumentedTransport) setResponseHeaders(resp *http.Response, result *
 }
 
 // extractTLSDetails extracts TLS connection details from the connection state.
-func (t *InstrumentedTransport) extractTLSDetails(result *AttestationResult, state *tls.ConnectionState) {
+func (it *InstrumentedTransport) extractTLSDetails(result *AttestationResult, state *tls.ConnectionState) {
 	result.TLSVersion = tlsVersionString(state.Version)
 	result.CipherSuite = tls.CipherSuiteName(state.CipherSuite)
 	result.ServerName = state.ServerName
@@ -236,7 +226,7 @@ func (t *InstrumentedTransport) extractTLSDetails(result *AttestationResult, sta
 		result.PeerCertSerial = hex.EncodeToString(cert.SerialNumber.Bytes())
 
 		// Extract attestation report from certificate extensions
-		result.Report = extractAttestationFromCert(cert, t.attestationType)
+		result.Report = extractAttestationFromCert(cert, it.attestationType)
 	}
 }
 
@@ -305,45 +295,13 @@ func extractAttestationFromCert(cert *x509.Certificate, platformType string) map
 	return report
 }
 
-// Helper functions
-
 func tlsVersionString(version uint16) string {
 	switch version {
 	case tls.VersionTLS13:
 		return "TLS1.3"
 	case tls.VersionTLS12:
 		return "TLS1.2"
-	case tls.VersionTLS11:
-		return "TLS1.1"
-	case tls.VersionTLS10:
-		return "TLS1.0"
 	default:
 		return strUnknown
 	}
-}
-
-func boolToString(b bool) string {
-	if b {
-		return strTrue
-	}
-
-	return strFalse
-}
-
-func floatToString(f float64) string {
-	return strconv.FormatFloat(f, 'f', 3, 64)
-}
-
-// ContextWithAttestation adds attestation result to context.
-func ContextWithAttestation(ctx context.Context, result *AttestationResult) context.Context {
-	return context.WithValue(ctx, AttestationContextKey, result)
-}
-
-// AttestationFromContext retrieves attestation result from context.
-func AttestationFromContext(ctx context.Context) *AttestationResult {
-	if result, ok := ctx.Value(AttestationContextKey).(*AttestationResult); ok {
-		return result
-	}
-
-	return nil
 }
