@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,7 +37,7 @@ type Event struct {
 	EventType string    `json:"event_type"`
 
 	// Authentication & Authorization
-	Session         authn.Session `json:"session,omitempty"`
+	Session         authn.Session `json:"session,omitzero"`
 	AuthMethod      string        `json:"auth_method,omitempty"`
 	AttestationType string        `json:"attestation_type,omitempty"`
 	AttestationOK   bool          `json:"attestation_ok,omitempty"`
@@ -68,16 +69,24 @@ type Event struct {
 	// Security & Compliance
 	TLSVersion      string   `json:"tls_version,omitempty"`
 	CipherSuite     string   `json:"cipher_suite,omitempty"`
+	PeerCertIssuer  string   `json:"peer_cert_issuer,omitempty"`
 	ContentFiltered bool     `json:"content_filtered"`
 	PIIDetected     bool     `json:"pii_detected"`
 	ComplianceTags  []string `json:"compliance_tags,omitempty"`
+
+	// aTLS & Attestation (extends Auth section above)
+	ATLSHandshake     bool           `json:"atls_handshake"`
+	ATLSHandshakeMs   float64        `json:"atls_handshake_ms,omitempty"`
+	AttestationError  string         `json:"attestation_error,omitempty"`
+	AttestationNonce  string         `json:"attestation_nonce,omitempty"`
+	AttestationReport map[string]any `json:"attestation_report,omitempty"`
 
 	// Error handling
 	Error     string `json:"error,omitempty"`
 	ErrorCode string `json:"error_code,omitempty"`
 
 	// Additional metadata
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // AuditMiddleware provides structured audit logging.
@@ -103,13 +112,16 @@ type Config struct {
 type responseCapture struct {
 	http.ResponseWriter
 
-	statusCode int
-	size       int64
-	body       *bytes.Buffer
+	statusCode      int
+	size            int64
+	body            *bytes.Buffer
+	responseHeaders http.Header
 }
 
 func (rc *responseCapture) WriteHeader(statusCode int) {
 	rc.statusCode = statusCode
+	// Capture response headers before they're written
+	rc.responseHeaders = rc.ResponseWriter.Header().Clone()
 	rc.ResponseWriter.WriteHeader(statusCode)
 }
 
@@ -120,6 +132,11 @@ func (rc *responseCapture) Write(data []byte) (int, error) {
 	}
 
 	return rc.ResponseWriter.Write(data)
+}
+
+// Header returns the header map to allow setting response headers.
+func (rc *responseCapture) Header() http.Header {
+	return rc.ResponseWriter.Header()
 }
 
 // NewAuditMiddleware creates a new audit middleware instance.
@@ -253,11 +270,14 @@ func (am *auditMiddleware) createAuditEvent(
 
 	event.ContentFiltered = am.checkContentFilter(&event)
 
+	// Extract attestation information from response headers (set by instrumented transport)
+	am.extractAttestationInfo(&event, capture.responseHeaders)
+
 	return event
 }
 
 func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) {
-	var requestData map[string]interface{}
+	var requestData map[string]any
 	if err := json.Unmarshal(requestBody, &requestData); err != nil {
 		return
 	}
@@ -275,11 +295,11 @@ func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) 
 	}
 
 	// Estimate input tokens (rough approximation)
-	if messages, ok := requestData["messages"].([]interface{}); ok {
+	if messages, ok := requestData["messages"].([]any); ok {
 		totalChars := 0
 
 		for _, msg := range messages {
-			if msgMap, ok := msg.(map[string]interface{}); ok {
+			if msgMap, ok := msg.(map[string]any); ok {
 				if content, ok := msgMap["content"].(string); ok {
 					totalChars += len(content)
 				}
@@ -291,18 +311,74 @@ func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) 
 }
 
 func (am *auditMiddleware) extractLLMResponse(event *Event, responseBody []byte) {
-	var responseData map[string]interface{}
+	var responseData map[string]any
 	if err := json.Unmarshal(responseBody, &responseData); err != nil {
 		return
 	}
 
-	if usage, ok := responseData["usage"].(map[string]interface{}); ok {
+	if usage, ok := responseData["usage"].(map[string]any); ok {
 		if promptTokens, ok := usage["prompt_tokens"].(float64); ok {
 			event.InputTokens = int(promptTokens)
 		}
 
 		if completionTokens, ok := usage["completion_tokens"].(float64); ok {
 			event.OutputTokens = int(completionTokens)
+		}
+	}
+}
+
+func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Header) {
+	if headers == nil {
+		return
+	}
+
+	// Extract TLS connection details (available for any TLS connection)
+	// Using canonical header names (Go's http package canonicalizes headers)
+	if tlsVersion := headers.Get("X-Tls-Version"); tlsVersion != "" {
+		event.TLSVersion = tlsVersion
+	}
+
+	if cipherSuite := headers.Get("X-Tls-Cipher-Suite"); cipherSuite != "" {
+		event.CipherSuite = cipherSuite
+	}
+
+	if peerCertIssuer := headers.Get("X-Tls-Peer-Cert-Issuer"); peerCertIssuer != "" {
+		event.PeerCertIssuer = peerCertIssuer
+	}
+
+	// Check for attestation type header (indicates aTLS was configured)
+	am.extractAttestationDetails(headers, event)
+}
+
+// extractAttestationDetails extracts aTLS/attestation information from response headers.
+func (am *auditMiddleware) extractAttestationDetails(headers http.Header, event *Event) {
+	atlsType := headers.Get("X-Attestation-Type")
+	if atlsType == "" {
+		return
+	}
+
+	event.AttestationType = atlsType
+	event.ATLSHandshake = headers.Get("X-Atls-Handshake") == "true"
+	event.AttestationOK = headers.Get("X-Attestation-Ok") == "true"
+
+	if atlsError := headers.Get("X-Attestation-Error"); atlsError != "" {
+		event.AttestationError = atlsError
+	}
+
+	if atlsNonce := headers.Get("X-Attestation-Nonce"); atlsNonce != "" {
+		event.AttestationNonce = atlsNonce
+	}
+
+	if handshakeMs := headers.Get("X-Atls-Handshake-Ms"); handshakeMs != "" {
+		if ms, err := strconv.ParseFloat(handshakeMs, 64); err == nil {
+			event.ATLSHandshakeMs = ms
+		}
+	}
+
+	if reportJSON := headers.Get("X-Attestation-Report"); reportJSON != "" {
+		var report map[string]any
+		if err := json.Unmarshal([]byte(reportJSON), &report); err == nil {
+			event.AttestationReport = report
 		}
 	}
 }
@@ -338,8 +414,37 @@ func (am *auditMiddleware) logAuditEvent(ctx context.Context, event *Event) {
 		slog.Bool("content_filtered", event.ContentFiltered),
 	)
 
+	// Add TLS connection details
 	if event.TLSVersion != "" {
-		logAttrs = append(logAttrs, slog.String("tls_version", event.TLSVersion))
+		logAttrs = append(logAttrs,
+			slog.String("tls_version", event.TLSVersion),
+		)
+
+		if event.CipherSuite != "" {
+			logAttrs = append(logAttrs, slog.String("cipher_suite", event.CipherSuite))
+		}
+
+		if event.PeerCertIssuer != "" {
+			logAttrs = append(logAttrs, slog.String("peer_cert_issuer", event.PeerCertIssuer))
+		}
+	}
+
+	// Add attestation details if aTLS was configured or used
+	if event.ATLSHandshake || event.AttestationType != "" {
+		logAttrs = append(logAttrs,
+			slog.Bool("atls_handshake", event.ATLSHandshake),
+			slog.Float64("atls_handshake_ms", event.ATLSHandshakeMs),
+			slog.Bool("attestation_ok", event.AttestationOK),
+			slog.String("attestation_type", event.AttestationType),
+		)
+
+		if event.AttestationError != "" {
+			logAttrs = append(logAttrs, slog.String("attestation_error", event.AttestationError))
+		}
+
+		if event.AttestationNonce != "" {
+			logAttrs = append(logAttrs, slog.String("attestation_nonce", event.AttestationNonce))
+		}
 	}
 
 	logAttrs = append(logAttrs, slog.Any("event", event))
