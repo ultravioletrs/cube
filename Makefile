@@ -156,7 +156,15 @@ up-vllm: config-vllm
 	docker compose -f docker/compose.yaml --profile vllm up -d
 
 .PHONY: up
-up: config-backend
+up: enable-guardrails config-backend
+ifeq ($(AI_BACKEND),vllm)
+	@$(MAKE) up-vllm
+else
+	@$(MAKE) up-ollama
+endif
+
+.PHONY: up-disable-guardrails
+up-disable-guardrails: disable-guardrails config-backend
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -310,16 +318,17 @@ help:
 	@echo "  clean-env          Clean environment configuration"
 	@echo ""
 	@echo "Deployment Commands:"
-	@echo "  up                 Start dev environment using docker-compose.yaml (AI_BACKEND=ollama|vllm)"
-	@echo "  up-ollama          Start with Ollama backend (pulls models automatically)"
-	@echo "  up-vllm            Start with vLLM backend"
-	@echo "  up-cloud           Start cloud deployment using cloud-compose.yaml"
-	@echo "  down               Stop all services"
-	@echo "  down-cloud         Stop cloud services and restore config"
-	@echo "  down-volumes       Stop all services and remove volumes"
-	@echo "  down-cloud-volumes Stop cloud services, remove volumes, and restore config"
-	@echo "  restart            Restart with configured backend"
-	@echo "  restart-cloud      Restart cloud deployment"
+	@echo "  up                      Start with guardrails enabled (default)"
+	@echo "  up-disable-guardrails   Start without guardrails"
+	@echo "  up-ollama               Start with Ollama backend (pulls models automatically)"
+	@echo "  up-vllm                 Start with vLLM backend"
+	@echo "  up-cloud                Start cloud deployment using cloud-compose.yaml"
+	@echo "  down                    Stop all services"
+	@echo "  down-cloud              Stop cloud services and restore config"
+	@echo "  down-volumes            Stop all services and remove volumes"
+	@echo "  down-cloud-volumes      Stop cloud services, remove volumes, and restore config"
+	@echo "  restart                 Restart with configured backend"
+	@echo "  restart-cloud           Restart cloud deployment"
 	@echo ""
 	@echo "Cloud Configuration Commands:"
 	@echo "  config-cloud-local Configure cloud deployment with localhost defaults"
@@ -330,18 +339,12 @@ help:
 	@echo "  logs-cloud         Show cloud deployment logs"
 	@echo ""
 	@echo "Examples:"
-	@echo "  make up AI_BACKEND=vllm              # Start with vLLM"
+	@echo "  make up                              # Start with guardrails (default)"
+	@echo "  make up-disable-guardrails           # Start without guardrails"
+	@echo "  make up AI_BACKEND=vllm              # Start with vLLM + guardrails"
 	@echo "  make up-ollama                       # Start with Ollama (pulls models)"
 	@echo "  make up-cloud                        # Start cloud deployment locally"
-	@echo "  make up-cube-full                    # Start with guardrails"
-	@echo "  make up-cube-lite                    # Start without guardrails"
-	@echo "  make config-vllm && make up          # Configure and start vLLM"
 
-.PHONY: up-cube-full
-up-cube-full: enable-guardrails up
-
-.PHONY: up-cube-lite
-up-cube-lite: disable-guardrails up
 
 
 all: build docker-dev

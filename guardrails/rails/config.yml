@@ -6,7 +6,7 @@ models:
     engine: CubeLLM
     model: llama3.2:3b
     parameters:
-      base_url: __CUBE_INTERNAL_AGENT_URL__
+      base_url: "http://cube-proxy:8900"
       headers:
         X-Guardrails-Request: "true"
 
