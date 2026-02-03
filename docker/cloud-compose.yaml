@@ -89,6 +89,8 @@ services:
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       opensearch:
         condition: service_healthy
@@ -192,11 +194,12 @@ services:
     container_name: cube-cloud-auth
     profiles: ["cloud"]
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: fluent-bit:24224
-        tag: docker.supermq-auth
-        fluentd-async: "true"
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "supermq-auth|{{.Name}}"
     depends_on:
       - auth-db
       - spicedb
@@ -289,11 +292,12 @@ services:
     container_name: cube-cloud-users
     profiles: ["cloud"]
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: fluent-bit:24224
-        tag: docker.supermq-users
-        fluentd-async: "true"
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "supermq-users|{{.Name}}"
     depends_on:
       - users-db
       - auth
@@ -419,11 +423,12 @@ services:
       - ${SMQ_DOMAINS_GRPC_PORT}
     restart: on-failure
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: fluent-bit:24224
-        tag: docker.supermq-domains
-        fluentd-async: "true"
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "supermq-domains|{{.Name}}"
     environment:
       SMQ_DOMAINS_LOG_LEVEL: ${SMQ_DOMAINS_LOG_LEVEL}
       SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
@@ -573,11 +578,12 @@ services:
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: fluent-bit:24224
-        tag: docker.cube-proxy
-        fluentd-async: "true"
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "cube-proxy|{{.Name}}"
     networks:
       - cube-cloud-network
     depends_on:
