@@ -84,10 +84,16 @@ func decodeCreateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 	}, nil
 }
 
-func encodeCreateRouteResponse(_ context.Context, w http.ResponseWriter, response any) error {
+func encodeCreateRouteResponse(ctx context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.CreateRouteResponse)
 	if !ok {
 		return errInvalidRequestType
+	}
+
+	if err := resp.Failed(); err != nil {
+		encodeError(ctx, err, w)
+
+		return nil
 	}
 
 	w.Header().Set("Content-Type", ContentType)
@@ -113,10 +119,16 @@ func decodeGetRouteRequest(ctx context.Context, r *http.Request) (any, error) {
 	}, nil
 }
 
-func encodeGetRouteResponse(_ context.Context, w http.ResponseWriter, response any) error {
+func encodeGetRouteResponse(ctx context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.GetRouteResponse)
 	if !ok {
 		return errInvalidRequestType
+	}
+
+	if err := resp.Failed(); err != nil {
+		encodeError(ctx, err, w)
+
+		return nil
 	}
 
 	if resp.Route == nil {
@@ -150,10 +162,16 @@ func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 	}, nil
 }
 
-func encodeUpdateRouteResponse(_ context.Context, w http.ResponseWriter, response any) error {
+func encodeUpdateRouteResponse(ctx context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.UpdateRouteResponse)
 	if !ok {
 		return errInvalidRequestType
+	}
+
+	if err := resp.Failed(); err != nil {
+		encodeError(ctx, err, w)
+
+		return nil
 	}
 
 	w.Header().Set("Content-Type", ContentType)
@@ -179,7 +197,18 @@ func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error)
 	}, nil
 }
 
-func encodeDeleteRouteResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+func encodeDeleteRouteResponse(ctx context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.DeleteRouteResponse)
+	if !ok {
+		return errInvalidRequestType
+	}
+
+	if err := resp.Failed(); err != nil {
+		encodeError(ctx, err, w)
+
+		return nil
+	}
+
 	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(http.StatusOK)
 
@@ -225,10 +254,16 @@ func decodeListRoutesRequest(ctx context.Context, r *http.Request) (any, error) 
 	}, nil
 }
 
-func encodeListRoutesResponse(_ context.Context, w http.ResponseWriter, response any) error {
+func encodeListRoutesResponse(ctx context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.ListRoutesResponse)
 	if !ok {
 		return errInvalidRequestType
+	}
+
+	if err := resp.Failed(); err != nil {
+		encodeError(ctx, err, w)
+
+		return nil
 	}
 
 	w.Header().Set("Content-Type", ContentType)

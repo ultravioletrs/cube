@@ -302,6 +302,8 @@ components:
             - method
             - header
             - query
+            - body_field
+            - body_regex
         path:
           type: string
           description: Path pattern to match (when type is 'path')

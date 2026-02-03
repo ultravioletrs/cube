@@ -158,7 +158,7 @@ func main() {
 		return
 	}
 
-	rter, err := initRouter(cfg.RouterConfig)
+	fileCfg, rter, err := initRouter(cfg.RouterConfig)
 	if err != nil {
 		logger.Error(err.Error())
 
@@ -168,7 +168,7 @@ func main() {
 	}
 
 	// Load routes from database and update in-memory router
-	if err := loadDatabaseRoutes(ctx, repo, rter); err != nil {
+	if err := loadDatabaseRoutes(ctx, repo, rter, fileCfg.Router.Routes); err != nil {
 		logger.Error(fmt.Sprintf("failed to load routes from database: %s", err))
 	}
 
@@ -257,10 +257,47 @@ func newService(
 }
 
 // loadDatabaseRoutes loads routes from the database and updates the in-memory router.
-func loadDatabaseRoutes(ctx context.Context, repo proxy.Repository, rter *router.Router) error {
+func loadDatabaseRoutes(
+	ctx context.Context, repo proxy.Repository, rter *router.Router, defaultRoutes []router.RouteRule,
+) error {
 	routes, _, err := repo.ListRoutes(ctx, 0, proxy.MaxLimit)
 	if err != nil {
 		return err
+	}
+
+	// If DB is empty and we have default routes, seed them
+	if len(routes) == 0 && len(defaultRoutes) > 0 {
+		seededRoutes := make([]router.RouteRule, 0, len(defaultRoutes))
+
+		for _, route := range defaultRoutes {
+			// Skip disabled routes
+			if route.Enabled != nil && !*route.Enabled {
+				continue
+			}
+
+			// Validate route before inserting
+			if err := router.ValidateRoute(&route); err != nil {
+				log.Printf("Skipping invalid default route %s: %s", route.Name, err)
+
+				continue
+			}
+
+			created, err := repo.CreateRoute(ctx, &route)
+			if err != nil {
+				log.Printf("Failed to seed default route %s: %s", route.Name, err)
+
+				continue
+			}
+
+			seededRoutes = append(seededRoutes, *created)
+		}
+
+		if len(seededRoutes) > 0 {
+			log.Printf("Seeded %d default routes into database", len(seededRoutes))
+			rter.UpdateRoutes(seededRoutes)
+
+			return nil
+		}
 	}
 
 	if len(routes) > 0 {
@@ -314,18 +351,18 @@ func initAuthClients(
 }
 
 // initRouter initializes the router from a config file.
-func initRouter(configPath string) (*router.Router, error) {
+func initRouter(configPath string) (fileConfig, *router.Router, error) {
 	routerFile, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read router config file: %w", err)
+		return fileConfig{}, nil, fmt.Errorf("failed to read router config file: %w", err)
 	}
 
 	var fileCfg fileConfig
 	if err := json.Unmarshal(routerFile, &fileCfg); err != nil {
-		return nil, fmt.Errorf("failed to parse router config file: %w", err)
+		return fileConfig{}, nil, fmt.Errorf("failed to parse router config file: %w", err)
 	}
 
-	return router.New(fileCfg.Router), nil
+	return fileCfg, router.New(fileCfg.Router), nil
 }
 
 // deriveAttestationType determines the attestation type from the security string.

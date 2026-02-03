@@ -75,7 +75,7 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) (
 
 	if err := row.Scan(
 		&createdRoute.Name, &createdRoute.TargetURL, &returnedMatchersJSON,
-		&createdRoute.Priority, &createdRoute.DefaultRule, &createdRoute.StripPrefix); err != nil {
+		&createdRoute.Priority, &createdRoute.DefaultRule, &createdRoute.StripPrefix, &enabled); err != nil {
 		return nil, err
 	}
 
@@ -146,7 +146,7 @@ func (r *repository) UpdateRoute(ctx context.Context, route *router.RouteRule) (
 
 	if err := row.Scan(
 		&updatedRoute.Name, &updatedRoute.TargetURL, &returnedMatchersJSON,
-		&updatedRoute.Priority, &updatedRoute.DefaultRule, &updatedRoute.StripPrefix); err != nil {
+		&updatedRoute.Priority, &updatedRoute.DefaultRule, &updatedRoute.StripPrefix, &enabled); err != nil {
 		return nil, err
 	}
 
