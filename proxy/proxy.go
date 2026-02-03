@@ -5,6 +5,7 @@ package proxy
 
 import (
 	"context"
+	"math"
 
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/ultravioletrs/cube/proxy/router"
@@ -14,7 +15,7 @@ type ContextKey string
 
 const (
 	MethodContextKey ContextKey = "method"
-	MaxLimit         uint64     = 1<<64 - 1
+	MaxLimit         uint64     = math.MaxInt64
 )
 
 type Service interface {
