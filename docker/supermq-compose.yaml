@@ -91,9 +91,15 @@ services:
   auth:
     image: docker.io/supermq/auth:${SMQ_RELEASE_TAG}
     container_name: supermq-auth
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        tag: docker.supermq-auth
     depends_on:
       - auth-db
       - spicedb
+      - fluent-bit
     expose:
       - ${SMQ_AUTH_GRPC_PORT}
     restart: on-failure
@@ -103,6 +109,8 @@ services:
       SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
       SMQ_SPICEDB_HOST: ${SMQ_SPICEDB_HOST}
       SMQ_SPICEDB_PORT: ${SMQ_SPICEDB_PORT}
+      SMQ_AUTH_SECRET_KEY: ${SMQ_AUTH_SECRET_KEY}
+      SMQ_AUTH_LOGIN_TOKEN_DURATION: ${SMQ_AUTH_LOGIN_TOKEN_DURATION}
       SMQ_AUTH_INVITATION_DURATION: ${SMQ_AUTH_INVITATION_DURATION}
       SMQ_AUTH_HTTP_HOST: ${SMQ_AUTH_HTTP_HOST}
       SMQ_AUTH_HTTP_PORT: ${SMQ_AUTH_HTTP_PORT}
@@ -171,6 +179,9 @@ services:
         target: /auth-grpc-client-ca${SMQ_AUTH_GRPC_CLIENT_CA_CERTS:+.crt}
         bind:
           create_host_path: true
+    labels:
+      logging: "supermq-auth"
+      service: "auth"
 
   users-db:
     image: postgres:16.2-alpine
@@ -190,10 +201,16 @@ services:
   users:
     image: supermq/users:${SMQ_RELEASE_TAG}
     container_name: supermq-users
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        tag: docker.supermq-users
     depends_on:
       - users-db
       - auth
       - nats
+      - fluent-bit
     restart: on-failure
     environment:
       SMQ_USERS_LOG_LEVEL: ${SMQ_USERS_LOG_LEVEL}
@@ -231,6 +248,7 @@ services:
       SMQ_EMAIL_PASSWORD: ${SMQ_EMAIL_PASSWORD}
       SMQ_EMAIL_FROM_ADDRESS: ${SMQ_EMAIL_FROM_ADDRESS}
       SMQ_EMAIL_FROM_NAME: ${SMQ_EMAIL_FROM_NAME}
+      SMQ_EMAIL_TEMPLATE: ${SMQ_EMAIL_TEMPLATE}
       SMQ_ES_URL: ${SMQ_ES_URL}
       SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
       SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
@@ -284,6 +302,9 @@ services:
           create_host_path: true
     networks:
       - cube-network
+    labels:
+      logging: "supermq-users"
+      service: "users"
 
   ui:
     image: ghcr.io/ultravioletrs/cube/ui:latest
@@ -348,9 +369,16 @@ services:
   domains:
     image: supermq/domains:${SMQ_RELEASE_TAG}
     container_name: supermq-domains
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: localhost:24224
+        tag: docker.supermq-domains
     depends_on:
       - domains-db
+      - domains-redis
       - spicedb
+      - fluent-bit
     expose:
       - ${SMQ_DOMAINS_GRPC_PORT}
     restart: on-failure
@@ -391,6 +419,22 @@ services:
       SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
       SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
       SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      SMQ_GROUPS_GRPC_URL: ${SMQ_GROUPS_GRPC_URL}
+      SMQ_GROUPS_GRPC_TIMEOUT: ${SMQ_GROUPS_GRPC_TIMEOUT}
+      SMQ_GROUPS_GRPC_CLIENT_CERT: ${SMQ_GROUPS_GRPC_CLIENT_CERT:+/groups-grpc-client.crt}
+      SMQ_GROUPS_GRPC_CLIENT_KEY: ${SMQ_GROUPS_GRPC_CLIENT_KEY:+/groups-grpc-client.key}
+      SMQ_GROUPS_GRPC_SERVER_CA_CERTS: ${SMQ_GROUPS_GRPC_SERVER_CA_CERTS:+/groups-grpc-server-ca.crt}
+      SMQ_CHANNELS_URL: ${SMQ_CHANNELS_URL}
+      SMQ_CHANNELS_GRPC_URL: ${SMQ_CHANNELS_GRPC_URL}
+      SMQ_CHANNELS_GRPC_TIMEOUT: ${SMQ_CHANNELS_GRPC_TIMEOUT}
+      SMQ_CHANNELS_GRPC_CLIENT_CERT: ${SMQ_CHANNELS_GRPC_CLIENT_CERT:+/channels-grpc-client.crt}
+      SMQ_CHANNELS_GRPC_CLIENT_KEY: ${SMQ_CHANNELS_GRPC_CLIENT_KEY:+/channels-grpc-client.key}
+      SMQ_CHANNELS_GRPC_SERVER_CA_CERTS: ${SMQ_CHANNELS_GRPC_SERVER_CA_CERTS:+/channels-grpc-server-ca.crt}
+      SMQ_CLIENTS_GRPC_URL: ${SMQ_CLIENTS_GRPC_URL}
+      SMQ_CLIENTS_GRPC_TIMEOUT: ${SMQ_CLIENTS_GRPC_TIMEOUT}
+      SMQ_CLIENTS_GRPC_CLIENT_CERT: ${SMQ_CLIENTS_GRPC_CLIENT_CERT:+/clients-grpc-client.crt}
+      SMQ_CLIENTS_GRPC_CLIENT_KEY: ${SMQ_CLIENTS_GRPC_CLIENT_KEY:+/clients-grpc-client.key}
+      SMQ_CLIENTS_GRPC_R_CA_CERTS: ${SMQ_CLIENTS_GRPC_SERVER_CA_CERTS:+/clients-grpc-server-ca.crt}
       SMQ_AUTH_KEYS_ALGORITHM: ${SMQ_AUTH_KEYS_ALGORITHM}
       SMQ_AUTH_JWKS_URL: ${SMQ_AUTH_JWKS_URL}
       SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
@@ -441,3 +485,6 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
+    labels:
+      logging: "supermq-domains"
+      service: "domains"

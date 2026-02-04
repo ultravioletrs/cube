@@ -122,6 +122,7 @@ services:
   cube-agent:
     container_name: cube-agent
     image: ghcr.io/ultravioletrs/cube/agent:latest
+    profiles: ["default", "ollama", "vllm"]
     restart: on-failure
     networks:
       - cube-network
@@ -208,6 +209,10 @@ services:
       UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
       UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
       UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
+      # Agent mTLS Configuration
+      UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
+      UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.pem}
     volumes:
       - type: bind
         source: ./config.json
@@ -229,5 +234,29 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
+      # Agent mTLS client certificates
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /etc/cube/agent-certs/client.crt
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /etc/cube/agent-certs/client.key
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /etc/cube/agent-certs/ca.pem
+        bind:
+          create_host_path: true
+      # Attestation policy
+      - type: bind
+        source: ${UV_CUBE_AGENT_ATTESTATION_POLICY:-./attestation-policy.json}
+        target: /etc/cube/attestation-policy.json
+        read_only: true
     ports:
       - ${UV_CUBE_PROXY_PORT}:${UV_CUBE_PROXY_PORT}
+    labels:
+      logging: "cube-proxy"
+      service: "proxy"

@@ -16,11 +16,14 @@ include:
     env_file: .env
   - path: ./cube-compose.yaml
     env_file: .env
+  - path: ./cloud-compose.yaml
+    env_file: .env
 
 services:
   traefik:
     container_name: traefik
     image: traefik:v3.1.2
+    profiles: ["default", "ollama", "vllm"]
     restart: unless-stopped
     command: --api.insecure=true --providers.docker
     ports:

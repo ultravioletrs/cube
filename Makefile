@@ -209,7 +209,7 @@ up-cloud: config-cloud-local
 		chmod 600 docker/traefik/ssl/certs/acme.json; \
 		echo "✓ Created acme.json"; \
 	fi
-	docker compose -f docker/cloud-compose.yaml --profile cloud up -d
+	docker compose -f docker/compose.yaml --profile cloud up -d
 	@echo ""
 	@echo "=== Cube Cloud Services Started ==="
 	@echo "  - UI: http://localhost:49210/"
@@ -226,7 +226,7 @@ down:
 .PHONY: down-cloud
 down-cloud:
 	@echo "Stopping Cube Cloud services..."
-	docker compose -f docker/cloud-compose.yaml --profile cloud down
+	docker compose -f docker/compose.yaml --profile cloud down
 	@$(MAKE) restore-cloud-config
 
 .PHONY: down-volumes
@@ -237,7 +237,7 @@ down-volumes:
 .PHONY: down-cloud-volumes
 down-cloud-volumes:
 	@echo "Stopping Cube Cloud services and removing volumes..."
-	docker compose -f docker/cloud-compose.yaml --profile cloud down -v
+	docker compose -f docker/compose.yaml --profile cloud down -v
 	@$(MAKE) restore-cloud-config
 
 .PHONY: restart
@@ -258,7 +258,7 @@ logs:
 
 .PHONY: logs-cloud
 logs-cloud:
-	docker compose -f docker/cloud-compose.yaml --profile cloud logs -f
+	docker compose -f docker/compose.yaml --profile cloud logs -f
 
 .PHONY: dev-setup
 dev-setup: build docker-dev
