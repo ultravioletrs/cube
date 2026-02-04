@@ -86,14 +86,10 @@ services:
     image: fluent/fluent-bit:2.2
     container_name: cube-cloud-fluent-bit
     profiles: ["cloud"]
-    ports:
-      - "24224:24224"
-      - "24224:24224/udp"
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       opensearch:
         condition: service_healthy
@@ -199,7 +195,7 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: localhost:24224
+        fluentd-address: cube-cloud-fluent-bit:24224
         tag: docker.supermq-auth
     depends_on:
       - auth-db
@@ -295,7 +291,7 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: localhost:24224
+        fluentd-address: cube-cloud-fluent-bit:24224
         tag: docker.supermq-users
     depends_on:
       - users-db
@@ -424,7 +420,7 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: localhost:24224
+        fluentd-address: cube-cloud-fluent-bit:24224
         tag: docker.supermq-domains
     environment:
       SMQ_DOMAINS_LOG_LEVEL: ${SMQ_DOMAINS_LOG_LEVEL}
@@ -577,7 +573,7 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: localhost:24224
+        fluentd-address: cube-cloud-fluent-bit:24224
         tag: docker.cube-proxy
     networks:
       - cube-cloud-network
