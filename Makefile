@@ -155,6 +155,9 @@ up-vllm: config-vllm
 	@echo "Starting Cube with vLLM backend..."
 	docker compose -f docker/compose.yaml --profile vllm up -d
 
+.PHONY: up-vllm-guardrails
+up-vllm-guardrails: enable-guardrails up-vllm
+
 .PHONY: up
 up: enable-guardrails config-backend config-cloud-local
 ifeq ($(AI_BACKEND),vllm)
@@ -335,6 +338,7 @@ help:
 	@echo "  up-disable-guardrails   Start without guardrails"
 	@echo "  up-ollama               Start with Ollama backend (pulls models automatically)"
 	@echo "  up-vllm                 Start with vLLM backend"
+	@echo "  up-vllm-guardrails      Start with vLLM backend and guardrails enabled"
 	@echo "  up-cloud                Start cloud deployment using cloud-compose.yaml"
 	@echo "  down                    Stop all services"
 	@echo "  down-cloud              Stop cloud services and restore config"
