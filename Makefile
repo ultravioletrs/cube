@@ -183,6 +183,9 @@ config-cloud-local:
 	@sed -i 's|__SMQ_EMAIL_FROM_ADDRESS__|noreply@localhost|g' docker/.env
 	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://localhost:8901|g' docker/.env
 	@sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml
+	@sed -i 's|__SMQ_GOOGLE_CLIENT_ID__||g' docker/.env
+	@sed -i 's|__SMQ_GOOGLE_CLIENT_SECRET__||g' docker/.env
+	@sed -i 's|__SMQ_GOOGLE_STATE__||g' docker/.env
 	@echo "✓ Configured with local defaults"
 
 .PHONY: restore-cloud-config
