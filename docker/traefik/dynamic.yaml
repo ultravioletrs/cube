@@ -129,7 +129,7 @@ http:
       priority: 9
 
     users:
-      rule: "PathPrefix(`/users`) || PathPrefix(`/password`) || Path(`/health`) || PathPrefix(`/groups`)"
+      rule: "PathPrefix(`/users`) || PathPrefix(`/password`) || Path(`/health`) || PathPrefix(`/groups`) || PathPrefix(`/oauth`)"
       entryPoints:
         - websecure
       service: users
@@ -181,7 +181,7 @@ http:
       priority: 8
 
     ui:
-      rule: "PathPrefix(`/`)"
+      rule: "PathPrefix(`/`) || PathPrefix(`/api`)"
       entryPoints:
         - websecure
       service: ui
