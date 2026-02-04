@@ -9,6 +9,14 @@ models:
       base_url: "http://cube-proxy:8900"
       headers:
         X-Guardrails-Request: "true"
+#
+#  - type: main
+#    engine: CubeLLM_vLLM
+#    model: microsoft/DialoGPT-medium
+#    parameters:
+#      base_url: "http://cube-proxy:8900"
+#      headers:
+#        X-Guardrails-Request: "true"
 
 instructions:
   - type: general
