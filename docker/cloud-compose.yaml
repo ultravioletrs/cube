@@ -86,9 +86,12 @@ services:
     image: fluent/fluent-bit:2.2
     container_name: cube-cloud-fluent-bit
     profiles: ["cloud"]
+    ports:
+      - "127.0.0.1:24224:24224"
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
     depends_on:
       opensearch:
         condition: service_healthy
@@ -194,13 +197,13 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: fluent-bit:24224
+        fluentd-address: 127.0.0.1:24224
         tag: docker.supermq-auth
-        fluentd-async: "true"
     depends_on:
       - auth-db
       - spicedb
       - nats
+      - fluent-bit
     expose:
       - ${SMQ_AUTH_GRPC_PORT}
     restart: on-failure
@@ -291,13 +294,13 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: fluent-bit:24224
+        fluentd-address: 127.0.0.1:24224
         tag: docker.supermq-users
-        fluentd-async: "true"
     depends_on:
       - users-db
       - auth
       - nats
+      - fluent-bit
     restart: on-failure
     environment:
       SMQ_USERS_LOG_LEVEL: ${SMQ_USERS_LOG_LEVEL}
@@ -415,15 +418,15 @@ services:
       - domains-redis
       - spicedb
       - auth
+      - fluent-bit
     expose:
       - ${SMQ_DOMAINS_GRPC_PORT}
     restart: on-failure
     logging:
       driver: fluentd
       options:
-        fluentd-address: fluent-bit:24224
+        fluentd-address: 127.0.0.1:24224
         tag: docker.supermq-domains
-        fluentd-async: "true"
     environment:
       SMQ_DOMAINS_LOG_LEVEL: ${SMQ_DOMAINS_LOG_LEVEL}
       SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
@@ -580,9 +583,8 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: fluent-bit:24224
+        fluentd-address: 127.0.0.1:24224
         tag: docker.cube-proxy
-        fluentd-async: "true"
     networks:
       - cube-cloud-network
     depends_on:
