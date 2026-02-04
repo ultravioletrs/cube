@@ -195,7 +195,7 @@ services:
     container_name: cube-cloud-auth
     profiles: ["cloud"]
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
         fluentd-address: 127.0.0.1:24224
         tag: docker.supermq-auth
@@ -292,7 +292,7 @@ services:
     container_name: cube-cloud-users
     profiles: ["cloud"]
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
         fluentd-address: 127.0.0.1:24224
         tag: docker.supermq-users
@@ -423,7 +423,7 @@ services:
       - ${SMQ_DOMAINS_GRPC_PORT}
     restart: on-failure
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
         fluentd-address: 127.0.0.1:24224
         tag: docker.supermq-domains
@@ -581,7 +581,7 @@ services:
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
         fluentd-address: 127.0.0.1:24224
         tag: docker.cube-proxy
