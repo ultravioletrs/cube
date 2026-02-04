@@ -88,7 +88,7 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) (
 
 // GetRoute implements proxy.Repository.
 func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRule, error) {
-	q := `SELECT id, name, target_url, matchers, priority, default_rule, strip_prefix, enabled, created_at, updated_at
+	q := `SELECT id, name, target_url, matchers, priority, default_rule, strip_prefix, enabled
 		FROM routes WHERE name = $1`
 
 	var (
@@ -102,7 +102,7 @@ func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRu
 
 	err := row.Scan(
 		&id, &route.Name, &route.TargetURL, &matchersJSON, &route.Priority,
-		&route.DefaultRule, &route.StripPrefix, &enabled, nil, nil)
+		&route.DefaultRule, &route.StripPrefix, &enabled)
 	if err != nil {
 		return nil, err
 	}
