@@ -86,6 +86,9 @@ services:
     image: fluent/fluent-bit:2.2
     container_name: cube-cloud-fluent-bit
     profiles: ["cloud"]
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
@@ -194,12 +197,10 @@ services:
     container_name: cube-cloud-auth
     profiles: ["cloud"]
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "supermq-auth|{{.Name}}"
+        fluentd-address: localhost:24224
+        tag: docker.supermq-auth
     depends_on:
       - auth-db
       - spicedb
@@ -292,12 +293,10 @@ services:
     container_name: cube-cloud-users
     profiles: ["cloud"]
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "supermq-users|{{.Name}}"
+        fluentd-address: localhost:24224
+        tag: docker.supermq-users
     depends_on:
       - users-db
       - auth
@@ -423,12 +422,10 @@ services:
       - ${SMQ_DOMAINS_GRPC_PORT}
     restart: on-failure
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "supermq-domains|{{.Name}}"
+        fluentd-address: localhost:24224
+        tag: docker.supermq-domains
     environment:
       SMQ_DOMAINS_LOG_LEVEL: ${SMQ_DOMAINS_LOG_LEVEL}
       SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
@@ -578,12 +575,10 @@ services:
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "cube-proxy|{{.Name}}"
+        fluentd-address: localhost:24224
+        tag: docker.cube-proxy
     networks:
       - cube-cloud-network
     depends_on:

@@ -169,6 +169,13 @@ services:
     container_name: cube-proxy
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "cube-proxy|{{.Name}}"
     networks:
       - cube-network
     depends_on:
