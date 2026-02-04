@@ -91,9 +91,11 @@ rails:
           - LOCATION
           - MEDICAL_LICENSE
   input:
+    parallel: true
     flows:
       - mask sensitive data on input
   output:
+    parallel: true
     flows:
       - mask sensitive data on output
   retrieval:
@@ -102,8 +104,8 @@ rails:
   dialog:
     # Whether to try to use a single LLM call for generating the user intent, next step and bot message.
     single_call:
-      enabled: False
-      fallback_to_multiple_calls: True
+      enabled: true
+      fallback_to_multiple_calls: true
 
 tracing:
   enabled: true

@@ -99,6 +99,9 @@ jobs:
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
             sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" .env
             sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" config.json
+            sed -i "s|__SMQ_GOOGLE_CLIENT_ID__|${{ secrets.SMQ_GOOGLE_CLIENT_ID }}|g" .env
+            sed -i "s|__SMQ_GOOGLE_CLIENT_SECRET__|${{ secrets.SMQ_GOOGLE_CLIENT_SECRET }}|g" .env
+            sed -i "s|__SMQ_GOOGLE_STATE__|${{ secrets.SMQ_GOOGLE_STATE }}|g" .env
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml

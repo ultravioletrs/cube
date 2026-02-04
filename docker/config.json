@@ -3,7 +3,7 @@
     "routes": [
       {
         "name": "guardrails-agent",
-        "target_url": "http://cube-agent:8901",
+        "target_url": "__CUBE_INTERNAL_AGENT_URL__",
         "matchers": [
           {
             "condition": "header",
