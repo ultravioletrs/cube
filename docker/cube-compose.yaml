@@ -171,17 +171,19 @@ services:
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "cube-proxy|{{.Name}}"
+        fluentd-address: 127.0.0.1:24224
+        fluentd-async: "true"
+        tag: docker.cube-proxy
     networks:
       - cube-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - auth
       - cube-proxy-db
+      - fluent-bit
     environment:
       UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
       UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}

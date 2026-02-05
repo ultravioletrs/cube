@@ -104,6 +104,9 @@ services:
     expose:
       - ${SMQ_AUTH_GRPC_PORT}
     restart: on-failure
+    labels:
+      logging: "supermq-auth"
+      service: "auth"
     environment:
       SMQ_AUTH_LOG_LEVEL: ${SMQ_AUTH_LOG_LEVEL}
       SMQ_SPICEDB_SCHEMA_FILE: ${SMQ_SPICEDB_SCHEMA_FILE}
@@ -180,9 +183,6 @@ services:
         target: /auth-grpc-client-ca${SMQ_AUTH_GRPC_CLIENT_CA_CERTS:+.crt}
         bind:
           create_host_path: true
-    labels:
-      logging: "supermq-auth"
-      service: "auth"
 
   users-db:
     image: postgres:16.2-alpine
@@ -214,6 +214,9 @@ services:
       - nats
       - fluent-bit
     restart: on-failure
+    labels:
+      logging: "supermq-users"
+      service: "users"
     environment:
       SMQ_USERS_LOG_LEVEL: ${SMQ_USERS_LOG_LEVEL}
       SMQ_USERS_SECRET_KEY: ${SMQ_USERS_SECRET_KEY}
@@ -304,9 +307,6 @@ services:
           create_host_path: true
     networks:
       - cube-network
-    labels:
-      logging: "supermq-users"
-      service: "users"
 
   ui:
     image: ghcr.io/ultravioletrs/cube/ui:latest
@@ -385,6 +385,9 @@ services:
     expose:
       - ${SMQ_DOMAINS_GRPC_PORT}
     restart: on-failure
+    labels:
+      logging: "supermq-domains"
+      service: "domains"
     environment:
       SMQ_DOMAINS_LOG_LEVEL: ${SMQ_DOMAINS_LOG_LEVEL}
       SMQ_SPICEDB_PRE_SHARED_KEY: ${SMQ_SPICEDB_PRE_SHARED_KEY}
@@ -488,6 +491,3 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
-    labels:
-      logging: "supermq-domains"
-      service: "domains"

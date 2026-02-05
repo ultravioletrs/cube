@@ -156,7 +156,7 @@ up-vllm: config-vllm
 	docker compose -f docker/compose.yaml --profile vllm up -d
 
 .PHONY: up
-up: enable-guardrails config-backend
+up: enable-guardrails config-backend config-cloud-local
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -164,7 +164,7 @@ else
 endif
 
 .PHONY: up-disable-guardrails
-up-disable-guardrails: disable-guardrails config-backend
+up-disable-guardrails: disable-guardrails config-backend config-cloud-local
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -176,16 +176,19 @@ config-cloud-local:
 	@echo "Configuring cloud deployment for local environment..."
 	@cp docker/.env docker/.env.backup 2>/dev/null || true
 	@cp docker/traefik/dynamic.toml docker/traefik/dynamic.toml.backup 2>/dev/null || true
+	@cp docker/config.json docker/config.json.backup 2>/dev/null || true
 	@sed -i 's|__SMQ_EMAIL_HOST__|localhost|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PORT__|1025|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_USERNAME__|test|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PASSWORD__|test|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_FROM_ADDRESS__|noreply@localhost|g' docker/.env
-	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://localhost:8901|g' docker/.env
+	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/.env
+	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/config.json
 	@sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml
 	@sed -i 's|__SMQ_GOOGLE_CLIENT_ID__||g' docker/.env
 	@sed -i 's|__SMQ_GOOGLE_CLIENT_SECRET__||g' docker/.env
 	@sed -i 's|__SMQ_GOOGLE_STATE__||g' docker/.env
+	@sed -i 's|__CUBE_PUBLIC_URL__|localhost|g' docker/.env
 	@echo "✓ Configured with local defaults"
 
 .PHONY: restore-cloud-config
@@ -198,6 +201,10 @@ restore-cloud-config:
 	@if [ -f docker/traefik/dynamic.toml.backup ]; then \
 		mv docker/traefik/dynamic.toml.backup docker/traefik/dynamic.toml; \
 		echo "✓ Restored dynamic.toml"; \
+	fi
+	@if [ -f docker/config.json.backup ]; then \
+		mv docker/config.json.backup docker/config.json; \
+		echo "✓ Restored config.json"; \
 	fi
 
 .PHONY: up-cloud
