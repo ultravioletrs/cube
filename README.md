@@ -78,7 +78,20 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 2. **Start Cube AI services**
 
    ```bash
+   # Local development with Ollama (default)
    make up
+
+   # Local development with vLLM
+   make up-vllm
+
+   # Cloud deployment (configures traefik for cloud ports)
+   make up-cloud
+
+   # Stop services
+   make down
+
+   # Stop services and remove volumes
+   make down-volumes
    ```
 
 3. **Get your authentication token**
