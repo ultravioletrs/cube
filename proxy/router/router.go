@@ -88,7 +88,7 @@ func (r *Router) UpdateRoutes(newRoutes []RouteRule) {
 	r.routes = routes
 }
 
-func (r *Router) DetermineTarget(req *http.Request) (targetURL, stripPrefix string, err error) {
+func (r *Router) DetermineTarget(req *http.Request) (*RouteRule, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -98,19 +98,19 @@ func (r *Router) DetermineTarget(req *http.Request) (targetURL, stripPrefix stri
 		}
 
 		if route.compiledMatcher != nil && route.compiledMatcher.Match(req) {
-			return route.TargetURL, route.StripPrefix, nil
+			return &route, nil
 		}
 	}
 
 	for _, route := range r.routes {
 		if route.DefaultRule {
-			return route.TargetURL, route.StripPrefix, nil
+			return &route, nil
 		}
 	}
 
 	if r.defaultURL != "" {
-		return r.defaultURL, "", nil
+		return &RouteRule{TargetURL: r.defaultURL}, nil
 	}
 
-	return "", "", ErrNoMatchingRoute
+	return nil, ErrNoMatchingRoute
 }
