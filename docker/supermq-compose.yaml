@@ -94,7 +94,8 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: localhost:24224
+        fluentd-address: 127.0.0.1:24224
+        fluentd-async: "true"
         tag: docker.supermq-auth
     depends_on:
       - auth-db
@@ -204,7 +205,8 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: localhost:24224
+        fluentd-address: 127.0.0.1:24224
+        fluentd-async: "true"
         tag: docker.supermq-users
     depends_on:
       - users-db
@@ -372,7 +374,8 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: localhost:24224
+        fluentd-address: 127.0.0.1:24224
+        fluentd-async: "true"
         tag: docker.supermq-domains
     depends_on:
       - domains-db
