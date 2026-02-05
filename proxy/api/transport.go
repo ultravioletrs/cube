@@ -5,13 +5,18 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/absmach/supermq"
@@ -198,14 +203,19 @@ func singleJoiningSlash(a, b string) string {
 	return a + b
 }
 
-func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router) {
-	targetURL, stripPrefix, err := rter.DetermineTarget(r)
+func serveReverseProxy(
+	w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router,
+) {
+	rule, err := rter.DetermineTarget(r)
 	if err != nil {
 		log.Printf("Failed to determine target: %v", err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 
 		return
 	}
+
+	targetURL := rule.TargetURL
+	stripPrefix := rule.StripPrefix
 
 	target, err := url.Parse(targetURL)
 	if err != nil {
@@ -231,43 +241,152 @@ func serveReverseProxy(w http.ResponseWriter, r *http.Request, transport http.Ro
 	}
 
 	prxy.Director = func(req *http.Request) {
-		if domainID := chi.URLParam(req, "domainID"); domainID != "" {
-			if err := uuid.Validate(domainID); err == nil {
-				prefix := "/" + domainID
-
-				req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
-				if req.URL.RawPath != "" {
-					req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
-				}
-			}
-		}
-
-		if stripPrefix != "" {
-			req.URL.Path = strings.TrimPrefix(req.URL.Path, stripPrefix)
-			if req.URL.RawPath != "" {
-				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, stripPrefix)
-			}
-		}
-
-		req.URL.Scheme = target.Scheme
-		req.URL.Host = target.Host
-
-		remainingPath := req.URL.Path
-		if target.Path != "" {
-			if remainingPath == "" || remainingPath == "/" {
-				req.URL.Path = target.Path
-			} else {
-				req.URL.Path = singleJoiningSlash(target.Path, remainingPath)
-			}
-		}
-
-		req.URL.RawQuery = target.RawQuery
-		if req.URL.RawQuery == "" {
-			req.URL.RawQuery = req.URL.Query().Encode()
-		}
-
-		req.Host = target.Host
+		domainID := chi.URLParam(req, "domainID")
+		prepareProxyRequest(req, target, rule, domainID, stripPrefix)
 	}
 
 	prxy.ServeHTTP(w, r)
+}
+
+func prepareProxyRequest(req *http.Request, target *url.URL, rule *router.RouteRule, domainID, stripPrefix string) {
+	if domainID != "" {
+		if err := uuid.Validate(domainID); err == nil {
+			prefix := "/" + domainID
+
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, prefix)
+			if req.URL.RawPath != "" {
+				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
+			}
+		}
+	}
+
+	if stripPrefix != "" {
+		req.URL.Path = strings.TrimPrefix(req.URL.Path, stripPrefix)
+		if req.URL.RawPath != "" {
+			req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, stripPrefix)
+		}
+	}
+
+	req.URL.Scheme = target.Scheme
+	req.URL.Host = target.Host
+
+	remainingPath := req.URL.Path
+	if target.Path != "" {
+		if remainingPath == "" || remainingPath == "/" {
+			req.URL.Path = target.Path
+		} else {
+			req.URL.Path = singleJoiningSlash(target.Path, remainingPath)
+		}
+	}
+
+	originalQuery := req.URL.RawQuery
+
+	req.URL.RawQuery = target.RawQuery
+	if originalQuery != "" {
+		if req.URL.RawQuery == "" {
+			req.URL.RawQuery = originalQuery
+		} else {
+			req.URL.RawQuery = req.URL.RawQuery + "&" + originalQuery
+		}
+	}
+
+	if rule.Name == "audit" && domainID != "" {
+		injectAuditFilter(req, domainID)
+	}
+
+	req.Host = target.Host
+}
+
+// injectAuditFilter modifies the request to filter audit logs by session.domain_id.
+// It handles both query string (q parameter) and JSON body queries.
+func injectAuditFilter(req *http.Request, domainID string) {
+	filter := "session.domain_id:" + domainID
+
+	if req.Body != nil && req.ContentLength > 0 {
+		if err := injectAuditFilterIntoBody(req, domainID); err != nil {
+			slog.Error("Failed to inject audit filter into body", "error", err)
+		}
+	}
+
+	injectAuditFilterIntoQuery(req, filter)
+}
+
+func injectAuditFilterIntoBody(req *http.Request, domainID string) error {
+	bodyBytes, err := io.ReadAll(req.Body)
+	if err != nil {
+		return fmt.Errorf("read body: %w", err)
+	}
+
+	req.Body.Close()
+
+	if err := tryInjectFilter(req, bodyBytes, domainID); err == nil {
+		return nil
+	}
+
+	req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	return nil
+}
+
+func tryInjectFilter(req *http.Request, bodyBytes []byte, domainID string) error {
+	var bodyMap map[string]any
+	if err := json.Unmarshal(bodyBytes, &bodyMap); err != nil {
+		return err
+	}
+
+	termFilter := map[string]any{
+		"term": map[string]any{
+			"session.domain_id": domainID,
+		},
+	}
+
+	if query, ok := bodyMap["query"].(map[string]any); ok {
+		boolQuery, isBool := query["bool"].(map[string]any)
+		if !isBool {
+			boolQuery = map[string]any{
+				"must": []any{query},
+			}
+			bodyMap["query"] = map[string]any{
+				"bool": boolQuery,
+			}
+		}
+
+		filterArr, ok := boolQuery["filter"].([]any)
+		if !ok {
+			filterArr = []any{}
+		}
+
+		filterArr = append(filterArr, termFilter)
+		boolQuery["filter"] = filterArr
+	} else {
+		bodyMap["query"] = map[string]any{
+			"bool": map[string]any{
+				"filter": []any{termFilter},
+			},
+		}
+	}
+
+	newBody, err := json.Marshal(bodyMap)
+	if err != nil {
+		return err
+	}
+
+	req.Body = io.NopCloser(bytes.NewBuffer(newBody))
+	req.ContentLength = int64(len(newBody))
+	req.Header.Set("Content-Length", strconv.Itoa(len(newBody)))
+
+	return nil
+}
+
+func injectAuditFilterIntoQuery(req *http.Request, filter string) {
+	q := req.URL.Query()
+
+	existingQ := q.Get("q")
+	if existingQ != "" {
+		q.Set("q", fmt.Sprintf("%s AND %s", existingQ, filter))
+	} else {
+		q.Set("q", filter)
+	}
+
+	req.URL.RawQuery = q.Encode()
 }

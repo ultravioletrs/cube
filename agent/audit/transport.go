@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"strconv"
 	"sync"
@@ -151,9 +152,7 @@ func (it *InstrumentedTransport) GetLastResult() *AttestationResult {
 
 	if it.lastResult.Report != nil {
 		result.Report = make(map[string]any, len(it.lastResult.Report))
-		for k, v := range it.lastResult.Report {
-			result.Report[k] = v
-		}
+		maps.Copy(result.Report, it.lastResult.Report)
 	}
 
 	return &result
