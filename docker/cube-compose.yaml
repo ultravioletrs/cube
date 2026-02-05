@@ -210,10 +210,10 @@ services:
       UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
       UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
       UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
-      # Agent mTLS Configuration
+      # Agent mTLS Configuration (optional - only set when certs are provided)
       UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
       UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
-      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.pem}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.crt}
     volumes:
       - type: bind
         source: ./config.json
@@ -235,20 +235,20 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
-      # Agent mTLS client certificates
+      # Agent mTLS client certificates (optional)
       - type: bind
         source: ${UV_CUBE_AGENT_CLIENT_CERT:-ssl/certs/dummy/client_cert}
-        target: /etc/cube/agent-certs/client.crt
+        target: /etc/cube/agent-certs/client${UV_CUBE_AGENT_CLIENT_CERT:+.crt}
         bind:
           create_host_path: true
       - type: bind
         source: ${UV_CUBE_AGENT_CLIENT_KEY:-ssl/certs/dummy/client_key}
-        target: /etc/cube/agent-certs/client.key
+        target: /etc/cube/agent-certs/client${UV_CUBE_AGENT_CLIENT_KEY:+.key}
         bind:
           create_host_path: true
       - type: bind
         source: ${UV_CUBE_AGENT_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
-        target: /etc/cube/agent-certs/ca.pem
+        target: /etc/cube/agent-certs/ca${UV_CUBE_AGENT_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
       # Attestation policy
