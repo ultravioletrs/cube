@@ -293,8 +293,6 @@ services:
       - auth
       - users
       - domains
-    ports:
-      - ${UI_PORT}:${UI_PORT}
     networks:
       - cube-network
     environment:

@@ -148,12 +148,12 @@ endif
 .PHONY: up-ollama
 up-ollama: config-ollama
 	@echo "Starting Cube with Ollama backend..."
-	docker compose -f docker/compose.yaml --profile default up -d
+	docker compose -f docker/compose.yaml -f docker/supermq-ui-ports.yaml --profile default up -d
 
 .PHONY: up-vllm
 up-vllm: config-vllm
 	@echo "Starting Cube with vLLM backend..."
-	docker compose -f docker/compose.yaml --profile vllm up -d
+	docker compose -f docker/compose.yaml -f docker/supermq-ui-ports.yaml --profile vllm up -d
 
 .PHONY: up
 up: enable-guardrails config-backend
