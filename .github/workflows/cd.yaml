@@ -46,6 +46,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Extract metadata for Docker
+        id: meta
         run: |
-          make latest
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "version=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "push_latest=true" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(git describe --abbrev=0 --tags 2>/dev/null || echo 'v0.0.0')" >> $GITHUB_OUTPUT
+            echo "push_latest=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Docker images
+        run: |
+          make docker VERSION=${{ steps.meta.outputs.version }}
+
+      - name: Push Docker images
+        run: |
+          make docker-push VERSION=${{ steps.meta.outputs.version }}
