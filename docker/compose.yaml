@@ -16,8 +16,6 @@ include:
     env_file: .env
   - path: ./cube-compose.yaml
     env_file: .env
-  - path: ./cloud-compose.yaml
-    env_file: .env
 
 services:
   traefik:
