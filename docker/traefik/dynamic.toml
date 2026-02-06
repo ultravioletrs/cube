@@ -2,34 +2,147 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Dynamic Traefik Configuration for Cube Services
-# Defines HTTP routers and services for UI and Proxy
 
-# HTTP Routers - HTTPS (Production)
-[http.routers.cube-ui]
-  rule = "Host(`__CUBE_DOMAIN__`)"
-  entrypoints = ["websecure"]
-  service = "cube-ui"
-  priority = 1
-  [http.routers.cube-ui.tls]
-    certResolver = "letsEncrypt"
-    [[http.routers.cube-ui.tls.domains]]
-      main = "__CUBE_DOMAIN__"
+# HTTP Middlewares
+[http.middlewares.retry-middleware.retry]
+  attempts = 4
+  initialInterval = "100ms"
 
-[http.routers.cube-proxy]
-  rule = "Host(`__CUBE_DOMAIN__`) && PathPrefix(`/proxy`)"
-  entrypoints = ["websecure"]
-  service = "cube-proxy"
-  priority = 2
-  [http.routers.cube-proxy.tls]
-    certResolver = "letsEncrypt"
+[http.middlewares.headers-middleware.headers]
+  frameDeny = true
+  browserXssFilter = true
+
+[http.middlewares.strip-auth-health-prefix-middleware.stripPrefix]
+  prefixes = ["/auth"]
+
+[http.middlewares.strip-users-health-prefix-middleware.stripPrefix]
+  prefixes = ["/users"]
+
+[http.middlewares.strip-proxy-prefix-middleware.stripPrefix]
+  prefixes = ["/proxy"]
+
+[http.middlewares.strip-domains-health-prefix-middleware.stripPrefix]
+  prefixes = ["/domains"]
 
 # HTTP Services
-[http.services.cube-ui]
-  [http.services.cube-ui.loadBalancer]
-    [[http.services.cube-ui.loadBalancer.servers]]
-      url = "http://ui:6193"
+[http.services.users.loadBalancer]
+  [[http.services.users.loadBalancer.servers]]
+    url = "http://supermq-users:9002"
+  [http.services.users.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
 
-[http.services.cube-proxy]
-  [http.services.cube-proxy.loadBalancer]
-    [[http.services.cube-proxy.loadBalancer.servers]]
-      url = "http://proxy:8900"
+[http.services.auth.loadBalancer]
+  [[http.services.auth.loadBalancer.servers]]
+    url = "http://supermq-auth:8189"
+  [http.services.auth.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
+
+[http.services.proxy.loadBalancer]
+  [[http.services.proxy.loadBalancer.servers]]
+    url = "http://cube-proxy:8900"
+  [http.services.proxy.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
+
+[http.services.ui.loadBalancer]
+  [[http.services.ui.loadBalancer.servers]]
+    url = "http://cube-ui:6193"
+  [http.services.ui.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
+
+[http.services.domains.loadBalancer]
+  [[http.services.domains.loadBalancer.servers]]
+    url = "http://supermq-domains:9003"
+  [http.services.domains.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
+
+# HTTP Routers
+[http.routers.users-health]
+  rule = "Path(`/users/health`)"
+  entryPoints = ["websecure"]
+  service = "users"
+  middlewares = ["strip-users-health-prefix-middleware", "retry-middleware", "headers-middleware"]
+  priority = 10
+
+[http.routers.auth-health]
+  rule = "Path(`/auth/health`)"
+  entryPoints = ["websecure"]
+  service = "auth"
+  middlewares = ["strip-auth-health-prefix-middleware", "retry-middleware", "headers-middleware"]
+  priority = 10
+
+[http.routers.proxy]
+  rule = "PathPrefix(`/proxy`)"
+  entryPoints = ["websecure"]
+  service = "proxy"
+  middlewares = ["strip-proxy-prefix-middleware", "retry-middleware", "headers-middleware"]
+  priority = 10
+
+[http.routers.users-entities]
+  # /groups/{group_id}/users
+  # /channels/{channel_id}/users
+  # /domains/{domain_id}/users
+  # /channels/{member_id}/groups
+  # /users/{member_id}/groups
+  rule = "PathRegexp(`^/(groups|channels|domains)/(.+)/users`) || PathRegexp(`^/(channels|users)/(.+)/groups`)"
+  entryPoints = ["websecure"]
+  service = "users"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 9
+
+[http.routers.users]
+  rule = "PathPrefix(`/users`) || PathPrefix(`/password`) || Path(`/health`) || PathPrefix(`/groups`) || PathPrefix(`/oauth`)"
+  entryPoints = ["websecure"]
+  service = "users"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 8
+
+[http.routers.auth-entities]
+  # /users/{member_id}/domains
+  rule = "PathRegexp(`^/users/(.+)/domains`)"
+  entryPoints = ["websecure"]
+  service = "auth"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 9
+
+[http.routers.auth]
+  rule = "PathPrefix(`/policies`) || PathPrefix(`/keys`) || PathPrefix(`/pats`)"
+  entryPoints = ["websecure"]
+  service = "auth"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 8
+
+[http.routers.domains-health]
+  rule = "Path(`/domains/health`)"
+  entryPoints = ["websecure"]
+  service = "domains"
+  middlewares = ["strip-domains-health-prefix-middleware", "retry-middleware", "headers-middleware"]
+  priority = 10
+
+[http.routers.domains]
+  rule = "PathPrefix(`/domains`)"
+  entryPoints = ["websecure"]
+  service = "domains"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 8
+
+[http.routers.ui]
+  rule = "PathPrefix(`/`) || PathPrefix(`/api`)"
+  entryPoints = ["websecure"]
+  service = "ui"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 1
