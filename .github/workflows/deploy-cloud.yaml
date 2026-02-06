@@ -9,7 +9,6 @@ on:
       - main
     paths:
       - "docker/compose.yaml"
-      - "docker/cloud-compose.yaml"
       - "docker/supermq-compose.yaml"
       - "docker/cube-compose.yaml"
       - "docker/.env"
