@@ -8,8 +8,9 @@ on:
     branches:
       - main
     paths:
-      - "docker/cloud-compose.yaml"
+      - "docker/compose.yaml"
       - "docker/supermq-compose.yaml"
+      - "docker/cube-compose.yaml"
       - "docker/.env"
       - "docker/config.json"
       - "docker/fluent-bit.conf"
@@ -74,59 +75,54 @@ jobs:
             git pull
 
             echo "Creating required directories and setting up SSL"
-            cd docker
-            mkdir -p traefik/ssl/certs
+            mkdir -p docker/traefik/ssl/certs
 
             # Initialize acme.json if it doesn't exist
-            if test -f traefik/ssl/certs/acme.json; then
-              chmod 600 traefik/ssl/certs/acme.json
+            if test -f docker/traefik/ssl/certs/acme.json; then
+              chmod 600 docker/traefik/ssl/certs/acme.json
               echo "  ✓ acme.json already exists"
             else
-              printf '{}' > traefik/ssl/certs/acme.json
-              chmod 600 traefik/ssl/certs/acme.json
+              printf '{}' > docker/traefik/ssl/certs/acme.json
+              chmod 600 docker/traefik/ssl/certs/acme.json
               echo "  ✓ Created acme.json"
             fi
 
             echo "Updating environment variables and configuration with secrets"
             # Replace placeholder with actual public URL from secrets
-            sed -i "s|__SMQ_EMAIL_HOST__|${{ secrets.SMQ_EMAIL_HOST }}|g" .env
-            sed -i "s|__SMQ_EMAIL_PORT__|${{ secrets.SMQ_EMAIL_PORT }}|g" .env
-            sed -i "s|__SMQ_EMAIL_USERNAME__|${{ secrets.SMQ_EMAIL_USERNAME }}|g" .env
-            sed -i "s|__SMQ_EMAIL_PASSWORD__|${{ secrets.SMQ_EMAIL_PASSWORD }}|g" .env
-            sed -i "s|__SMQ_EMAIL_FROM_ADDRESS__|${{ secrets.SMQ_EMAIL_FROM_ADDRESS }}|g" .env
-            sed -i "s|admin@example.com|${{ secrets.CUBE_ADMIN_EMAIL }}|g" .env
-            sed -i "s|"m2N2Lfno"|"${{ secrets.CUBE_ADMIN_PASSWORD }}"|g" .env
-            sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" .env
-            sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" .env
-            sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" config.json
-            sed -i "s|__SMQ_GOOGLE_CLIENT_ID__|${{ secrets.SMQ_GOOGLE_CLIENT_ID }}|g" .env
-            sed -i "s|__SMQ_GOOGLE_CLIENT_SECRET__|${{ secrets.SMQ_GOOGLE_CLIENT_SECRET }}|g" .env
-            sed -i "s|__SMQ_GOOGLE_STATE__|${{ secrets.SMQ_GOOGLE_STATE }}|g" .env
+            sed -i "s|__SMQ_EMAIL_HOST__|${{ secrets.SMQ_EMAIL_HOST }}|g" docker/.env
+            sed -i "s|__SMQ_EMAIL_PORT__|${{ secrets.SMQ_EMAIL_PORT }}|g" docker/.env
+            sed -i "s|__SMQ_EMAIL_USERNAME__|${{ secrets.SMQ_EMAIL_USERNAME }}|g" docker/.env
+            sed -i "s|__SMQ_EMAIL_PASSWORD__|${{ secrets.SMQ_EMAIL_PASSWORD }}|g" docker/.env
+            sed -i "s|__SMQ_EMAIL_FROM_ADDRESS__|${{ secrets.SMQ_EMAIL_FROM_ADDRESS }}|g" docker/.env
+            sed -i "s|admin@example.com|${{ secrets.CUBE_ADMIN_EMAIL }}|g" docker/.env
+            sed -i "s|"m2N2Lfno"|"${{ secrets.CUBE_ADMIN_PASSWORD }}"|g" docker/.env
+            sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" docker/.env
+            sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" docker/.env
+            sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" docker/config.json
             # Replace placeholder with actual domain from secrets
-            sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" cloud-compose.yaml
-            sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" traefik/dynamic.toml
+            sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" docker/traefik/dynamic.toml
 
             echo "Pulling latest Docker images"
-            docker compose -f cloud-compose.yaml --profile cloud pull 2>&1
+            docker compose -f docker/compose.yaml --profile cloud pull 2>&1
 
             echo "Stopping existing services"
-            docker compose -f cloud-compose.yaml --profile cloud down 2>&1
+            make down-cloud 2>&1
 
             echo "Starting cloud services"
-            docker compose -f cloud-compose.yaml --profile cloud up -d 2>&1
+            make up-cloud 2>&1
 
             echo "Waiting for services to start (30 seconds)..."
             sleep 30
 
             echo "Checking service status..."
-            docker compose -f cloud-compose.yaml --profile cloud ps 2>&1
+            docker compose -f docker/compose.yaml --profile cloud ps 2>&1
 
             echo "=== Verifying Critical Services ==="
             SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy guardrails fluent-bit"
             ALL_RUNNING=true
 
             for SERVICE in $SERVICES; do
-              if docker ps --format '{{.Names}}' | grep -q "cube-cloud-$SERVICE"; then
+              if docker ps --format '{{.Names}}' | grep -q "$SERVICE"; then
                 echo "✓ Service $SERVICE is running"
               else
                 echo "✗ Service $SERVICE is not running"
@@ -136,7 +132,7 @@ jobs:
 
             if [ "$ALL_RUNNING" = false ]; then
               echo "Deployment verification failed!"
-              docker compose -f cloud-compose.yaml --profile cloud logs --tail=50 2>&1
+              make logs-cloud 2>&1 | tail -100
               exit 1
             fi
 

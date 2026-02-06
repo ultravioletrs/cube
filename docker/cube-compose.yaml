@@ -51,11 +51,11 @@ services:
   fluent-bit:
     image: fluent/fluent-bit:2.2
     container_name: fluent-bit
+    ports:
+      - "127.0.0.1:24224:24224"
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       opensearch:
         condition: service_healthy
@@ -122,6 +122,7 @@ services:
   cube-agent:
     container_name: cube-agent
     image: ghcr.io/ultravioletrs/cube/agent:latest
+    profiles: ["default", "ollama", "vllm"]
     restart: on-failure
     networks:
       - cube-network
@@ -170,18 +171,19 @@ services:
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
     logging:
-      driver: "json-file"
+      driver: fluentd
       options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "cube-proxy|{{.Name}}"
+        fluentd-address: 127.0.0.1:24224
+        fluentd-async: "true"
+        tag: docker.cube-proxy
     networks:
       - cube-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      - cube-agent
       - auth
       - cube-proxy-db
+      - fluent-bit
     environment:
       UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
       UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
@@ -208,6 +210,10 @@ services:
       UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
       UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
       UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
+      # Agent mTLS Configuration (optional - only set when certs are provided)
+      UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
+      UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.crt}
     volumes:
       - type: bind
         source: ./config.json
@@ -229,5 +235,29 @@ services:
         target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
+      # Agent mTLS client certificates (optional)
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /etc/cube/agent-certs/client${UV_CUBE_AGENT_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /etc/cube/agent-certs/client${UV_CUBE_AGENT_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${UV_CUBE_AGENT_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /etc/cube/agent-certs/ca${UV_CUBE_AGENT_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+      # Attestation policy
+      - type: bind
+        source: ${UV_CUBE_AGENT_ATTESTATION_POLICY:-./attestation-policy.json}
+        target: /etc/cube/attestation-policy.json
+        read_only: true
     ports:
       - ${UV_CUBE_PROXY_PORT}:${UV_CUBE_PROXY_PORT}
+    labels:
+      logging: "cube-proxy"
+      service: "proxy"

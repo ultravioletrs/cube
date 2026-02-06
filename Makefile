@@ -156,7 +156,7 @@ up-vllm: config-vllm
 	docker compose -f docker/compose.yaml --profile vllm up -d
 
 .PHONY: up
-up: enable-guardrails config-backend
+up: enable-guardrails config-backend config-cloud-local
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -164,7 +164,7 @@ else
 endif
 
 .PHONY: up-disable-guardrails
-up-disable-guardrails: disable-guardrails config-backend
+up-disable-guardrails: disable-guardrails config-backend config-cloud-local
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -176,16 +176,24 @@ config-cloud-local:
 	@echo "Configuring cloud deployment for local environment..."
 	@cp docker/.env docker/.env.backup 2>/dev/null || true
 	@cp docker/traefik/dynamic.toml docker/traefik/dynamic.toml.backup 2>/dev/null || true
+	@cp docker/config.json docker/config.json.backup 2>/dev/null || true
 	@sed -i 's|__SMQ_EMAIL_HOST__|localhost|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PORT__|1025|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_USERNAME__|test|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PASSWORD__|test|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_FROM_ADDRESS__|noreply@localhost|g' docker/.env
-	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://localhost:8901|g' docker/.env
+	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/.env
+	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/config.json
 	@sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml
 	@sed -i 's|__SMQ_GOOGLE_CLIENT_ID__||g' docker/.env
 	@sed -i 's|__SMQ_GOOGLE_CLIENT_SECRET__||g' docker/.env
 	@sed -i 's|__SMQ_GOOGLE_STATE__||g' docker/.env
+	@sed -i 's|__CUBE_PUBLIC_URL__|localhost|g' docker/.env
+	@sed -i 's|^TRAEFIK_HTTP_PORT=.*|TRAEFIK_HTTP_PORT=49210|g' docker/.env
+	@sed -i 's|^TRAEFIK_HTTPS_PORT=.*|TRAEFIK_HTTPS_PORT=49211|g' docker/.env
+	@sed -i 's|^TRAEFIK_DASHBOARD_PORT=.*|TRAEFIK_DASHBOARD_PORT=49212|g' docker/.env
+	@sed -i 's|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=traefik.toml|g' docker/.env
+	@sed -i 's|^TRAEFIK_DYNAMIC_CONFIG=.*|TRAEFIK_DYNAMIC_CONFIG=dynamic.toml|g' docker/.env
 	@echo "✓ Configured with local defaults"
 
 .PHONY: restore-cloud-config
@@ -199,6 +207,10 @@ restore-cloud-config:
 		mv docker/traefik/dynamic.toml.backup docker/traefik/dynamic.toml; \
 		echo "✓ Restored dynamic.toml"; \
 	fi
+	@if [ -f docker/config.json.backup ]; then \
+		mv docker/config.json.backup docker/config.json; \
+		echo "✓ Restored config.json"; \
+	fi
 
 .PHONY: up-cloud
 up-cloud: config-cloud-local
@@ -209,7 +221,7 @@ up-cloud: config-cloud-local
 		chmod 600 docker/traefik/ssl/certs/acme.json; \
 		echo "✓ Created acme.json"; \
 	fi
-	docker compose -f docker/cloud-compose.yaml --profile cloud up -d
+	docker compose -f docker/compose.yaml --profile cloud up -d
 	@echo ""
 	@echo "=== Cube Cloud Services Started ==="
 	@echo "  - UI: http://localhost:49210/"
@@ -226,7 +238,7 @@ down:
 .PHONY: down-cloud
 down-cloud:
 	@echo "Stopping Cube Cloud services..."
-	docker compose -f docker/cloud-compose.yaml --profile cloud down
+	docker compose -f docker/compose.yaml --profile cloud down
 	@$(MAKE) restore-cloud-config
 
 .PHONY: down-volumes
@@ -237,7 +249,7 @@ down-volumes:
 .PHONY: down-cloud-volumes
 down-cloud-volumes:
 	@echo "Stopping Cube Cloud services and removing volumes..."
-	docker compose -f docker/cloud-compose.yaml --profile cloud down -v
+	docker compose -f docker/compose.yaml --profile cloud down -v
 	@$(MAKE) restore-cloud-config
 
 .PHONY: restart
@@ -258,7 +270,7 @@ logs:
 
 .PHONY: logs-cloud
 logs-cloud:
-	docker compose -f docker/cloud-compose.yaml --profile cloud logs -f
+	docker compose -f docker/compose.yaml --profile cloud logs -f
 
 .PHONY: dev-setup
 dev-setup: build docker-dev
