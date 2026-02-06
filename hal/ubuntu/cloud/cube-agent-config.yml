@@ -1,0 +1,288 @@
+#cloud-config
+# Cube AI Cloud-Init Configuration
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+#
+# This cloud-init configuration sets up a Cube AI agent with Ollama backend
+# on Ubuntu-based confidential VMs (GCP, Azure, or QEMU with TDX/SEV-SNP).
+#
+# Usage:
+#   - GCP: Reference this file in terraform.tfvars as cloud_init_config
+#   - Azure: Reference this file in terraform.tfvars as cloud_init_config
+#   - QEMU: Use with cloud-localds to create seed image
+#
+# Environment Variables (set before deployment):
+#   CUBE_AI_BACKEND    - AI backend: "ollama" (default) or "vllm"
+#   CUBE_MODELS        - Comma-separated list of models to pull (Ollama only)
+#   CUBE_VLLM_MODEL    - HuggingFace model ID for vLLM backend
+#
+# For vLLM backend, see: hal/ubuntu/cloud/cube-agent-vllm-config.yml
+
+package_update: true
+package_upgrade: false
+
+users:
+  - name: cubeadmin
+    plain_text_passwd: changeme
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: [docker]
+  - name: ollama
+    system: true
+    home: /var/lib/ollama
+    shell: /usr/sbin/nologin
+
+ssh_pwauth: true
+
+packages:
+  - curl
+  - git
+  - golang-go
+  - build-essential
+  - ca-certificates
+  - jq
+
+write_files:
+  # Cube Agent environment configuration template
+  # Customize these values for your deployment
+  - path: /etc/cube/agent.env.template
+    content: |
+      # Cube Agent Configuration
+      # Copy to /etc/cube/agent.env and customize
+
+      # Logging
+      UV_CUBE_AGENT_LOG_LEVEL=info
+
+      # Network binding
+      UV_CUBE_AGENT_HOST=0.0.0.0
+      UV_CUBE_AGENT_PORT=7001
+
+      # Instance identification
+      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+
+      # AI Backend URL (Ollama default)
+      UV_CUBE_AGENT_TARGET_URL=http://localhost:11434
+
+      # TLS Configuration (optional - uncomment for production)
+      # UV_CUBE_AGENT_SERVER_CERT=/etc/cube/certs/server.crt
+      # UV_CUBE_AGENT_SERVER_KEY=/etc/cube/certs/server.key
+      # UV_CUBE_AGENT_SERVER_CA_CERTS=/etc/cube/certs/ca.crt
+
+      # Attestation Manager URL (optional)
+      # UV_CUBE_AGENT_CA_URL=https://cloud.prism.ultraviolet.rs/am-certs
+    permissions: '0644'
+
+  # Default agent.env (minimal configuration)
+  - path: /etc/cube/agent.env
+    content: |
+      UV_CUBE_AGENT_LOG_LEVEL=info
+      UV_CUBE_AGENT_HOST=0.0.0.0
+      UV_CUBE_AGENT_PORT=7001
+      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+      UV_CUBE_AGENT_TARGET_URL=http://localhost:11434
+    permissions: '0644'
+
+  # Ollama systemd service
+  - path: /etc/systemd/system/ollama.service
+    content: |
+      [Unit]
+      Description=Ollama Service
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=ollama
+      Group=ollama
+      Environment="OLLAMA_HOST=0.0.0.0:11434"
+      ExecStart=/usr/local/bin/ollama serve
+      Restart=always
+      RestartSec=3
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  # Cube Agent systemd service
+  - path: /etc/systemd/system/cube-agent.service
+    content: |
+      [Unit]
+      Description=Cube Agent Service
+      After=network-online.target ollama.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      EnvironmentFile=/etc/cube/agent.env
+      ExecStart=/usr/local/bin/cube-agent
+      Restart=on-failure
+      RestartSec=5
+      StartLimitBurst=5
+      StartLimitIntervalSec=60
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+  # Model pull script for Ollama
+  - path: /usr/local/bin/pull-ollama-models.sh
+    content: |
+      #!/bin/bash
+      # Pull Ollama models after service is ready
+      # Default models: tinyllama:1.1b
+      # Override with CUBE_MODELS environment variable
+
+      MODELS="${CUBE_MODELS:-tinyllama:1.1b}"
+
+      # Wait for Ollama to be ready (max 2 minutes)
+      echo "Waiting for Ollama service..."
+      for i in $(seq 1 60); do
+        if curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
+          echo "Ollama is ready"
+          break
+        fi
+        sleep 2
+      done
+
+      # Pull each model
+      IFS=',' read -ra MODEL_ARRAY <<< "$MODELS"
+      for model in "${MODEL_ARRAY[@]}"; do
+        model=$(echo "$model" | xargs)  # Trim whitespace
+        echo "Pulling model: $model"
+        /usr/local/bin/ollama pull "$model"
+      done
+
+      echo "Model pull complete"
+    permissions: '0755'
+
+  # TLS certificate generation script (for development/testing)
+  - path: /usr/local/bin/generate-cube-certs.sh
+    content: |
+      #!/bin/bash
+      # Generate self-signed certificates for Cube Agent
+      # For production, replace with certificates from your CA
+
+      CERT_DIR="/etc/cube/certs"
+      mkdir -p "$CERT_DIR"
+
+      # Generate CA certificate
+      openssl req -x509 -newkey rsa:4096 \
+        -keyout "$CERT_DIR/ca.key" \
+        -out "$CERT_DIR/ca.crt" \
+        -days 365 -nodes \
+        -subj "/CN=Cube-CA"
+
+      # Generate server certificate
+      openssl req -newkey rsa:4096 \
+        -keyout "$CERT_DIR/server.key" \
+        -out "$CERT_DIR/server.csr" \
+        -nodes -subj "/CN=cube-agent"
+
+      openssl x509 -req \
+        -in "$CERT_DIR/server.csr" \
+        -CA "$CERT_DIR/ca.crt" \
+        -CAkey "$CERT_DIR/ca.key" \
+        -CAcreateserial \
+        -out "$CERT_DIR/server.crt" \
+        -days 365
+
+      # Generate client certificate for mTLS
+      openssl req -newkey rsa:4096 \
+        -keyout "$CERT_DIR/client.key" \
+        -out "$CERT_DIR/client.csr" \
+        -nodes -subj "/CN=cube-client"
+
+      openssl x509 -req \
+        -in "$CERT_DIR/client.csr" \
+        -CA "$CERT_DIR/ca.crt" \
+        -CAkey "$CERT_DIR/ca.key" \
+        -CAcreateserial \
+        -out "$CERT_DIR/client.crt" \
+        -days 365
+
+      # Set permissions
+      chmod 600 "$CERT_DIR"/*.key
+      chmod 644 "$CERT_DIR"/*.crt
+      rm -f "$CERT_DIR"/*.csr
+
+      echo "Certificates generated in $CERT_DIR"
+    permissions: '0755'
+
+  # Optional: TLS certificate placeholders for production
+  # Uncomment and replace with your actual certificates
+  #
+  # - path: /etc/cube/certs/server.crt
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     [Your server certificate here]
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+  #
+  # - path: /etc/cube/certs/server.key
+  #   content: |
+  #     -----BEGIN PRIVATE KEY-----
+  #     [Your server private key here]
+  #     -----END PRIVATE KEY-----
+  #   permissions: '0600'
+  #
+  # - path: /etc/cube/certs/ca.crt
+  #   content: |
+  #     -----BEGIN CERTIFICATE-----
+  #     [Your CA certificate here]
+  #     -----END CERTIFICATE-----
+  #   permissions: '0644'
+
+runcmd:
+  # Configure SSH for password authentication
+  - |
+    cat > /etc/ssh/sshd_config.d/60-cloudimg-settings.conf << 'SSHEOF'
+    PasswordAuthentication yes
+    SSHEOF
+  - systemctl restart sshd
+
+  # Create Cube directories
+  - mkdir -p /etc/cube/certs
+  - mkdir -p /var/log/cube
+
+  # Generate self-signed certificates (for development)
+  # Comment out for production if using real certificates
+  - /usr/local/bin/generate-cube-certs.sh
+
+  # Set up Ollama directories
+  - mkdir -p /var/lib/ollama
+  - mkdir -p /home/ollama/.ollama
+  - chown -R ollama:ollama /var/lib/ollama
+  - chown -R ollama:ollama /home/ollama
+
+  # Install Ollama
+  - curl -fsSL https://ollama.com/install.sh | sh
+
+  # Install Cube Agent from latest release
+  - |
+    CUBE_VERSION="${CUBE_AGENT_VERSION:-latest}"
+    if [ "$CUBE_VERSION" = "latest" ]; then
+      DOWNLOAD_URL=$(curl -s https://api.github.com/repos/ultravioletrs/cube/releases/latest | jq -r '.assets[] | select(.name | contains("linux") and contains("amd64")) | .browser_download_url' | head -1)
+    else
+      DOWNLOAD_URL="https://github.com/ultravioletrs/cube/releases/download/${CUBE_VERSION}/cube-agent-linux-amd64"
+    fi
+    if [ -n "$DOWNLOAD_URL" ] && [ "$DOWNLOAD_URL" != "null" ]; then
+      curl -fsSL "$DOWNLOAD_URL" -o /usr/local/bin/cube-agent
+      chmod +x /usr/local/bin/cube-agent
+    else
+      echo "Could not find release, building from source..."
+      git clone https://github.com/ultravioletrs/cube.git /tmp/cube
+      cd /tmp/cube && /usr/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
+    fi
+
+  # Enable and start services
+  - systemctl daemon-reload
+  - systemctl enable ollama.service
+  - systemctl start ollama.service
+  - systemctl enable cube-agent.service
+  - systemctl start cube-agent.service
+
+  # Pull default models in background
+  - nohup /usr/local/bin/pull-ollama-models.sh > /var/log/cube/ollama-pull.log 2>&1 &
+
+final_message: "Cube AI deployment complete. Cube Agent running on port 7001."
