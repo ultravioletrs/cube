@@ -71,30 +71,32 @@ func (s *service) UpdateAttestationPolicy(ctx context.Context, _ *authn.Session,
 }
 
 // CreateRoute implements Service.
-func (s *service) CreateRoute(ctx context.Context, _ *authn.Session, route *router.RouteRule) error {
-	// Validate route configuration
+func (s *service) CreateRoute(
+	ctx context.Context, _ *authn.Session, route *router.RouteRule,
+) (*router.RouteRule, error) {
 	if err := router.ValidateRoute(route); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Get existing routes to check for conflicts
-	existingRoutes, err := s.repo.ListRoutes(ctx)
+	existingRoutes, _, err := s.repo.ListRoutes(ctx, 0, MaxLimit)
 	if err != nil {
-		return fmt.Errorf("failed to list existing routes: %w", err)
+		return nil, fmt.Errorf("failed to list existing routes: %w", err)
 	}
 
-	// Check for conflicts
 	if err := router.DetectConflict(route, existingRoutes); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Create route in database
-	if err := s.repo.CreateRoute(ctx, route); err != nil {
-		return err
+	createdRoute, err := s.repo.CreateRoute(ctx, route)
+	if err != nil {
+		return nil, err
 	}
 
-	// Update in-memory router with new routes from database
-	return s.refreshRoutes(ctx)
+	if err := s.refreshRoutes(ctx); err != nil {
+		return nil, err
+	}
+
+	return createdRoute, nil
 }
 
 // GetRoute implements Service.
@@ -103,24 +105,22 @@ func (s *service) GetRoute(ctx context.Context, _ *authn.Session, name string) (
 }
 
 // UpdateRoute implements Service.
-func (s *service) UpdateRoute(ctx context.Context, _ *authn.Session, route *router.RouteRule) error {
-	// Check if this is a system route
+func (s *service) UpdateRoute(
+	ctx context.Context, _ *authn.Session, route *router.RouteRule,
+) (*router.RouteRule, error) {
 	if router.IsSystemRoute(route.Name) {
-		return router.ErrSystemRouteProtected
+		return nil, router.ErrSystemRouteProtected
 	}
 
-	// Validate route configuration
 	if err := router.ValidateRoute(route); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Get existing routes to check for conflicts (excluding the route being updated)
-	existingRoutes, err := s.repo.ListRoutes(ctx)
+	existingRoutes, _, err := s.repo.ListRoutes(ctx, 0, MaxLimit)
 	if err != nil {
-		return fmt.Errorf("failed to list existing routes: %w", err)
+		return nil, fmt.Errorf("failed to list existing routes: %w", err)
 	}
 
-	// Filter out the route being updated from conflict detection
 	var otherRoutes []router.RouteRule
 
 	for _, r := range existingRoutes {
@@ -129,18 +129,20 @@ func (s *service) UpdateRoute(ctx context.Context, _ *authn.Session, route *rout
 		}
 	}
 
-	// Check for conflicts with other routes
 	if err := router.DetectConflict(route, otherRoutes); err != nil {
-		return err
+		return nil, err
 	}
 
-	// Update route in database
-	if err := s.repo.UpdateRoute(ctx, route); err != nil {
-		return err
+	updatedRoute, err := s.repo.UpdateRoute(ctx, route)
+	if err != nil {
+		return nil, err
 	}
 
-	// Update in-memory router with new routes from database
-	return s.refreshRoutes(ctx)
+	if err := s.refreshRoutes(ctx); err != nil {
+		return nil, err
+	}
+
+	return updatedRoute, nil
 }
 
 // DeleteRoute implements Service.
@@ -160,8 +162,10 @@ func (s *service) DeleteRoute(ctx context.Context, _ *authn.Session, name string
 }
 
 // ListRoutes implements Service.
-func (s *service) ListRoutes(ctx context.Context, _ *authn.Session) ([]router.RouteRule, error) {
-	return s.repo.ListRoutes(ctx)
+func (s *service) ListRoutes(
+	ctx context.Context, _ *authn.Session, offset, limit uint64,
+) ([]router.RouteRule, uint64, error) {
+	return s.repo.ListRoutes(ctx, offset, limit)
 }
 
 // refreshRoutes updates the in-memory router with routes from database.
@@ -170,7 +174,7 @@ func (s *service) refreshRoutes(ctx context.Context) error {
 		return nil // Router not set, skip refresh
 	}
 
-	routes, err := s.repo.ListRoutes(ctx)
+	routes, _, err := s.repo.ListRoutes(ctx, 0, MaxLimit)
 	if err != nil {
 		return err
 	}

@@ -65,18 +65,44 @@ paths:
       security:
         - bearerAuth: []
       responses:
-        "200":
-          description: List of routing rules
+        '200':
+          description: List of routing rules with pagination metadata
           content:
             application/json:
               schema:
                 type: object
+                required:
+                  - total
+                  - limit
+                  - routes
                 properties:
+                  total:
+                    type: integer
+                    description: Total number of routes in the system
+                    example: 5
+                  limit:
+                    type: integer
+                    description: Maximum number of routes per page
+                    example: 10
                   routes:
                     type: array
+                    description: Array of routing rules
                     items:
-                      $ref: "#/components/schemas/RouteRule"
-        "401":
+                      $ref: '#/components/schemas/RouteRule'
+              example:
+                total: 2
+                limit: 10
+                routes:
+                  - name: "backend-api"
+                    target_url: "http://backend:8000"
+                    priority: 100
+                    default_rule: false
+                    strip_prefix: "/api"
+                  - name: "frontend"
+                    target_url: "http://frontend:3000"
+                    priority: 50
+                    default_rule: true
+        '401':
           description: Unauthorized
           content:
             application/json:
@@ -197,9 +223,17 @@ paths:
           schema:
             type: string
       responses:
-        "204":
+        '200':
           description: Route deleted successfully
-        "401":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "route deleted successfully"
+        '401':
           description: Unauthorized
           content:
             application/json:
@@ -268,6 +302,8 @@ components:
             - method
             - header
             - query
+            - body_field
+            - body_regex
         path:
           type: string
           description: Path pattern to match (when type is 'path')

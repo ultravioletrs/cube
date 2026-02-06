@@ -124,7 +124,8 @@ type CreateRouteRequest struct {
 }
 
 type CreateRouteResponse struct {
-	Err error
+	Route *router.RouteRule
+	Err   error
 }
 
 func (r CreateRouteResponse) Failed() error {
@@ -138,9 +139,9 @@ func MakeCreateRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 			return CreateRouteResponse{Err: errInvalidRequestType}, nil
 		}
 
-		err := s.CreateRoute(ctx, req.Session, req.Route)
+		route, err := s.CreateRoute(ctx, req.Session, req.Route)
 
-		return CreateRouteResponse{Err: err}, nil
+		return CreateRouteResponse{Route: route, Err: err}, nil
 	}
 }
 
@@ -177,7 +178,8 @@ type UpdateRouteRequest struct {
 }
 
 type UpdateRouteResponse struct {
-	Err error
+	Route *router.RouteRule
+	Err   error
 }
 
 func (r UpdateRouteResponse) Failed() error {
@@ -191,9 +193,9 @@ func MakeUpdateRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 			return UpdateRouteResponse{Err: errInvalidRequestType}, nil
 		}
 
-		err := s.UpdateRoute(ctx, req.Session, req.Route)
+		route, err := s.UpdateRoute(ctx, req.Session, req.Route)
 
-		return UpdateRouteResponse{Err: err}, nil
+		return UpdateRouteResponse{Route: route, Err: err}, nil
 	}
 }
 
@@ -225,10 +227,15 @@ func MakeDeleteRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 
 type ListRoutesRequest struct {
 	Session *authn.Session
+	Offset  uint64
+	Limit   uint64
 }
 
 type ListRoutesResponse struct {
 	Routes []router.RouteRule
+	Offset uint64
+	Limit  uint64
+	Total  uint64
 	Err    error
 }
 
@@ -243,8 +250,14 @@ func MakeListRoutesEndpoint(s proxy.Service) endpoint.Endpoint {
 			return ListRoutesResponse{Err: errInvalidRequestType}, nil
 		}
 
-		routes, err := s.ListRoutes(ctx, req.Session)
+		routes, total, err := s.ListRoutes(ctx, req.Session, req.Offset, req.Limit)
 
-		return ListRoutesResponse{Routes: routes, Err: err}, nil
+		return ListRoutesResponse{
+			Routes: routes,
+			Offset: req.Offset,
+			Limit:  req.Limit,
+			Total:  total,
+			Err:    err,
+		}, nil
 	}
 }
