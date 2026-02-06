@@ -1,13 +1,26 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
-# Traefik Configuration for Cube Cloud Deployment
-# Based on prism project blueprint
+# Traefik Configuration for Cube Cloud Deployment                                                                               
 
 # Global Configuration
 [global]
   checkNewVersion = false
   sendAnonymousUsage = false
+
+# Logging Configuration
+[log]
+  compress = true
+  format = "json"
+  level = "ERROR"
+
+# Access Logging
+[accessLog]
+  format = "json"
+
+# Distributed Tracing
+[tracing.otlp.http]
+  endpoint = "http://jaeger:4318/v1/traces"
 
 # Entry Points
 [entryPoints]
@@ -16,22 +29,16 @@
     [entryPoints.web.http.redirections.entryPoint]
       to = "websecure"
       scheme = "https"
-      permanent = true
 
   [entryPoints.websecure]
     address = ":443"
     [entryPoints.websecure.http.tls]
-      certResolver = "letsEncrypt"
+      certResolver = "letsencrypt"
 
 # API and Dashboard
 [api]
   dashboard = true
   insecure = true
-
-# Docker Provider
-[providers.docker]
-  exposedByDefault = false
-  network = "cube-cloud-network"
 
 # File Provider for Dynamic Configuration
 [providers.file]
@@ -39,12 +46,8 @@
   watch = true
 
 # Certificates Resolvers
-[certificatesResolvers.letsEncrypt.acme]
-  email = "admin@ultraviolet.rs"
-  storage = "/etc/traefik/ssl/certs/acme.json"
-  [certificatesResolvers.letsEncrypt.acme.httpChallenge]
+[certificatesResolvers.letsencrypt.acme]
+  email = "info@ultraviolet.com"
+  storage = "/etc/traefik/ssl/acme.json"
+  [certificatesResolvers.letsencrypt.acme.httpChallenge]
     entryPoint = "web"
-
-# Logging
-[log]
-  level = "DEBUG"
