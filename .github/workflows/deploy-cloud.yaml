@@ -98,6 +98,13 @@ jobs:
             sed -i "s|"m2N2Lfno"|"${{ secrets.CUBE_ADMIN_PASSWORD }}"|g" docker/.env
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" docker/.env
             sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" docker/.env
+            
+            # Replace Traefik configuration placeholders
+            sed -i "s|__TRAEFIK_HTTP_PORT__|${{ secrets.TRAEFIK_HTTP_PORT }}|g" docker/.env
+            sed -i "s|__TRAEFIK_HTTPS_PORT__|${{ secrets.TRAEFIK_HTTPS_PORT }}|g" docker/.env
+            sed -i "s|__TRAEFIK_DASHBOARD_PORT__|${{ secrets.TRAEFIK_DASHBOARD_PORT }}|g" docker/.env
+            sed -i "s|__TRAEFIK_CONFIG__|${{ secrets.TRAEFIK_CONFIG }}|g" docker/.env
+            sed -i "s|__TRAEFIK_DYNAMIC_CONFIG__|${{ secrets.TRAEFIK_DYNAMIC_CONFIG }}|g" docker/.env
             sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" docker/config.json
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" docker/traefik/dynamic.toml
