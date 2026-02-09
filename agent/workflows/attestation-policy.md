@@ -105,9 +105,12 @@ Retrieve the SEV-SNP attestation report from your CVM:
 
 ```bash
 # Inside the CVM
-# Method depends on your platform
-# Example for direct SEV-SNP access:
-sudo cat /dev/sev-guest > attestation_report.bin
+# Method depends on your platform and kernel version
+# The SEV-SNP guest device is typically at /dev/sev-guest
+# Use a SNP attestation tool or library to produce the report
+# For example, using snpguest or configfs-tsm:
+cd /sys/kernel/config/tsm/report/report0
+cat outblob > /tmp/attestation_report.bin
 ```
 
 #### Step 2: Generate Attestation Policy
@@ -138,14 +141,18 @@ For Intel TDX-based CVMs.
 
 #### Step 1: Obtain TDX Attestation Report
 
-Retrieve the TDX quote from your CVM:
+Retrieve the TDX quote from your CVM. The method depends on your platform and kernel version:
 
 ```bash
 # Inside the CVM
-# Method depends on your platform
-# Example:
-sudo cat /dev/tdx-guest > tdx_quote.bin
+# The TDX guest device is typically at /dev/tdx_guest
+# Use a TDX quote generation tool or library to produce the quote
+# For example, using the go-tdx-guest library or configfs-tsm:
+cd /sys/kernel/config/tsm/report/report0
+cat outblob > /tmp/tdx_quote.bin
 ```
+
+Copy the `tdx_quote.bin` file to your local machine where Cocos CLI is installed.
 
 #### Step 2: Generate Attestation Policy
 
@@ -156,15 +163,20 @@ cocos-cli policy tdx tdx_quote.bin [flags]
 ```
 
 **Optional flags:**
+- `--config <path>`: Path to a JSON file containing the validation configuration (overrides individual flags)
 - `--qe_vendor_id <hex>`: Expected QE_VENDOR_ID (16 bytes hex)
 - `--mr_seam <hex>`: Expected MR_SEAM measurement (48 bytes hex)
 - `--td_attributes <hex>`: Expected TD_ATTRIBUTES (8 bytes hex)
 - `--xfam <hex>`: Expected XFAM (8 bytes hex)
 - `--mr_td <hex>`: Expected MR_TD measurement (48 bytes hex)
+- `--mr_config_id <hex>`: Expected MR_CONFIG_ID (48 bytes hex)
+- `--mr_owner <hex>`: Expected MR_OWNER (48 bytes hex)
+- `--mr_config_owner <hex>`: Expected MR_OWNER_CONFIG (48 bytes hex)
 - `--rtmrs <hex,hex,hex,hex>`: Comma-separated RTMR values (4 values, 48 bytes each)
 - `--minimum_tee_tcb_svn <hex>`: Minimum TEE_TCB_SVN (16 bytes hex)
-- `--minimum_qe_svn <value>`: Minimum QE_SVN
-- `--minimum_pce_svn <value>`: Minimum PCE_SVN
+- `--minimum_qe_svn <value>`: Minimum QE_SVN (uint32)
+- `--minimum_pce_svn <value>`: Minimum PCE_SVN (uint32)
+- `--trusted_root <paths>`: Comma-separated paths to PEM CA bundles for Intel TDX root certificates
 - `--get_collateral`: Download necessary collaterals for additional checks
 
 **Output:**
@@ -225,9 +237,28 @@ Once you have generated the `attestation_policy.json` file:
 
 1. **Store the policy securely**: This file contains the expected measurements and configuration for your CVM.
 
-2. **Configure Cube AI**: Provide the policy file to Cube AI's attestation verification system.
+2. **Upload to Cube Proxy**: Seed the policy into the Cube Proxy database using the API (requires super admin privileges):
 
-3. **Verify attestation**: When clients connect to your Cube AI CVM, they will use this policy to verify that the CVM is running the expected code in a genuine TEE.
+    ```bash
+    curl -X POST http://<proxy-host>:<proxy-port>/attestation/policy \
+      -H "Authorization: Bearer <access_token>" \
+      -H "Content-Type: application/json" \
+      -d @attestation_policy.json
+    ```
+
+    A `201 Created` response confirms the policy was stored successfully. Each upload creates a new version; the proxy always serves the latest.
+
+3. **Retrieve the policy**: The current attestation policy can be fetched via the Cube Proxy API:
+
+    ```bash
+    curl -X GET http://<proxy-host>:<proxy-port>/<domain_id>/attestation/policy \
+      -H "Authorization: Bearer <access_token>"
+    ```
+
+    This returns the raw attestation policy JSON. The UI also uses this endpoint to display the policy.
+
+4. **Verify attestation**: When clients connect to your Cube AI CVM, the proxy uses this policy to verify that the CVM is running the expected code in a genuine TEE.
+
 ---
 
 ## Configuring Cube Proxy
