@@ -28,8 +28,8 @@ services:
       - ${TRAEFIK_DASHBOARD_PORT:-8080}:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/${TRAEFIK_CONFIG:-traefik.yaml}:/etc/traefik/traefik.yaml:ro
-      - ./traefik/${TRAEFIK_DYNAMIC_CONFIG:-dynamic.yaml}:/etc/traefik/dynamic.yaml:ro
+      - ./traefik/${TRAEFIK_CONFIG:-traefik.toml}:/etc/traefik/traefik.toml:ro
+      - ./traefik/${TRAEFIK_DYNAMIC_CONFIG:-dynamic.toml}:/etc/traefik/dynamic.toml:ro
       - ./traefik/ssl:/etc/traefik/ssl
     networks:
       - cube-network

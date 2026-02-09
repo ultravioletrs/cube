@@ -192,8 +192,6 @@ config-cloud-local:
 	@sed -i 's|^TRAEFIK_HTTP_PORT=.*|TRAEFIK_HTTP_PORT=49210|g' docker/.env
 	@sed -i 's|^TRAEFIK_HTTPS_PORT=.*|TRAEFIK_HTTPS_PORT=49211|g' docker/.env
 	@sed -i 's|^TRAEFIK_DASHBOARD_PORT=.*|TRAEFIK_DASHBOARD_PORT=49212|g' docker/.env
-	@sed -i 's|^TRAEFIK_CONFIG=.*|TRAEFIK_CONFIG=traefik.toml|g' docker/.env
-	@sed -i 's|^TRAEFIK_DYNAMIC_CONFIG=.*|TRAEFIK_DYNAMIC_CONFIG=dynamic.toml|g' docker/.env
 	@echo "✓ Configured with local defaults"
 
 .PHONY: restore-cloud-config
