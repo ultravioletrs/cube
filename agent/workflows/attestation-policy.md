@@ -20,14 +20,13 @@ GCP CVMs use AMD SEV-SNP with vTPM attestation.
 
 #### Step 1: Obtain vTPM Attestation Report
 
-SSH into your GCP CVM and retrieve the vTPM attestation report:
+Retrieve the vTPM attestation report from the GCP CVM using the Cocos CLI:
 
 ```bash
-# Inside the CVM
-sudo cat /sys/kernel/security/tpm0/binary_bios_measurements > attestation.bin
+cocos-cli attestation get snp-vtpm --tee <512-bit-hex-nonce> --vtpm <256-bit-hex-nonce>
 ```
 
-Copy the `attestation.bin` file to your local machine where Cocos CLI is installed.
+This saves the attestation report to `attestation.bin` by default. Use the `-r` flag to get the report in JSON format.
 
 #### Step 2: Generate Attestation Policy
 
@@ -62,18 +61,13 @@ Azure CVMs use AMD SEV-SNP with Microsoft Azure Attestation (MAA).
 
 #### Step 1: Obtain MAA Token
 
-SSH into your Azure CVM and retrieve the MAA token:
+Retrieve the MAA token from the Azure CVM using the Cocos CLI:
 
 ```bash
-# Inside the CVM
-# Use Azure's attestation client to get the MAA token
-# Save the token to a file
-echo "<maa_token>" > maa_token.txt
+cocos-cli attestation get azure-token --token <256-bit-hex-nonce>
 ```
 
-Alternatively, use Azure CLI or SDK to retrieve the attestation token.
-
-Copy the `maa_token.txt` file to your local machine.
+This saves the Azure attestation result to `azure_attest_result.json` by default. Use the `--azurejwt` flag to get the raw JWT token (`azure_attest_token.jwt`).
 
 #### Step 2: Generate Attestation Policy
 
@@ -101,33 +95,35 @@ For generic SEV-SNP platforms not using GCP or Azure.
 
 #### Step 1: Obtain Attestation Report
 
-Retrieve the SEV-SNP attestation report from your CVM:
+Retrieve the SEV-SNP attestation report from the CVM using the Cocos CLI, which connects to the agent running inside the CVM:
 
 ```bash
-# Inside the CVM
-# Method depends on your platform and kernel version
-# The SEV-SNP guest device is typically at /dev/sev-guest
-# Use a SNP attestation tool or library to produce the report
-# For example, using snpguest or configfs-tsm:
-cd /sys/kernel/config/tsm/report/report0
-cat outblob > /tmp/attestation_report.bin
+# Retrieve the SEV-SNP attestation report via the agent
+cocos-cli attestation get snp --tee <512-bit-hex-nonce>
+```
+
+This saves the attestation report to `attestation.bin` by default. Use the `-r` flag to get the report in JSON format (`attestation.json`).
+
+For SNP with vTPM attestation (e.g., on GCP):
+
+```bash
+cocos-cli attestation get snp-vtpm --tee <512-bit-hex-nonce> --vtpm <256-bit-hex-nonce>
 ```
 
 #### Step 2: Generate Attestation Policy
 
-Use the Rust-based script in Cocos:
+Use the Rust-based attestation policy tool in the Cocos repository:
 
 ```bash
-cd /path/to/cocos-ai/scripts/attestation_policy/sev-snp
+cd cocos/scripts/attestation_policy/sev-snp
 make
 
-# Run the binary
 cd target/release
 ./attestation_policy --policy 196608 --pcr ../../pcr_values.json
 ```
 
 **Parameters:**
-- `--policy`: 64-bit policy value (default: 196608)
+- `--policy`: 64-bit guest policy value (default: 196608)
 - `--pcr`: Path to PCR values JSON file (optional)
 
 **Output:**
@@ -141,42 +137,38 @@ For Intel TDX-based CVMs.
 
 #### Step 1: Obtain TDX Attestation Report
 
-Retrieve the TDX quote from your CVM. The method depends on your platform and kernel version:
+Retrieve the TDX quote from the CVM using the Cocos CLI, which connects to the agent running inside the CVM:
 
 ```bash
-# Inside the CVM
-# The TDX guest device is typically at /dev/tdx_guest
-# Use a TDX quote generation tool or library to produce the quote
-# For example, using the go-tdx-guest library or configfs-tsm:
-cd /sys/kernel/config/tsm/report/report0
-cat outblob > /tmp/tdx_quote.bin
+# Retrieve the TDX attestation quote via the agent
+cocos-cli attestation get tdx --tee <512-bit-hex-nonce>
 ```
 
-Copy the `tdx_quote.bin` file to your local machine where Cocos CLI is installed.
+This saves the TDX quote to `attestation.bin` by default. Use the `-r` flag to get the report in JSON format (`attestation.json`).
 
 #### Step 2: Generate Attestation Policy
 
 Run the Cocos CLI command:
 
 ```bash
-cocos-cli policy tdx tdx_quote.bin [flags]
+cocos-cli policy tdx attestation.bin [flags]
 ```
 
-**Optional flags:**
-- `--config <path>`: Path to a JSON file containing the validation configuration (overrides individual flags)
-- `--qe_vendor_id <hex>`: Expected QE_VENDOR_ID (16 bytes hex)
-- `--mr_seam <hex>`: Expected MR_SEAM measurement (48 bytes hex)
-- `--td_attributes <hex>`: Expected TD_ATTRIBUTES (8 bytes hex)
-- `--xfam <hex>`: Expected XFAM (8 bytes hex)
-- `--mr_td <hex>`: Expected MR_TD measurement (48 bytes hex)
-- `--mr_config_id <hex>`: Expected MR_CONFIG_ID (48 bytes hex)
-- `--mr_owner <hex>`: Expected MR_OWNER (48 bytes hex)
-- `--mr_config_owner <hex>`: Expected MR_OWNER_CONFIG (48 bytes hex)
-- `--rtmrs <hex,hex,hex,hex>`: Comma-separated RTMR values (4 values, 48 bytes each)
-- `--minimum_tee_tcb_svn <hex>`: Minimum TEE_TCB_SVN (16 bytes hex)
-- `--minimum_qe_svn <value>`: Minimum QE_SVN (uint32)
-- `--minimum_pce_svn <value>`: Minimum PCE_SVN (uint32)
-- `--trusted_root <paths>`: Comma-separated paths to PEM CA bundles for Intel TDX root certificates
+**Optional flags** (from `cocos-cli policy tdx --help`):
+- `--config <path>`: Path to a serialized JSON `check.Config` protobuf file (overrides individual flags)
+- `--qe_vendor_id <hex>`: Expected QE_VENDOR_ID field (16 bytes hex, unchecked if unset)
+- `--mr_seam <hex>`: Expected MR_SEAM field (48 bytes hex, unchecked if unset)
+- `--td_attributes <hex>`: Expected TD_ATTRIBUTES field (8 bytes hex, unchecked if unset)
+- `--xfam <hex>`: Expected XFAM field (8 bytes hex, unchecked if unset)
+- `--mr_td <hex>`: Expected MR_TD field (48 bytes hex, unchecked if unset)
+- `--mr_config_id <hex>`: Expected MR_CONFIG_ID field (48 bytes hex, unchecked if unset)
+- `--mr_owner <hex>`: Expected MR_OWNER field (48 bytes hex, unchecked if unset)
+- `--mr_config_owner <hex>`: Expected MR_OWNER_CONFIG field (48 bytes hex, unchecked if unset)
+- `--rtmrs <hex,hex,hex,hex>`: Comma-separated expected RTMR values (4 strings, each 48 bytes hex, unchecked if unset)
+- `--minimum_tee_tcb_svn <hex>`: Minimum TEE_TCB_SVN field (16 bytes hex, unchecked if unset)
+- `--minimum_qe_svn <value>`: Minimum QE_SVN field (uint32)
+- `--minimum_pce_svn <value>`: Minimum PCE_SVN field (uint32)
+- `--trusted_root <paths>`: Comma-separated paths to PEM CA bundles for Intel TDX root certificates (uses embedded root certificate if unset)
 - `--get_collateral`: Download necessary collaterals for additional checks
 
 **Output:**
@@ -284,10 +276,12 @@ On platforms like GCP and Azure, the agent cannot fetch attestation reports if t
 
 #### Step 2: Fetch Attestation Materials
 
-Retrieve the necessary attestation data from the running CVM:
+Retrieve the necessary attestation data from the running CVM using `cocos-cli`:
 
-*   **GCP**: Fetch the vTPM attestation report (`attestation.bin`).
-*   **Azure**: Fetch the MAA token (`maa_token.txt`) and the attestation report.
+*   **GCP**: `cocos-cli attestation get snp-vtpm --tee <nonce> --vtpm <nonce>`
+*   **Azure**: `cocos-cli attestation get azure-token --token <nonce>`
+*   **TDX**: `cocos-cli attestation get tdx --tee <nonce>`
+*   **SEV-SNP**: `cocos-cli attestation get snp --tee <nonce>`
 
 #### Step 3: Generate Policy
 
