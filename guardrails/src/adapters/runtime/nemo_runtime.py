@@ -11,7 +11,6 @@ from nemoguardrails.llm.providers import register_llm_provider
 
 from src.adapters.exceptions import ConfigLoadError
 from src.adapters.llm.extended_ollama import ExtendedOllama
-from src.adapters.llm.extended_openai import ExtendedOpenAI
 from src.adapters.llm.extended_vllm import ExtendedVLLM
 from src.domain.entities import MaterializedGuardrail
 from src.ports.runtime import GuardrailRuntime
@@ -20,9 +19,6 @@ logger = logging.getLogger(__name__)
 
 register_llm_provider("CubeLLM", ExtendedOllama)
 logger.info("CubeLLM LLM provider registered successfully")
-
-register_llm_provider("CubeOpenAI", ExtendedOpenAI)
-logger.info("CubeOpenAI LLM provider registered successfully")
 
 register_llm_provider("CubeVLLM", ExtendedVLLM)
 logger.info("CubeVLLM LLM provider registered successfully")
