@@ -3,10 +3,10 @@
 
 models:
   - type: main
-    engine: CubeVLLM
-    model: microsoft/DialoGPT-medium
+    engine: CubeLLM
+    model: llama3.2:3b
     parameters:
-      base_url: "http://cube-proxy:8900/v1"
+      base_url: "http://cube-proxy:8900"
       headers:
         X-Guardrails-Request: "true"
 

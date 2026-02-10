@@ -18,7 +18,7 @@ Usage:
            engine: CubeVLLM
            model: microsoft/DialoGPT-medium
            parameters:
-             base_url: http://vllm:8000/v1
+             base_url: http://vllm:8000
              headers:
                X-Guardrails-Request: "true"
 
@@ -63,8 +63,6 @@ class ExtendedVLLM(ChatOpenAI):
 
         self._config_headers = headers or {}
 
-        # vLLM doesn't require an API key, but ChatOpenAI requires one
-        # Set a dummy key if not provided
         if "api_key" not in kwargs and "openai_api_key" not in kwargs:
             kwargs["api_key"] = "EMPTY"
 
@@ -123,7 +121,6 @@ class ExtendedVLLM(ChatOpenAI):
             **kwargs
         )
 
-        # Extract text from ChatResult
         if result.generations:
             return result.generations[0].text
         return ""
@@ -137,11 +134,9 @@ class ExtendedVLLM(ChatOpenAI):
     ) -> ChatResult:
         final_headers = self._merge_headers()
 
-        # Get model from context, fallback to self.model_name
         model = self._get_model_from_context() or self.model_name
         logger.info(f"ExtendedVLLM: using model '{model}' (from context: {self._get_model_from_context() is not None})")
 
-        # Create temp client with merged headers and dynamic model
         temp_client = ChatOpenAI(
             model=model,
             base_url=str(self.openai_api_base),
@@ -184,9 +179,6 @@ class ExtendedVLLM(ChatOpenAI):
 
     def _extract_openai_options(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Extract valid OpenAI options from kwargs to pass to constructor."""
-        # ChatOpenAI constructor args we want to preserve from the parent
-        # or that might be passed in kwargs.
-        
         valid_options = {
             "model_kwargs", "frequency_penalty", "presence_penalty", "n", 
             "logit_bias", "streaming"
