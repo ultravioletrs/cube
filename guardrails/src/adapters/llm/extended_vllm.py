@@ -18,7 +18,7 @@ Usage:
            engine: CubeVLLM
            model: microsoft/DialoGPT-medium
            parameters:
-             base_url: http://vllm:8000
+             base_url: http://cube-proxy:8900
              headers:
                X-Guardrails-Request: "true"
 
@@ -178,7 +178,6 @@ class ExtendedVLLM(ChatOpenAI):
         )
 
     def _extract_openai_options(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract valid OpenAI options from kwargs to pass to constructor."""
         valid_options = {
             "model_kwargs", "frequency_penalty", "presence_penalty", "n", 
             "logit_bias", "streaming"
