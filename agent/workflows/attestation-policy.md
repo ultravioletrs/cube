@@ -20,13 +20,17 @@ GCP CVMs use AMD SEV-SNP with vTPM attestation.
 
 #### Step 1: Obtain vTPM Attestation Report
 
-Retrieve the vTPM attestation report from the GCP CVM using the Cocos CLI:
+Retrieve the vTPM attestation report from the GCP CVM via the Cube Proxy API:
 
 ```bash
-cocos-cli attestation get snp-vtpm --tee <512-bit-hex-nonce> --vtpm <256-bit-hex-nonce>
+curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "attestation_type": "snpvtpm", "to_json": true}' \
+  -o attestation.json
 ```
 
-This saves the attestation report to `attestation.bin` by default. Use the `-r` flag to get the report in JSON format.
+To get the report in binary format instead, set `"to_json": false` and save to `attestation.bin`.
 
 #### Step 2: Generate Attestation Policy
 
@@ -61,13 +65,17 @@ Azure CVMs use AMD SEV-SNP with Microsoft Azure Attestation (MAA).
 
 #### Step 1: Obtain MAA Token
 
-Retrieve the MAA token from the Azure CVM using the Cocos CLI:
+Retrieve the MAA token from the Azure CVM via the Cube Proxy API:
 
 ```bash
-cocos-cli attestation get azure-token --token <256-bit-hex-nonce>
+curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "attestation_type": "snp", "to_json": true}' \
+  -o attestation.json
 ```
 
-This saves the Azure attestation result to `azure_attest_result.json` by default. Use the `--azurejwt` flag to get the raw JWT token (`azure_attest_token.jwt`).
+Extract the MAA token from the response and save it to `maa_token.txt`.
 
 #### Step 2: Generate Attestation Policy
 
@@ -95,19 +103,14 @@ For generic SEV-SNP platforms not using GCP or Azure.
 
 #### Step 1: Obtain Attestation Report
 
-Retrieve the SEV-SNP attestation report from the CVM using the Cocos CLI, which connects to the agent running inside the CVM:
+Retrieve the SEV-SNP attestation report from the CVM via the Cube Proxy API:
 
 ```bash
-# Retrieve the SEV-SNP attestation report via the agent
-cocos-cli attestation get snp --tee <512-bit-hex-nonce>
-```
-
-This saves the attestation report to `attestation.bin` by default. Use the `-r` flag to get the report in JSON format (`attestation.json`).
-
-For SNP with vTPM attestation (e.g., on GCP):
-
-```bash
-cocos-cli attestation get snp-vtpm --tee <512-bit-hex-nonce> --vtpm <256-bit-hex-nonce>
+curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "attestation_type": "snp", "to_json": false}' \
+  -o attestation.bin
 ```
 
 #### Step 2: Generate Attestation Policy
@@ -137,14 +140,15 @@ For Intel TDX-based CVMs.
 
 #### Step 1: Obtain TDX Attestation Report
 
-Retrieve the TDX quote from the CVM using the Cocos CLI, which connects to the agent running inside the CVM:
+Retrieve the TDX quote from the CVM via the Cube Proxy API:
 
 ```bash
-# Retrieve the TDX attestation quote via the agent
-cocos-cli attestation get tdx --tee <512-bit-hex-nonce>
+curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "attestation_type": "tdx", "to_json": false}' \
+  -o attestation.bin
 ```
-
-This saves the TDX quote to `attestation.bin` by default. Use the `-r` flag to get the report in JSON format (`attestation.json`).
 
 #### Step 2: Generate Attestation Policy
 
@@ -276,12 +280,12 @@ On platforms like GCP and Azure, the agent cannot fetch attestation reports if t
 
 #### Step 2: Fetch Attestation Materials
 
-Retrieve the necessary attestation data from the running CVM using `cocos-cli`:
+Retrieve the necessary attestation data from the running CVM via the Cube Proxy API (`POST /<domain_id>/attestation`). Set the `attestation_type` field according to your platform:
 
-*   **GCP**: `cocos-cli attestation get snp-vtpm --tee <nonce> --vtpm <nonce>`
-*   **Azure**: `cocos-cli attestation get azure-token --token <nonce>`
-*   **TDX**: `cocos-cli attestation get tdx --tee <nonce>`
-*   **SEV-SNP**: `cocos-cli attestation get snp --tee <nonce>`
+*   **GCP**: `"attestation_type": "snpvtpm"`
+*   **Azure**: `"attestation_type": "snp"`
+*   **TDX**: `"attestation_type": "tdx"`
+*   **SEV-SNP**: `"attestation_type": "snp"`
 
 #### Step 3: Generate Policy
 
