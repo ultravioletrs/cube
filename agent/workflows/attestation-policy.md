@@ -9,8 +9,69 @@ This guide explains how to generate attestation policies for Cube AI Confidentia
 ## Prerequisites
 
 - **Cocos CLI** installed and built (`cocos-cli`)
-- Access to the CVM to retrieve attestation reports
+- A running Cube deployment with the **Cube Proxy** accessible
+- Valid access token and domain ID for the Cube Proxy API
 - Appropriate permissions to access cloud provider attestation services (for GCP/Azure)
+
+## Important: Initial Setup Without Attested TLS
+
+When generating an attestation policy for the first time, the Cube Proxy **must not** enforce Attested TLS (aTLS). This is because aTLS requires a policy to verify the agent, but you need to connect to the agent first to obtain the attestation report used to generate that policy.
+
+Before retrieving attestation reports, ensure the proxy is configured with aTLS disabled:
+
+```yaml
+services:
+  cube-proxy:
+    environment:
+      - UV_CUBE_AGENT_ATTESTED_TLS=false
+```
+
+Start the services with this configuration. After generating and uploading the policy, you can enable aTLS as described in [Configuring Cube Proxy](#configuring-cube-proxy).
+
+## Retrieving Attestation Reports via the Cube Proxy API
+
+All platforms use the same Cube Proxy API endpoint to retrieve attestation reports. The agent automatically detects the TEE platform (TDX, SEV-SNP, SNPvTPM, Azure) at startup — there is no `attestation_type` field in the request.
+
+**Endpoint:** `POST /<domain_id>/attestation`
+
+**Request body:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `report_data` | string | Base64-encoded data to embed in the report (max 64 bytes). Use `""` for empty. |
+| `nonce` | string | Base64-encoded nonce (max 32 bytes). Use `""` for empty. |
+| `to_json` | boolean | `true` for JSON response, `false` for binary protobuf. |
+
+**Example — JSON response:**
+
+```bash
+curl -sSf -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "to_json": true}' \
+  -o attestation.json
+```
+
+**Example — Binary response:**
+
+```bash
+curl -sSf -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
+  -o attestation.bin
+```
+
+The response format depends on the platform the agent is running on:
+
+| Platform | Response Content | Format |
+|----------|-----------------|--------|
+| **GCP (SNPvTPM)** | vTPM attestation with embedded SEV-SNP report | Protobuf (`attest.Attestation`) |
+| **Azure** | vTPM attestation with embedded SEV-SNP report | Protobuf (`attest.Attestation`) |
+| **Generic SEV-SNP** | Raw SEV-SNP attestation report | Binary SEV-SNP report |
+| **Intel TDX** | Raw TDX quote | Binary TDX quote |
+
+---
 
 ## Platform-Specific Instructions
 
@@ -23,14 +84,14 @@ GCP CVMs use AMD SEV-SNP with vTPM attestation.
 Retrieve the vTPM attestation report from the GCP CVM via the Cube Proxy API:
 
 ```bash
-curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+curl -sSf -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
-  -d '{"report_data": "", "nonce": "", "attestation_type": "snpvtpm", "to_json": true}' \
-  -o attestation.json
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
+  -o attestation.bin
 ```
 
-To get the report in binary format instead, set `"to_json": false` and save to `attestation.bin`.
+To get the report in JSON format instead, set `"to_json": true` and save to `attestation.json`.
 
 #### Step 2: Generate Attestation Policy
 
@@ -41,11 +102,11 @@ cocos-cli policy gcp attestation.bin <vcpu_count>
 ```
 
 **Parameters:**
-- `attestation.bin`: Path to the vTPM attestation report file
+- `attestation.bin`: Path to the vTPM attestation report file (binary protobuf)
 - `<vcpu_count>`: Number of vCPUs allocated to the CVM (e.g., 4, 8, 16)
 
 **Optional flags:**
-- `--json`: Use if the attestation report is in JSON format instead of binary
+- `--json`: Use if the attestation report is in JSON format (i.e., retrieved with `"to_json": true`)
 
 **Output:**
 - `attestation_policy.json`: Generated attestation policy file
@@ -63,19 +124,17 @@ The generated policy includes:
 
 Azure CVMs use AMD SEV-SNP with Microsoft Azure Attestation (MAA).
 
-#### Step 1: Obtain MAA Token
+#### Step 1: Obtain the MAA Token
 
-Retrieve the MAA token from the Azure CVM via the Cube Proxy API:
+The `cocos-cli policy azure` command requires a Microsoft Azure Attestation (MAA) JWT token. This token is obtained by the agent internally when it fetches the attestation report, but the Cube Proxy API returns the combined vTPM + SNP attestation protobuf rather than the raw MAA token.
+
+To obtain the MAA token, use the `cocos-cli` directly on the Azure CVM:
 
 ```bash
-curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
-  -H "Authorization: Bearer <access_token>" \
-  -H "Content-Type: application/json" \
-  -d '{"report_data": "", "nonce": "", "attestation_type": "snp", "to_json": true}' \
-  -o attestation.json
+cocos-cli attestation get --maa-token -o maa_token.txt
 ```
 
-Extract the MAA token from the response and save it to `maa_token.txt`.
+If the `cocos-cli` is not available on the CVM, you can retrieve the MAA token programmatically using the Azure Guest Attestation SDK from within the CVM.
 
 #### Step 2: Generate Attestation Policy
 
@@ -86,7 +145,7 @@ cocos-cli policy azure maa_token.txt <product_name>
 ```
 
 **Parameters:**
-- `maa_token.txt`: Path to the MAA token file
+- `maa_token.txt`: Path to the MAA token file (JWT string)
 - `<product_name>`: AMD product name (e.g., `Milan`, `Genoa`)
 
 **Optional flags:**
@@ -106,10 +165,10 @@ For generic SEV-SNP platforms not using GCP or Azure.
 Retrieve the SEV-SNP attestation report from the CVM via the Cube Proxy API:
 
 ```bash
-curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+curl -sSf -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
-  -d '{"report_data": "", "nonce": "", "attestation_type": "snp", "to_json": false}' \
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
   -o attestation.bin
 ```
 
@@ -143,12 +202,14 @@ For Intel TDX-based CVMs.
 Retrieve the TDX quote from the CVM via the Cube Proxy API:
 
 ```bash
-curl -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
+curl -sSf -X POST http://<proxy-host>:<proxy-port>/<domain_id>/attestation \
   -H "Authorization: Bearer <access_token>" \
   -H "Content-Type: application/json" \
-  -d '{"report_data": "", "nonce": "", "attestation_type": "tdx", "to_json": false}' \
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
   -o attestation.bin
 ```
+
+To get the report in JSON format instead, set `"to_json": true` and save to `attestation.json`.
 
 #### Step 2: Generate Attestation Policy
 
@@ -236,7 +297,7 @@ Once you have generated the `attestation_policy.json` file:
 2. **Upload to Cube Proxy**: Seed the policy into the Cube Proxy database using the API (requires super admin privileges):
 
     ```bash
-    curl -X POST http://<proxy-host>:<proxy-port>/attestation/policy \
+    curl -sSf -X POST http://<proxy-host>:<proxy-port>/attestation/policy \
       -H "Authorization: Bearer <access_token>" \
       -H "Content-Type: application/json" \
       -d @attestation_policy.json
@@ -247,7 +308,7 @@ Once you have generated the `attestation_policy.json` file:
 3. **Retrieve the policy**: The current attestation policy can be fetched via the Cube Proxy API:
 
     ```bash
-    curl -X GET http://<proxy-host>:<proxy-port>/<domain_id>/attestation/policy \
+    curl -sSf -X GET http://<proxy-host>:<proxy-port>/<domain_id>/attestation/policy \
       -H "Authorization: Bearer <access_token>"
     ```
 
@@ -259,62 +320,34 @@ Once you have generated the `attestation_policy.json` file:
 
 ## Configuring Cube Proxy
 
-To enable attestation verification in the Cube Proxy, you must configure it to use the generated `attestation_policy.json` file.
+To enable attestation verification in the Cube Proxy, you must configure it to use the generated attestation policy.
 
-### Proxy Configuration for GCP and Azure
+#### Step 1: Mount the Policy
 
-On platforms like GCP and Azure, the agent cannot fetch attestation reports if the proxy is already enforcing attestation (aTLS or mTLS) because the policy hasn't been generated yet. You must follow a two-step process:
+Update your configuration to mount the `attestation_policy.json` into the proxy container:
 
-#### Step 1: Initial Launch (No-TLS)
+```yaml
+services:
+  cube-proxy:
+    volumes:
+      - ./attestation_policy.json:/etc/cube/proxy/attestation_policy.json:ro
+```
 
-1.  Configure the proxy to **disable** Attested TLS. This allows the agent to start without verifying the CVM's identity, which is necessary to fetch the initial attestation materials.
+#### Step 2: Enable Attested TLS
 
-    ```yaml
-    services:
-      cube-proxy:
-        environment:
-          - UV_CUBE_AGENT_ATTESTED_TLS=false
-    ```
+Update the environment variables to point to the policy and enable Attested TLS (or Mutual aTLS):
 
-2.  Start the services.
+```yaml
+services:
+  cube-proxy:
+    environment:
+      - UV_CUBE_AGENT_ATTESTATION_POLICY=/etc/cube/proxy/attestation_policy.json
+      - UV_CUBE_AGENT_ATTESTED_TLS=true  # or 'mutual' for Mutual aTLS
+```
 
-#### Step 2: Fetch Attestation Materials
+#### Step 3: Restart Proxy
 
-Retrieve the necessary attestation data from the running CVM via the Cube Proxy API (`POST /<domain_id>/attestation`). Set the `attestation_type` field according to your platform:
-
-*   **GCP**: `"attestation_type": "snpvtpm"`
-*   **Azure**: `"attestation_type": "snp"`
-*   **TDX**: `"attestation_type": "tdx"`
-*   **SEV-SNP**: `"attestation_type": "snp"`
-
-#### Step 3: Generate Policy
-
-Generate the `attestation_policy.json` using the `cocos-cli` as described in the platform-specific sections above.
-
-#### Step 4: Enable Attested TLS
-
-Once the policy is generated:
-
-1.  **Mount the Policy**: Update your configuration to mount the `attestation_policy.json` into the proxy container.
-
-    ```yaml
-    services:
-      cube-proxy:
-        volumes:
-          - ./attestation_policy.json:/etc/cube/proxy/attestation_policy.json:ro
-    ```
-
-2.  **Enable aTLS**: Update the environment variables to point to the policy and enable Attested TLS (or Mutual aTLS).
-
-    ```yaml
-    services:
-      cube-proxy:
-        environment:
-          - UV_CUBE_AGENT_ATTESTATION_POLICY=/etc/cube/proxy/attestation_policy.json
-          - UV_CUBE_AGENT_ATTESTED_TLS=true  # or 'mutual' for Mutual aTLS
-    ```
-
-3.  **Restart Proxy**: Restart the `cube-proxy` service to apply the changes. Now, all connections to the agent will be verified against your policy.
+Restart the `cube-proxy` service to apply the changes. Now, all connections to the agent will be verified against your policy.
 
 ---
 
