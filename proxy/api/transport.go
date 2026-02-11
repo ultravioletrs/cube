@@ -47,6 +47,7 @@ func MakeHandler(
 	instanceID string,
 	auditSvc audit.Service,
 	authn mgauthn.AuthNMiddleware,
+	domainAuthn mgauthn.AuthNMiddleware,
 	idp supermq.IDProvider,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
@@ -90,7 +91,7 @@ func MakeHandler(
 	)).ServeHTTP)
 
 	mux.Route("/{domainID}", func(r chi.Router) {
-		r.Use(authn.Middleware(), api.RequestIDMiddleware(idp))
+		r.Use(domainAuthn.Middleware(), api.RequestIDMiddleware(idp))
 		r.Use(auditSvc.Middleware)
 
 		r.Get("/attestation/policy", kithttp.NewServer(
@@ -297,10 +298,10 @@ func prepareProxyRequest(req *http.Request, target *url.URL, rule *router.RouteR
 	req.Host = target.Host
 }
 
-// injectAuditFilter modifies the request to filter audit logs by session.domain_id.
+// injectAuditFilter modifies the request to filter audit logs by event.session.DomainID.keyword.
 // It handles both query string (q parameter) and JSON body queries.
 func injectAuditFilter(req *http.Request, domainID string) {
-	filter := "session.domain_id:" + domainID
+	filter := "event.session.DomainID.keyword:" + domainID
 
 	if req.Body != nil && req.ContentLength > 0 {
 		if err := injectAuditFilterIntoBody(req, domainID); err != nil {
@@ -336,7 +337,7 @@ func tryInjectFilter(req *http.Request, bodyBytes []byte, domainID string) error
 
 	termFilter := map[string]any{
 		"term": map[string]any{
-			"session.domain_id": domainID,
+			"event.session.DomainID.keyword": domainID,
 		},
 	}
 
