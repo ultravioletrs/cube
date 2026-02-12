@@ -155,8 +155,18 @@ up-vllm: config-vllm
 	@echo "Starting Cube with vLLM backend..."
 	docker compose -f docker/compose.yaml --profile vllm up -d
 
+.PHONY: disable-atls
+disable-atls:
+	@echo "Disabling attested TLS for local development..."
+	@sed -i 's|^UV_CUBE_AGENT_CLIENT_CERT=.*|UV_CUBE_AGENT_CLIENT_CERT=|' docker/.env
+	@sed -i 's|^UV_CUBE_AGENT_CLIENT_KEY=.*|UV_CUBE_AGENT_CLIENT_KEY=|' docker/.env
+	@sed -i 's|^UV_CUBE_AGENT_SERVER_CA_CERTS=.*|UV_CUBE_AGENT_SERVER_CA_CERTS=|' docker/.env
+	@sed -i 's|^UV_CUBE_AGENT_ATTESTED_TLS=.*|UV_CUBE_AGENT_ATTESTED_TLS=false|' docker/.env
+	@sed -i 's|^UV_CUBE_AGENT_ATTESTATION_POLICY=.*|UV_CUBE_AGENT_ATTESTATION_POLICY=|' docker/.env
+	@echo "✓ Attested TLS disabled"
+
 .PHONY: up
-up: enable-guardrails config-backend config-cloud-local
+up: config-cloud-local enable-guardrails config-backend disable-atls
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -164,7 +174,7 @@ else
 endif
 
 .PHONY: up-disable-guardrails
-up-disable-guardrails: disable-guardrails config-backend config-cloud-local
+up-disable-guardrails: config-cloud-local disable-guardrails config-backend disable-atls
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -174,9 +184,7 @@ endif
 .PHONY: config-cloud-local
 config-cloud-local:
 	@echo "Configuring cloud deployment for local environment..."
-	@cp docker/.env docker/.env.backup 2>/dev/null || true
-	@cp docker/traefik/dynamic.toml docker/traefik/dynamic.toml.backup 2>/dev/null || true
-	@cp docker/config.json docker/config.json.backup 2>/dev/null || true
+	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null || true
 	@sed -i 's|__SMQ_EMAIL_HOST__|localhost|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PORT__|1025|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_USERNAME__|test|g' docker/.env
@@ -197,18 +205,8 @@ config-cloud-local:
 .PHONY: restore-cloud-config
 restore-cloud-config:
 	@echo "Restoring cloud deployment placeholders..."
-	@if [ -f docker/.env.backup ]; then \
-		mv docker/.env.backup docker/.env; \
-		echo "✓ Restored .env"; \
-	fi
-	@if [ -f docker/traefik/dynamic.toml.backup ]; then \
-		mv docker/traefik/dynamic.toml.backup docker/traefik/dynamic.toml; \
-		echo "✓ Restored dynamic.toml"; \
-	fi
-	@if [ -f docker/config.json.backup ]; then \
-		mv docker/config.json.backup docker/config.json; \
-		echo "✓ Restored config.json"; \
-	fi
+	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null && \
+		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
 
 .PHONY: up-cloud
 up-cloud: config-cloud-local
@@ -237,7 +235,6 @@ down:
 down-cloud:
 	@echo "Stopping Cube Cloud services..."
 	docker compose -f docker/compose.yaml --profile cloud down
-	@$(MAKE) restore-cloud-config
 
 .PHONY: down-volumes
 down-volumes:
@@ -248,7 +245,6 @@ down-volumes:
 down-cloud-volumes:
 	@echo "Stopping Cube Cloud services and removing volumes..."
 	docker compose -f docker/compose.yaml --profile cloud down -v
-	@$(MAKE) restore-cloud-config
 
 .PHONY: restart
 restart: down up

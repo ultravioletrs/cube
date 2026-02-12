@@ -99,6 +99,11 @@ jobs:
             sed -i "s|__CUBE_PUBLIC_URL__|${{ secrets.CUBE_PUBLIC_URL }}|g" docker/.env
             sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" docker/.env
             
+            # Replace Google OAuth placeholders
+            sed -i "s|__SMQ_GOOGLE_CLIENT_ID__|${{ secrets.SMQ_GOOGLE_CLIENT_ID }}|g" docker/.env
+            sed -i "s|__SMQ_GOOGLE_CLIENT_SECRET__|${{ secrets.SMQ_GOOGLE_CLIENT_SECRET }}|g" docker/.env
+            sed -i "s|__SMQ_GOOGLE_STATE__|${{ secrets.SMQ_GOOGLE_STATE }}|g" docker/.env
+
             # Replace Traefik configuration placeholders
             sed -i "s|__TRAEFIK_HTTP_PORT__|${{ secrets.TRAEFIK_HTTP_PORT }}|g" docker/.env
             sed -i "s|__TRAEFIK_HTTPS_PORT__|${{ secrets.TRAEFIK_HTTPS_PORT }}|g" docker/.env
@@ -111,10 +116,10 @@ jobs:
             docker compose -f docker/compose.yaml --profile cloud pull 2>&1
 
             echo "Stopping existing services"
-            make down-cloud 2>&1
+            docker compose -f docker/compose.yaml --profile cloud down 2>&1
 
             echo "Starting cloud services"
-            make up-cloud 2>&1
+            docker compose -f docker/compose.yaml --profile cloud up -d 2>&1
 
             echo "Waiting for services to start (30 seconds)..."
             sleep 30
