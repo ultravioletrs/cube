@@ -225,43 +225,15 @@ restore-cloud-config:
 	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null && \
 		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
 
-.PHONY: up-cloud
-up-cloud: config-cloud-local
-	@echo "Starting Cube Cloud services with local configuration..."
-	@mkdir -p docker/traefik/ssl/certs docker/traefik/letsencrypt
-	@if [ ! -f docker/traefik/ssl/certs/acme.json ]; then \
-		printf '{}' > docker/traefik/ssl/certs/acme.json; \
-		chmod 600 docker/traefik/ssl/certs/acme.json; \
-		echo "✓ Created acme.json"; \
-	fi
-	docker compose -f docker/compose.yaml --profile cloud up -d
-	@echo ""
-	@echo "=== Cube Cloud Services Started ==="
-	@echo "  - UI: http://localhost:49210/"
-	@echo "  - Proxy API: http://localhost:49210/proxy"
-	@echo "  - Traefik Dashboard: http://localhost:49212"
-	@echo ""
-	@echo "Note: Run 'make restore-cloud-config' to restore placeholders after stopping"
-
 .PHONY: down
 down:
 	@echo "Stopping all Cube services..."
 	docker compose -f docker/compose.yaml down
 
-.PHONY: down-cloud
-down-cloud:
-	@echo "Stopping Cube Cloud services..."
-	docker compose -f docker/compose.yaml --profile cloud down
-
 .PHONY: down-volumes
 down-volumes:
 	@echo "Stopping all Cube services and removing volumes..."
 	docker compose -f docker/compose.yaml --profile cloud --profile vllm down -v
-
-.PHONY: down-cloud-volumes
-down-cloud-volumes:
-	@echo "Stopping Cube Cloud services and removing volumes..."
-	docker compose -f docker/compose.yaml --profile cloud down -v
 
 .PHONY: restart
 restart: down up
@@ -271,9 +243,6 @@ restart-ollama: down up-ollama
 
 .PHONY: restart-vllm
 restart-vllm: down up-vllm
-
-.PHONY: restart-cloud
-restart-cloud: down-cloud up-cloud
 
 .PHONY: logs
 logs:
