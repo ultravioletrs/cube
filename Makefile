@@ -183,7 +183,7 @@ disable-atls:
 	@echo "✓ Attested TLS disabled"
 
 .PHONY: up
-up: config-cloud-local enable-guardrails config-backend disable-atls
+up: config-local enable-guardrails config-backend disable-atls
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -198,9 +198,9 @@ else
 	@$(MAKE) up-ollama
 endif
 
-.PHONY: config-cloud-local
-config-cloud-local:
-	@echo "Configuring cloud deployment for local environment..."
+.PHONY: config-local
+config-local:
+	@echo "Configuring for local development..."
 	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null || true
 	@sed -i 's|__SMQ_EMAIL_HOST__|localhost|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PORT__|1025|g' docker/.env
@@ -219,9 +219,9 @@ config-cloud-local:
 	@sed -i 's|^TRAEFIK_DASHBOARD_PORT=.*|TRAEFIK_DASHBOARD_PORT=8080|g' docker/.env
 	@echo "✓ Configured with local defaults"
 
-.PHONY: restore-cloud-config
-restore-cloud-config:
-	@echo "Restoring cloud deployment placeholders..."
+.PHONY: restore-config
+restore-config:
+	@echo "Restoring configuration placeholders..."
 	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null && \
 		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
 
@@ -330,7 +330,7 @@ help:
 	@echo ""
 	@echo "Cloud Configuration Commands:"
 	@echo "  config-cloud-local Configure cloud deployment with localhost defaults"
-	@echo "  restore-cloud-config Restore placeholder values in cloud config files"
+	@echo "  restore-config       Restore placeholder values in config files"
 	@echo ""
 	@echo "Logs:"
 	@echo "  logs               Show all logs"

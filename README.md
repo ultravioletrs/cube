@@ -92,9 +92,8 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```
 
    **Local Development Access:**
-   - UI: http://localhost:6193
-   - Traefik Gateway: https://localhost (port 443)
-   - Traefik Dashboard: http://localhost:8080
+   - Traefik Gateway: https://localhost (ports 80/443)
+   - All services accessible through Traefik reverse proxy
 
    **Cloud Deployment:**
    Cloud deployment is automated via GitHub Actions workflow (`.github/workflows/deploy-cloud.yaml`).
@@ -195,8 +194,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 Cube AI exposes all services through a Traefik reverse proxy. All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
 
 **Local Development Access:**
-- Via Traefik HTTPS: `https://localhost` (port 443, recommended)
-- Direct UI access: `http://localhost:6193`
+- Via Traefik HTTPS: `https://localhost` (port 443)
 
 **Cloud Deployment Access:**
 - Via Traefik HTTPS: `https://your-domain.com`
