@@ -200,6 +200,10 @@ func main() {
 		auth, smqauthn.WithAllowUnverifiedUser(true), smqauthn.WithDomainCheck(false),
 	)
 
+	domainAuthmMiddleware := smqauthn.NewAuthNMiddleware(
+		auth, smqauthn.WithAllowUnverifiedUser(true), smqauthn.WithDomainCheck(true),
+	)
+
 	httpServerConfig := server.Config{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
@@ -216,7 +220,7 @@ func main() {
 
 	httpSvr := http.NewServer(
 		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, idp, instrumentedTransport, rter,
+			svc, cfg.InstanceID, auditSvc, authmMiddleware, domainAuthmMiddleware, idp, instrumentedTransport, rter,
 		),
 		logger)
 
