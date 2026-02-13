@@ -95,10 +95,6 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    - Traefik Gateway: https://localhost (ports 80/443)
    - All services accessible through Traefik reverse proxy
 
-   **Cloud Deployment:**
-   Cloud deployment is automated via GitHub Actions workflow (`.github/workflows/deploy-cloud.yaml`).
-   The workflow handles configuration, secret injection, and service deployment automatically.
-
 3. **Get your authentication token**
 
    All API requests require JWT authentication. Once services are running, obtain a token:

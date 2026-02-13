@@ -233,7 +233,7 @@ down:
 .PHONY: down-volumes
 down-volumes:
 	@echo "Stopping all Cube services and removing volumes..."
-	docker compose -f docker/compose.yaml --profile cloud --profile vllm down -v
+	docker compose -f docker/compose.yaml down -v
 
 .PHONY: restart
 restart: down up
