@@ -93,8 +93,8 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
    **Local Development Access:**
    - UI: http://localhost:6193
-   - Traefik Gateway: https://localhost:49211
-   - Traefik Dashboard: http://localhost:49212
+   - Traefik Gateway: https://localhost (port 443)
+   - Traefik Dashboard: http://localhost:8080
 
    **Cloud Deployment:**
    Cloud deployment is automated via GitHub Actions workflow (`.github/workflows/deploy-cloud.yaml`).
@@ -105,7 +105,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    All API requests require JWT authentication. Once services are running, obtain a token:
 
    ```bash
-   curl -ksSiX POST https://localhost:49211/users/tokens/issue \
+   curl -ksSiX POST https://localhost/users/tokens/issue \
      -H "Content-Type: application/json" \
      -d '{
        "username": "admin@example.com",
@@ -127,7 +127,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    All API requests require a domain ID in the URL path. You can fetch a domain ID from the UI or create one via the API:
 
    ```bash
-   curl -ksSiX POST https://localhost:49211/domains \
+   curl -ksSiX POST https://localhost/domains \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
@@ -169,14 +169,14 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 4):
 
    ```bash
-   curl -k https://localhost:49211/proxy/YOUR_DOMAIN_ID/v1/models \
+   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
    ```
 
 6. **Make your first AI request**
 
    ```bash
-   curl -k https://localhost:49211/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
+   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
@@ -195,7 +195,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 Cube AI exposes all services through a Traefik reverse proxy. All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
 
 **Local Development Access:**
-- Via Traefik HTTPS: `https://localhost:49211` (recommended)
+- Via Traefik HTTPS: `https://localhost` (port 443, recommended)
 - Direct UI access: `http://localhost:6193`
 
 **Cloud Deployment Access:**
@@ -203,7 +203,7 @@ Cube AI exposes all services through a Traefik reverse proxy. All protected endp
 
 ### Proxy Endpoints (OpenAI-Compatible)
 
-**Base URL (Local):** `https://localhost:49211/proxy/`
+**Base URL (Local):** `https://localhost/proxy/`
 **Base URL (Cloud):** `https://your-domain.com/proxy/`
 
 Replace `{domainID}` with your domain ID from the Getting Started section.
@@ -233,19 +233,19 @@ Example:
 
 ```bash
 # OpenAI-compatible endpoint
-curl -k https://localhost:49211/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
+curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"model":"llama3.2:3b","messages":[{"role":"user","content":"Hello"}]}'
 
 # Ollama API endpoint
-curl -k https://localhost:49211/proxy/YOUR_DOMAIN_ID/api/tags \
+curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
 ```
 
 ### Auth Endpoints
 
-**Base URL (Local):** `https://localhost:49211/users`
+**Base URL (Local):** `https://localhost/users`
 **Base URL (Cloud):** `https://your-domain.com/users`
 
 | Method | Path                          | Description                            |
@@ -259,7 +259,7 @@ curl -k https://localhost:49211/proxy/YOUR_DOMAIN_ID/api/tags \
 Example:
 
 ```bash
-curl -ksSiX POST https://localhost:49211/users/tokens/issue \
+curl -ksSiX POST https://localhost/users/tokens/issue \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin@example.com",
@@ -269,7 +269,7 @@ curl -ksSiX POST https://localhost:49211/users/tokens/issue \
 
 ### Domains Endpoints
 
-**Base URL (Local):** `https://localhost:49211/domains`
+**Base URL (Local):** `https://localhost/domains`
 **Base URL (Cloud):** `https://your-domain.com/domains`
 
 | Method | Path                          | Description                            |
@@ -285,7 +285,7 @@ curl -ksSiX POST https://localhost:49211/users/tokens/issue \
 Example:
 
 ```bash
-curl -ksSiX POST https://localhost:49211/domains \
+curl -ksSiX POST https://localhost/domains \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
