@@ -132,6 +132,9 @@ class ExtendedVLLM(ChatOpenAI):
         run_manager: Optional[Any] = None,
         **kwargs: Any,
     ) -> ChatResult:
+        if "headers" in kwargs:
+            kwargs.pop("headers")
+
         final_headers = self._merge_headers()
 
         model = self._get_model_from_context() or self.model_name
@@ -158,6 +161,9 @@ class ExtendedVLLM(ChatOpenAI):
         run_manager: Optional[Any] = None,
         **kwargs: Any,
     ) -> ChatResult:
+        if "headers" in kwargs:
+            kwargs.pop("headers")
+
         final_headers = self._merge_headers()
 
         model = self._get_model_from_context() or self.model_name
