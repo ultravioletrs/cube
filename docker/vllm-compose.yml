@@ -16,12 +16,21 @@ services:
       --host 0.0.0.0
       --port 8000
       --trust-remote-code
+      --gpu-memory-utilization 0.85
       --max-model-len 1024
-      --device cpu
     volumes:
       - vllm-cache:/root/.cache
     networks:
       - cube-network
     environment:
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES}
+      - NVIDIA_DRIVER_CAPABILITIES=${NVIDIA_DRIVER_CAPABILITIES}
       - VLLM_LOGGING_LEVEL=${VLLM_LOGGING_LEVEL}
-      - VLLM_TARGET_DEVICE=cpu
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
