@@ -123,7 +123,7 @@ class ChatRequest(BaseModel):
     """Schema for chat completion request."""
 
     messages: List[ChatMessage]
-    model: Optional[str] = "tinyllama"
+    model: Optional[str] = "llama3.2:3b"
     temperature: Optional[float] = 0.1
     max_tokens: Optional[int] = 150
 

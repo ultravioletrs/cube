@@ -87,7 +87,7 @@ Navigate to **Target packages → Cube AI Services**:
   - **Client CA Certificates**: Path to file
 
 ##### Ollama Backend (if selected)
-- **Install default models**: Automatically pulls tinyllama:1.1b, starcoder2:3b, nomic-embed-text:v1.5
+- **Install default models**: Automatically pulls llama3.2:3b, starcoder2:3b, nomic-embed-text:v1.5
 - **Custom models**: Space-separated list (e.g., `llama2:7b mistral:7b codellama:13b`)
 - **GPU Support**: Enable NVIDIA or AMD GPU acceleration
 
@@ -198,7 +198,7 @@ ollama list
 ollama pull llama2:7b
 
 # Remove models
-ollama rm tinyllama:1.1b
+ollama rm llama3.2:3b
 ```
 
 ### vLLM Models

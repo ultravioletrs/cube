@@ -16,7 +16,7 @@
       },
       {
         "name": "attestation",
-        "target_url": "__CUBE_INTERNAL_AGENT_URL__",
+        "target_url": "http://cube-agent:8901",
         "matchers": [
           {
             "condition": "path",
@@ -71,7 +71,7 @@
       },
       {
         "name": "agent",
-        "target_url": "__CUBE_INTERNAL_AGENT_URL__",
+        "target_url": "http://cube-agent:8901",
         "default_rule": true,
         "enabled": true
       }
