@@ -84,15 +84,16 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    # Local development with vLLM
    make up-vllm
 
-   # Cloud deployment (configures traefik for cloud ports)
-   make up-cloud
-
    # Stop services
    make down
 
-   # Stop services and remove volumes
+   # Stop services and remove volumes (includes all profiles)
    make down-volumes
    ```
+
+   **Local Development Access:**
+   - Traefik Gateway: https://localhost (ports 80/443)
+   - All services accessible through Traefik reverse proxy
 
 3. **Get your authentication token**
 
@@ -188,9 +189,16 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
 Cube AI exposes all services through a Traefik reverse proxy. All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
 
+**Local Development Access:**
+- Via Traefik HTTPS: `https://localhost` (port 443)
+
+**Cloud Deployment Access:**
+- Via Traefik HTTPS: `https://your-domain.com`
+
 ### Proxy Endpoints (OpenAI-Compatible)
 
-**Base URL:** `https://localhost/proxy/`
+**Base URL (Local):** `https://localhost/proxy/`
+**Base URL (Cloud):** `https://your-domain.com/proxy/`
 
 Replace `{domainID}` with your domain ID from the Getting Started section.
 
@@ -231,7 +239,8 @@ curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
 
 ### Auth Endpoints
 
-**Base URL:** `https://localhost/users`
+**Base URL (Local):** `https://localhost/users`
+**Base URL (Cloud):** `https://your-domain.com/users`
 
 | Method | Path                          | Description                            |
 |--------|-------------------------------|----------------------------------------|
@@ -254,7 +263,8 @@ curl -ksSiX POST https://localhost/users/tokens/issue \
 
 ### Domains Endpoints
 
-**Base URL:** `https://localhost/domains`
+**Base URL (Local):** `https://localhost/domains`
+**Base URL (Cloud):** `https://your-domain.com/domains`
 
 | Method | Path                          | Description                            |
 |--------|-------------------------------|----------------------------------------|
