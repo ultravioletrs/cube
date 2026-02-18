@@ -84,27 +84,6 @@ class CubeLLM(ChatOpenAI):
         final_headers = {**base_headers, **request_headers}
         return final_headers
 
-    def _extract_options(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Extract valid options for ChatOpenAI and handle provider-specifics (like Ollama).
-        Any unknown kwargs are typically passed as model_kwargs by LangChain, but strict
-        filtering helps avoid issues.
-        """
-        valid_options = {
-            "model_kwargs", "frequency_penalty", "presence_penalty", "n", 
-            "logit_bias", "streaming", "seed", "response_format", "user"
-        }
-        options = {}
-        for key in valid_options:
-            if key in kwargs:
-                options[key] = kwargs[key]
-            elif hasattr(self, key):
-                 # ChatOpenAI handles defaults, we just want overrides from kwargs
-                 pass
-
-        
-        return options
-
     async def _acall(
         self,
         prompt: str,
@@ -152,7 +131,8 @@ class CubeLLM(ChatOpenAI):
         logger.info(f"CubeLLM: using model '{model}' (from context: {context_model is not None})")
 
         # Normalize base_url to ensure it ends with /v1
-        base_url = str(client_kwargs.get("base_url") or self.openai_api_base)
+        raw_base_url = client_kwargs.get("base_url") or self.openai_api_base
+        base_url = str(raw_base_url) if raw_base_url else None
         if base_url and not base_url.endswith("/v1"):
             base_url = f"{base_url.rstrip('/')}/v1"
 
@@ -160,7 +140,7 @@ class CubeLLM(ChatOpenAI):
         temp_client = ChatOpenAI(
             model=model,
             base_url=base_url,
-            api_key=str(client_kwargs.get("api_key") or (self.openai_api_base and self.openai_api_key.get_secret_value()) or "EMPTY"),
+            api_key=str(client_kwargs.get("api_key") or (self.openai_api_key and self.openai_api_key.get_secret_value()) or "EMPTY"),
             default_headers=final_headers,
             temperature=client_kwargs.get("temperature", self.temperature),
             max_tokens=client_kwargs.get("max_tokens", self.max_tokens),
@@ -192,14 +172,15 @@ class CubeLLM(ChatOpenAI):
         logger.info(f"CubeLLM: using model '{model}' (from context: {context_model is not None})")
 
         # Normalize base_url
-        base_url = str(client_kwargs.get("base_url") or self.openai_api_base)
+        raw_base_url = client_kwargs.get("base_url") or self.openai_api_base
+        base_url = str(raw_base_url) if raw_base_url else None
         if base_url and not base_url.endswith("/v1"):
             base_url = f"{base_url.rstrip('/')}/v1"
 
         temp_client = ChatOpenAI(
             model=model,
             base_url=base_url,
-            api_key=str(client_kwargs.get("api_key") or (self.openai_api_base and self.openai_api_key.get_secret_value()) or "EMPTY"),
+            api_key=str(client_kwargs.get("api_key") or (self.openai_api_key and self.openai_api_key.get_secret_value()) or "EMPTY"),
             default_headers=final_headers,
             temperature=client_kwargs.get("temperature", self.temperature),
             max_tokens=client_kwargs.get("max_tokens", self.max_tokens),
