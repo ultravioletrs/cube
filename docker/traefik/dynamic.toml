@@ -70,6 +70,15 @@
     interval = "10s"
     timeout = "10s"
 
+[http.services.certs.loadBalancer]
+  [[http.services.certs.loadBalancer.servers]]
+    url = "http://cube-certs:9010"
+  [http.services.certs.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
+
 # HTTP Routers
 [http.routers.users-health]
   rule = "Path(`/users/health`)"
@@ -133,6 +142,13 @@
   service = "domains"
   middlewares = ["retry-middleware", "headers-middleware"]
   priority = 8
+
+[http.routers.certs]
+  rule = "PathPrefix(`/`)"
+  entryPoints = ["certs"]
+  service = "certs"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 10
 
 [http.routers.ui]
   rule = "PathPrefix(`/`) || PathPrefix(`/api`)"
