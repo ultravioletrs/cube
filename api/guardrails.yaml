@@ -462,7 +462,7 @@ components:
             models:
               - type: main
                 engine: ollama
-                model: tinyllama
+                model: llama3.2:3b
         prompts_yaml:
           type: string
           description: YAML content for prompts.yml

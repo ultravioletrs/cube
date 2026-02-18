@@ -15,7 +15,7 @@ config BR2_PACKAGE_OLLAMA_MODELS
 	default y
 	help
 	  Automatically pull default models on first boot
-	  (tinyllama:1.1b, starcoder2:3b, nomic-embed-text:v1.5)
+	  (llama3.2:3b, starcoder2:3b, nomic-embed-text:v1.5)
 
 config BR2_PACKAGE_OLLAMA_CUSTOM_MODELS
 	string "Custom models to install"

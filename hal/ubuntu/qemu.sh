@@ -141,7 +141,7 @@ write_files:
         sleep 2
       done
       # Pull models
-      /usr/local/bin/ollama pull tinyllama:1.1b
+      /usr/local/bin/ollama pull llama3.2:3b
       /usr/local/bin/ollama pull starcoder2:3b
       /usr/local/bin/ollama pull nomic-embed-text:v1.5
     permissions: '0755'

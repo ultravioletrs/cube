@@ -174,7 +174,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
      -H "Content-Type: application/json" \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
-       "model": "tinyllama:1.1b",
+       "model": "llama3.2:3b",
        "messages": [
          {
            "role": "user",
@@ -222,7 +222,7 @@ Example:
 curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"model":"tinyllama:1.1b","messages":[{"role":"user","content":"Hello"}]}'
+  -d '{"model":"llama3.2:3b","messages":[{"role":"user","content":"Hello"}]}'
 
 # Ollama API endpoint
 curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
