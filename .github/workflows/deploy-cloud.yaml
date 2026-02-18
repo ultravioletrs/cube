@@ -107,6 +107,15 @@ jobs:
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" docker/traefik/dynamic.toml
 
+            ENV="docker/.env"
+            VAL="/var/snap/docker/common/var-lib-docker"
+
+            if grep -q '^DOCKER_ROOT_DIR=' "$ENV"; then
+              sed -i "s|^DOCKER_ROOT_DIR=.*$|DOCKER_ROOT_DIR=$VAL|" "$ENV"
+            else
+              echo "DOCKER_ROOT_DIR=$VAL" >> "$ENV"
+            fi
+
             echo "Pulling latest Docker images"
             docker compose -f docker/compose.yaml --profile cloud pull 2>&1
 
