@@ -155,6 +155,23 @@ up-vllm: config-vllm
 	@echo "Starting Cube with vLLM backend..."
 	docker compose -f docker/compose.yaml --profile vllm up -d
 
+GUARDRAILS_CONFIG_FILE = ./guardrails/rails/config.yml
+
+.PHONY: config-guardrails-vllm
+config-guardrails-vllm:
+	@echo "Configuring guardrails for vLLM backend..."
+	@sed -i '/^models:/,/X-Guardrails-Request:/{s/engine: CubeLLM/engine: CubeVLLM/; s/model: llama3.2:3b/model: microsoft\/DialoGPT-medium/}' $(GUARDRAILS_CONFIG_FILE)
+	@echo "Guardrails configured for vLLM"
+
+.PHONY: config-guardrails-ollama
+config-guardrails-ollama:
+	@echo "Configuring guardrails for Ollama backend..."
+	@sed -i '/^models:/,/X-Guardrails-Request:/{s/engine: CubeVLLM/engine: CubeLLM/; s/model: microsoft\/DialoGPT-medium/model: llama3.2:3b/}' $(GUARDRAILS_CONFIG_FILE)
+	@echo "Guardrails configured for Ollama"
+
+.PHONY: up-vllm-guardrails
+up-vllm-guardrails: enable-guardrails config-guardrails-vllm up-vllm
+
 .PHONY: up
 up: enable-guardrails config-backend config-cloud-local
 ifeq ($(AI_BACKEND),vllm)
@@ -323,18 +340,21 @@ help:
 	@echo "  docker-dev         Build development Docker images"
 	@echo ""
 	@echo "Configuration Commands:"
-	@echo "  config-ollama      Configure for Ollama backend"
-	@echo "  config-vllm        Configure for vLLM backend"
-	@echo "  enable-guardrails  Enable guardrails routes in config.json"
-	@echo "  disable-guardrails Disable guardrails routes in config.json"
-	@echo "  show-config        Show current configuration"
-	@echo "  clean-env          Clean environment configuration"
+	@echo "  config-ollama           Configure for Ollama backend"
+	@echo "  config-vllm             Configure for vLLM backend"
+	@echo "  config-guardrails-vllm  Configure guardrails config.yml for vLLM"
+	@echo "  config-guardrails-ollama Configure guardrails config.yml for Ollama"
+	@echo "  enable-guardrails       Enable guardrails routes in config.json"
+	@echo "  disable-guardrails      Disable guardrails routes in config.json"
+	@echo "  show-config             Show current configuration"
+	@echo "  clean-env               Clean environment configuration"
 	@echo ""
 	@echo "Deployment Commands:"
 	@echo "  up                      Start with guardrails enabled (default)"
 	@echo "  up-disable-guardrails   Start without guardrails"
 	@echo "  up-ollama               Start with Ollama backend (pulls models automatically)"
 	@echo "  up-vllm                 Start with vLLM backend"
+	@echo "  up-vllm-guardrails      Start with vLLM backend and guardrails enabled"
 	@echo "  up-cloud                Start cloud deployment using cloud-compose.yaml"
 	@echo "  down                    Stop all services"
 	@echo "  down-cloud              Stop cloud services and restore config"
