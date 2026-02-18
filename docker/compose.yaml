@@ -26,6 +26,7 @@ services:
       - ${TRAEFIK_HTTP_PORT:-80}:80
       - ${TRAEFIK_HTTPS_PORT:-443}:443
       - ${TRAEFIK_DASHBOARD_PORT:-8080}:8080
+      - 49215:9010
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./traefik/${TRAEFIK_CONFIG:-traefik.toml}:/etc/traefik/traefik.toml:ro
