@@ -139,18 +139,20 @@ class CubeLLM(ChatOpenAI):
         if "headers" in kwargs:
             kwargs.pop("headers")
 
-        # Remove arguments that we explicitly pass to ChatOpenAI to avoid "multiple values" error
+        # Extract options for ChatOpenAI constructor to avoid passing them to _agenerate later
+        client_kwargs = {}
         for key in ["model", "temperature", "max_tokens", "base_url", "api_key", "openai_api_key"]:
             if key in kwargs:
-                kwargs.pop(key)
+                client_kwargs[key] = kwargs.pop(key)
 
         final_headers = self._merge_headers()
 
-        model = self._get_model_from_context() or self.model_name
-        logger.info(f"CubeLLM: using model '{model}' (from context: {self._get_model_from_context() is not None})")
+        context_model = self._get_model_from_context()
+        model = context_model or self.model_name
+        logger.info(f"CubeLLM: using model '{model}' (from context: {context_model is not None})")
 
         # Normalize base_url to ensure it ends with /v1
-        base_url = str(self.openai_api_base)
+        base_url = str(client_kwargs.get("base_url") or self.openai_api_base)
         if base_url and not base_url.endswith("/v1"):
             base_url = f"{base_url.rstrip('/')}/v1"
 
@@ -158,13 +160,10 @@ class CubeLLM(ChatOpenAI):
         temp_client = ChatOpenAI(
             model=model,
             base_url=base_url,
-            api_key=self.openai_api_key.get_secret_value() if self.openai_api_key else "EMPTY",
+            api_key=str(client_kwargs.get("api_key") or (self.openai_api_base and self.openai_api_key.get_secret_value()) or "EMPTY"),
             default_headers=final_headers,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            # Pass other config that might be on 'self' but not in kwargs
-            # We trust kwargs to override or supplement
-            **kwargs 
+            temperature=client_kwargs.get("temperature", self.temperature),
+            max_tokens=client_kwargs.get("max_tokens", self.max_tokens),
         )
 
         return await temp_client._agenerate(
@@ -181,29 +180,29 @@ class CubeLLM(ChatOpenAI):
         if "headers" in kwargs:
             kwargs.pop("headers")
 
-        # Remove arguments that we explicitly pass to ChatOpenAI to avoid "multiple values" error
+        client_kwargs = {}
         for key in ["model", "temperature", "max_tokens", "base_url", "api_key", "openai_api_key"]:
             if key in kwargs:
-                kwargs.pop(key)
+                client_kwargs[key] = kwargs.pop(key)
 
         final_headers = self._merge_headers()
 
-        model = self._get_model_from_context() or self.model_name
-        logger.info(f"CubeLLM: using model '{model}' (from context: {self._get_model_from_context() is not None})")
+        context_model = self._get_model_from_context()
+        model = context_model or self.model_name
+        logger.info(f"CubeLLM: using model '{model}' (from context: {context_model is not None})")
 
-        # Normalize base_url to ensure it ends with /v1
-        base_url = str(self.openai_api_base)
+        # Normalize base_url
+        base_url = str(client_kwargs.get("base_url") or self.openai_api_base)
         if base_url and not base_url.endswith("/v1"):
             base_url = f"{base_url.rstrip('/')}/v1"
 
         temp_client = ChatOpenAI(
             model=model,
             base_url=base_url,
-            api_key=self.openai_api_key.get_secret_value() if self.openai_api_key else "EMPTY",
+            api_key=str(client_kwargs.get("api_key") or (self.openai_api_base and self.openai_api_key.get_secret_value()) or "EMPTY"),
             default_headers=final_headers,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            **kwargs
+            temperature=client_kwargs.get("temperature", self.temperature),
+            max_tokens=client_kwargs.get("max_tokens", self.max_tokens),
         )
 
         return temp_client._generate(
