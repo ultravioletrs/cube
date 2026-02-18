@@ -51,11 +51,11 @@ services:
   fluent-bit:
     image: fluent/fluent-bit:2.2
     container_name: fluent-bit
-    ports:
-      - "127.0.0.1:24224:24224"
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
       - ./parsers.conf:/fluent-bit/etc/parsers.conf:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       opensearch:
         condition: service_healthy
@@ -171,11 +171,12 @@ services:
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: 127.0.0.1:24224
-        fluentd-async: "true"
-        tag: docker.cube-proxy
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "cube-proxy|{{.Name}}"
     networks:
       - cube-network
     extra_hosts:

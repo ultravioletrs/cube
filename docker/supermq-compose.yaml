@@ -92,11 +92,12 @@ services:
     image: docker.io/supermq/auth:${SMQ_RELEASE_TAG}
     container_name: supermq-auth
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: 127.0.0.1:24224
-        fluentd-async: "true"
-        tag: docker.supermq-auth
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "supermq-auth|{{.Name}}"
     depends_on:
       - auth-db
       - spicedb
@@ -203,11 +204,12 @@ services:
     image: supermq/users:${SMQ_RELEASE_TAG}
     container_name: supermq-users
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: 127.0.0.1:24224
-        fluentd-async: "true"
-        tag: docker.supermq-users
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "supermq-users|{{.Name}}"
     depends_on:
       - users-db
       - auth
@@ -371,11 +373,12 @@ services:
     image: supermq/domains:${SMQ_RELEASE_TAG}
     container_name: supermq-domains
     logging:
-      driver: fluentd
+      driver: "json-file"
       options:
-        fluentd-address: 127.0.0.1:24224
-        fluentd-async: "true"
-        tag: docker.supermq-domains
+        max-size: "10m"
+        max-file: "3"
+        labels: "logging,service"
+        tag: "supermq-domains|{{.Name}}"
     depends_on:
       - domains-db
       - domains-redis
