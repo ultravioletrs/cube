@@ -7,6 +7,15 @@ volumes:
   cube-guardrails-db-volume:
 
 services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    networks:
+      - cube-network
   opensearch:
     image: opensearchproject/opensearch:2.11.0
     container_name: opensearch
