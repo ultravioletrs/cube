@@ -35,9 +35,6 @@
     [entryPoints.websecure.http.tls]
       certResolver = "letsencrypt"
 
-  [entryPoints.certs]
-    address = ":9010"
-
 # API and Dashboard
 [api]
   dashboard = true

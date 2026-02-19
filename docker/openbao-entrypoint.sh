@@ -256,6 +256,15 @@ if [ ! -f /opt/openbao/data/configured ]; then
 
   echo "$INTERMEDIATE_CERT" > /opt/openbao/data/intermediate_ca.pem
 
+  # Export full CA chain (intermediate + root) to shared volume for proxy
+  ROOT_CA_PEM=$(bao read -field=certificate pki/cert/ca)
+  mkdir -p /opt/openbao/ca
+  {
+    echo "$INTERMEDIATE_CERT"
+    echo "$ROOT_CA_PEM"
+  } > /opt/openbao/ca/ca.pem
+  echo "CA chain exported to /opt/openbao/ca/ca.pem"
+
   bao write pki/config/urls \
     issuing_certificates="$OPENBAO_BASE_URL/v1/pki/ca" \
     crl_distribution_points="$OPENBAO_BASE_URL/v1/pki/crl" \
@@ -281,8 +290,7 @@ if [ ! -f /opt/openbao/data/configured ]; then
     client_flag=true \
     code_signing_flag=false \
     email_protection_flag=false \
-    key_type=rsa \
-    key_bits=2048 \
+    key_type=any \
     key_usage=\"DigitalSignature,KeyEncipherment,KeyAgreement\" \
     ext_key_usage=\"ServerAuth,ClientAuth,OCSPSigning\" \
     use_csr_common_name=true \
@@ -381,7 +389,7 @@ EOF
   echo "OpenBao configuration completed successfully!"
 else
   echo "OpenBao already configured, skipping setup..."
-  
+
   # Restore namespace if it exists
   if [ -f /opt/openbao/data/namespace ] && [ -n "$AM_CERTS_OPENBAO_NAMESPACE" ]; then
     SAVED_NAMESPACE=$(cat /opt/openbao/data/namespace)
@@ -389,7 +397,19 @@ else
       export BAO_NAMESPACE="$AM_CERTS_OPENBAO_NAMESPACE"
     fi
   fi
-  
+
+  if [ ! -f /opt/openbao/ca/ca.pem ]; then
+    echo "CA chain missing from shared volume, re-exporting..."
+    INTERMEDIATE_CA_PEM=$(bao read -field=certificate pki_int/cert/ca)
+    ROOT_CA_PEM=$(bao read -field=certificate pki/cert/ca)
+    mkdir -p /opt/openbao/ca
+    {
+      echo "$INTERMEDIATE_CA_PEM"
+      echo "$ROOT_CA_PEM"
+    } > /opt/openbao/ca/ca.pem
+    echo "CA chain re-exported to /opt/openbao/ca/ca.pem"
+  fi
+
   if [ -n "$AM_CERTS_OPENBAO_APP_SECRET" ]; then
     echo "Verifying existing secret ID validity..."
     if ! bao write -field=client_token auth/approle/login role_id="$AM_CERTS_OPENBAO_APP_ROLE" secret_id="$AM_CERTS_OPENBAO_APP_SECRET" > /dev/null 2>&1; then

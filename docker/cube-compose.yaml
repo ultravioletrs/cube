@@ -7,6 +7,7 @@ volumes:
   cube-guardrails-db-volume:
   cube-certs-db-volume:
   openbao-data:
+  openbao-ca:
 
 services:
   cloudflared:
@@ -196,6 +197,7 @@ services:
       - auth
       - cube-proxy-db
       - fluent-bit
+      - openbao
     environment:
       UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
       UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
@@ -225,7 +227,7 @@ services:
       # Agent mTLS Configuration (optional - only set when certs are provided)
       UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
       UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
-      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:+/etc/cube/agent-certs/ca.crt}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: /etc/cube/openbao-ca/ca.pem
       UV_CUBE_AGENT_ATTESTED_TLS: ${UV_CUBE_AGENT_ATTESTED_TLS}
       UV_CUBE_AGENT_ATTESTATION_POLICY: ${UV_CUBE_AGENT_ATTESTATION_POLICY:+/etc/cube/attestation-policy.json}
     volumes:
@@ -270,6 +272,8 @@ services:
         source: ${UV_CUBE_AGENT_ATTESTATION_POLICY:-./attestation-policy.json}
         target: /etc/cube/attestation-policy.json
         read_only: true
+      # OpenBao CA chain for verifying agent certificates
+      - openbao-ca:/etc/cube/openbao-ca:ro
     ports:
       - ${UV_CUBE_PROXY_PORT}:${UV_CUBE_PROXY_PORT}
     labels:
@@ -287,6 +291,8 @@ services:
     restart: always
     networks:
       - cube-network
+    ports:
+      - ${AM_CERTS_HTTP_PORT}:${AM_CERTS_HTTP_PORT}
     environment:
       AM_CERTS_LOG_LEVEL: ${AM_CERTS_LOG_LEVEL}
       AM_CERTS_HTTP_HOST: ${AM_CERTS_HTTP_HOST}
@@ -375,6 +381,7 @@ services:
     volumes:
       - openbao-data:/opt/openbao/data
       - openbao-data:/opt/openbao/config
+      - openbao-ca:/opt/openbao/ca
       - ./openbao-entrypoint.sh:/entrypoint.sh
     entrypoint: /bin/sh
     command: /entrypoint.sh
