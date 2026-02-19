@@ -41,7 +41,7 @@ default_lease_ttl = "$OPENBAO_DEFAULT_LEASE_TTL"
 max_lease_ttl = "$OPENBAO_MAX_LEASE_TTL"
 EOF
 
-export BAO_ADDR="$OPENBAO_BASE_URL"
+export BAO_ADDR="${BAO_ADDR:-$OPENBAO_BASE_URL}"
 
 # Check if we have pre-configured unseal keys and root token
 if [ -n "$AM_CERTS_OPENBAO_UNSEAL_KEY_1" ] && [ -n "$AM_CERTS_OPENBAO_UNSEAL_KEY_2" ] && [ -n "$AM_CERTS_OPENBAO_UNSEAL_KEY_3" ] && [ -n "$AM_CERTS_OPENBAO_ROOT_TOKEN" ]; then

@@ -347,10 +347,9 @@ services:
     restart: on-failure
     networks:
       - cube-network
-    ports:
-      - 8200:8200
     environment:
       - BAO_ADDR=http://127.0.0.1:8200
+      - OPENBAO_BASE_URL=${AM_CERTS_OPENBAO_HOST}
       - BAO_LOG_LEVEL=info
       - AM_CERTS_OPENBAO_PKI_ROLE=${AM_CERTS_OPENBAO_ROLE}
       - AM_CERTS_OPENBAO_APP_ROLE=${AM_CERTS_OPENBAO_APP_ROLE}
