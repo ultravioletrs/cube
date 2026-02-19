@@ -51,6 +51,11 @@ services:
   fluent-bit:
     image: fluent/fluent-bit:2.2
     container_name: fluent-bit
+    # Run as root because the Docker container log directory (including the
+    # snap-docker data root at /var/snap/docker/common/var-lib-docker) is owned
+    # by root with restricted permissions. Fluent Bit must be able to read
+    # container log files directly from the host filesystem, which requires
+    # root-level access when docker is installed via snap.
     user: "0:0"
     volumes:
       - ./fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
