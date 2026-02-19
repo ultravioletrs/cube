@@ -218,7 +218,7 @@ config-local:
 	@sed -i 's|^TRAEFIK_HTTPS_PORT=.*|TRAEFIK_HTTPS_PORT=443|g' docker/.env
 	@sed -i 's|^TRAEFIK_DASHBOARD_PORT=.*|TRAEFIK_DASHBOARD_PORT=8080|g' docker/.env
 	@sed -i 's|__TUNNEL_TOKEN__||g' docker/.env
-	@sed -i 's|^TRAEFIK_CERTS_PORT=.*|TRAEFIK_CERTS_PORT=9010|g' docker/.env 
+	@sed -i 's|__CUBE_AGENT_CERTS_TOKEN__|localdevtoken12we12we12we12we12we|g' docker/.env
 	@echo "✓ Configured with local defaults"
 
 .PHONY: restore-config

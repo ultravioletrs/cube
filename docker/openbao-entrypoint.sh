@@ -157,7 +157,7 @@ if [ ! -f /opt/openbao/data/configured ]; then
 
   # Validate required CA environment variables
   for var in AM_CERTS_OPENBAO_PKI_CA_CN AM_CERTS_OPENBAO_PKI_CA_O AM_CERTS_OPENBAO_PKI_CA_C; do
-    eval "value=\$var"
+    eval "value=\$$var"
     if [ -z "$value" ]; then
       echo "ERROR: Required environment variable $var is not set" >&2
       exit 1
@@ -168,7 +168,7 @@ if [ ! -f /opt/openbao/data/configured ]; then
     common_name=\"$AM_CERTS_OPENBAO_PKI_CA_CN\" \
     organization=\"$AM_CERTS_OPENBAO_PKI_CA_O\" \
     country=\"$AM_CERTS_OPENBAO_PKI_CA_C\" \
-    ttl="$OPENBAO_ROOT_CA_TTL" \
+    ttl=\"$OPENBAO_ROOT_CA_TTL\" \
     key_bits=2048 \
     exclude_cn_from_sans=false"
 
@@ -183,9 +183,7 @@ if [ ! -f /opt/openbao/data/configured ]; then
   [ -n "$AM_CERTS_OPENBAO_PKI_CA_URI_SANS" ] && PKI_CMD="$PKI_CMD uri_sans=\"$AM_CERTS_OPENBAO_PKI_CA_URI_SANS\""
   [ -n "$AM_CERTS_OPENBAO_PKI_CA_EMAIL_ADDRESSES" ] && PKI_CMD="$PKI_CMD email_sans=\"$AM_CERTS_OPENBAO_PKI_CA_EMAIL_ADDRESSES\""
 
-  eval $PKI_CMD > /dev/null
-
-  if [ $? -eq 0 ]; then
+  if eval $PKI_CMD > /dev/null; then
     echo "OpenBao root CA certificate generated successfully!"
   else
     echo "ERROR: Failed to generate OpenBao root CA certificate" >&2
@@ -209,7 +207,7 @@ if [ ! -f /opt/openbao/data/configured ]; then
     common_name=\"$INTERMEDIATE_CN\" \
     organization=\"$AM_CERTS_OPENBAO_PKI_CA_O\" \
     country=\"$AM_CERTS_OPENBAO_PKI_CA_C\" \
-    ttl="$OPENBAO_INTERMEDIATE_CA_TTL" \
+    ttl=\"$OPENBAO_INTERMEDIATE_CA_TTL\" \
     key_bits=2048"
 
   [ -n "$AM_CERTS_OPENBAO_PKI_CA_OU" ] && INTERMEDIATE_CSR_CMD="$INTERMEDIATE_CSR_CMD ou=\"$AM_CERTS_OPENBAO_PKI_CA_OU\""
@@ -223,33 +221,25 @@ if [ ! -f /opt/openbao/data/configured ]; then
   [ -n "$AM_CERTS_OPENBAO_PKI_CA_URI_SANS" ] && INTERMEDIATE_CSR_CMD="$INTERMEDIATE_CSR_CMD uri_sans=\"$AM_CERTS_OPENBAO_PKI_CA_URI_SANS\""
   [ -n "$AM_CERTS_OPENBAO_PKI_CA_EMAIL_ADDRESSES" ] && INTERMEDIATE_CSR_CMD="$INTERMEDIATE_CSR_CMD email_sans=\"$AM_CERTS_OPENBAO_PKI_CA_EMAIL_ADDRESSES\""
 
-  INTERMEDIATE_CSR=$(eval $INTERMEDIATE_CSR_CMD)
-
-  if [ $? -ne 0 ] || [ -z "$INTERMEDIATE_CSR" ]; then
+  if ! INTERMEDIATE_CSR=$(eval $INTERMEDIATE_CSR_CMD) || [ -z "$INTERMEDIATE_CSR" ]; then
     echo "ERROR: Failed to generate intermediate CA CSR" >&2
     exit 1
   fi
 
   echo "Intermediate CA CSR generated successfully!"
 
-  INTERMEDIATE_CERT=$(bao write -field=certificate pki/root/sign-intermediate \
+  if ! INTERMEDIATE_CERT=$(bao write -field=certificate pki/root/sign-intermediate \
     csr="$INTERMEDIATE_CSR" \
     format=pem_bundle \
     ttl="$OPENBAO_INTERMEDIATE_CA_TTL" \
-    use_csr_values=true)
-
-  if [ $? -ne 0 ] || [ -z "$INTERMEDIATE_CERT" ]; then
+    use_csr_values=true) || [ -z "$INTERMEDIATE_CERT" ]; then
     echo "ERROR: Failed to sign intermediate CA certificate" >&2
     exit 1
   fi
 
   echo "Intermediate CA certificate signed successfully!"
 
-  bao write pki_int/intermediate/set-signed certificate="$INTERMEDIATE_CERT" > /dev/null
-
-  if [ $? -eq 0 ]; then
-    echo "Intermediate CA setup completed successfully!"
-  else
+  if ! bao write pki_int/intermediate/set-signed certificate="$INTERMEDIATE_CERT" > /dev/null; then
     echo "ERROR: Failed to set signed intermediate certificate" >&2
     exit 1
   fi
@@ -283,9 +273,9 @@ if [ ! -f /opt/openbao/data/configured ]; then
     allow_bare_domains=true \
     allow_subdomains=true \
     allow_glob_domains=true \
-    allowed_domains=\"*\" \
-    allowed_uri_sans=\"*\" \
-    allowed_other_sans=\"*\" \
+    allowed_domains=\"localhost,$AM_CERTS_OPENBAO_PKI_CA_DNS_NAMES\" \
+    allowed_uri_sans=\"spiffe://cube/*\" \
+    allowed_other_sans=\"2.99999.1.2;UTF8:*\" \
     server_flag=true \
     client_flag=true \
     code_signing_flag=false \
@@ -298,8 +288,8 @@ if [ ! -f /opt/openbao/data/configured ]; then
     copy_extensions=true \
     allowed_extensions=\"*\" \
     basic_constraints_valid_for_non_ca=true \
-    max_ttl="$OPENBAO_MAX_LEASE_TTL" \
-    ttl="$OPENBAO_MAX_LEASE_TTL""
+    max_ttl=\"$OPENBAO_MAX_LEASE_TTL\" \
+    ttl=\"$OPENBAO_MAX_LEASE_TTL\""
 
   eval "$ROLE_CMD" > /dev/null
 

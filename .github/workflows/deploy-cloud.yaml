@@ -109,7 +109,7 @@ jobs:
             sed -i "s|__TRAEFIK_HTTPS_PORT__|${{ secrets.TRAEFIK_HTTPS_PORT }}|g" docker/.env
             sed -i "s|__TRAEFIK_DASHBOARD_PORT__|${{ secrets.TRAEFIK_DASHBOARD_PORT }}|g" docker/.env
             sed -i "s|__TUNNEL_TOKEN__|${{ secrets.TUNNEL_TOKEN }}|g" docker/.env
-            sed -i "s|__TRAEFIK_CERTS_PORT__|${{ secrets.TRAEFIK_CERTS_PORT }}|g" docker/.env
+            sed -i "s|__CUBE_AGENT_CERTS_TOKEN__|${{ secrets.CUBE_AGENT_CERTS_TOKEN }}|g" docker/.env
             sed -i "s|__CUBE_INTERNAL_AGENT_URL__|${{ secrets.CUBE_INTERNAL_AGENT_URL }}|g" docker/config.json
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" docker/traefik/dynamic.toml
