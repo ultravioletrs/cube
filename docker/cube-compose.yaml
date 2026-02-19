@@ -338,8 +338,6 @@ services:
       POSTGRES_USER: ${AM_CERTS_DB_USER}
       POSTGRES_PASSWORD: ${AM_CERTS_DB_PASS}
       POSTGRES_DB: ${AM_CERTS_DB}
-    ports:
-      - 5454:5432
     volumes:
       - cube-certs-db-volume:/var/lib/postgresql/data
 
@@ -380,7 +378,6 @@ services:
     mem_swappiness: 0
     volumes:
       - openbao-data:/opt/openbao/data
-      - openbao-data:/opt/openbao/config
       - openbao-ca:/opt/openbao/ca
       - ./openbao-entrypoint.sh:/entrypoint.sh
     entrypoint: /bin/sh
