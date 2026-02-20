@@ -126,29 +126,44 @@ Azure CVMs use AMD SEV-SNP with Microsoft Azure Attestation (MAA).
 
 #### Step 1: Obtain the MAA Token
 
-The `cocos-cli policy azure` command requires a Microsoft Azure Attestation (MAA) JWT token. This token is not available through the Cube Proxy REST API (which returns a vTPM + SNP protobuf). Instead, use `cocos-cli` to retrieve it directly from the agent:
+The `cocos-cli policy azure` command requires a Microsoft Azure Attestation (MAA) JWT token. This token is not available through the Cube Proxy REST API (which returns a vTPM + SNP protobuf).
+
+Use Microsoft's guest attestation package and sample app on the Azure CVM to generate the JWT:
 
 ```bash
-# Generate a 32-byte hex nonce (or use all zeros)
-TOKEN_NONCE=$(openssl rand -hex 32)
+# On the Azure CVM
+sudo apt-get update
+sudo apt-get install -y build-essential libcurl4-openssl-dev libjsoncpp-dev libboost-all-dev nlohmann-json3-dev
 
-cocos-cli attestation get azure-token \
-  --token "$TOKEN_NONCE" \
-  --azurejwt
+git clone https://github.com/Azure/confidential-computing-cvm-guest-attestation.git
+cd confidential-computing-cvm-guest-attestation
+
+# Download and install Microsoft guest attestation package
+# Replace <latest-version> with the package version available in:
+# https://packages.microsoft.com/repos/azurecore/pool/main/a/azguestattestation1/
+wget https://packages.microsoft.com/repos/azurecore/pool/main/a/azguestattestation1/azguestattestation1_<latest-version>_amd64.deb
+sudo dpkg -i azguestattestation1_<latest-version>_amd64.deb
+
+# Build and run the sample app to fetch the attestation token
+cd cvm-attestation-sample-app
+sudo cmake . && sudo make
+sudo ./AttestationClient -o token > azure_attest_token.jwt
 ```
 
-This saves the MAA JWT to `azure_attest_token.jwt`. The `cocos-cli` must be configured to connect to the agent (set `AGENT_GRPC_URL` or equivalent to the agent's address).
+The generated JWT is saved as `azure_attest_token.jwt`.
 
 #### Step 2: Generate Attestation Policy
 
-Run the Cocos CLI command:
+Run the Cocos CLI command. This step reads the JWT file locally and does not require a connection to `cocos-agent`:
 
 ```bash
 cocos-cli policy azure azure_attest_token.jwt <product_name>
 ```
 
+Note: `cocos-cli` validates the JWT signature against the MAA key set, so the machine running this command needs outbound HTTPS access to the MAA endpoint.
+
 **Parameters:**
-- `maa_token.txt`: Path to the MAA token file (JWT string)
+- `azure_attest_token.jwt`: Path to the MAA token file (JWT string)
 - `<product_name>`: AMD product name (e.g., `Milan`, `Genoa`)
 
 **Optional flags:**
