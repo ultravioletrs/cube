@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	mgauthn "github.com/absmach/supermq/pkg/authn"
+	"github.com/go-chi/chi/v5"
 	"github.com/ultravioletrs/cube/proxy/endpoint"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
@@ -21,10 +22,14 @@ var (
 	errRouteNameRequired  = errors.New("route name required")
 )
 
-func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (any, error) {
+func decodeGetAttestationPolicyRequest(ctx context.Context, r *http.Request) (any, error) {
 	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
 	if !ok {
 		return nil, errUnauthorized
+	}
+
+	if domainID := chi.URLParam(r, "domainID"); domainID != "" {
+		session.DomainID = domainID
 	}
 
 	return endpoint.GetAttestationPolicyRequest{
@@ -32,10 +37,16 @@ func decodeGetAttestationPolicyRequest(ctx context.Context, _ *http.Request) (an
 	}, nil
 }
 
-func encodeGetAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, response any) error {
+func encodeGetAttestationPolicyResponse(ctx context.Context, w http.ResponseWriter, response any) error {
 	resp, ok := response.(endpoint.GetAttestationPolicyResponse)
 	if !ok {
 		return errInvalidRequestType
+	}
+
+	if err := resp.Failed(); err != nil {
+		encodeError(ctx, err, w)
+
+		return nil
 	}
 
 	w.Header().Set("Content-Type", ContentType)
@@ -61,7 +72,18 @@ func decodeUpdateAttestationPolicyRequest(ctx context.Context, r *http.Request) 
 	}, nil
 }
 
-func encodeUpdateAttestationPolicyResponse(_ context.Context, w http.ResponseWriter, _ any) error {
+func encodeUpdateAttestationPolicyResponse(ctx context.Context, w http.ResponseWriter, response any) error {
+	resp, ok := response.(endpoint.UpdateAttestationPolicyResponse)
+	if !ok {
+		return errInvalidRequestType
+	}
+
+	if err := resp.Failed(); err != nil {
+		encodeError(ctx, err, w)
+
+		return nil
+	}
+
 	w.WriteHeader(http.StatusCreated)
 
 	return nil
