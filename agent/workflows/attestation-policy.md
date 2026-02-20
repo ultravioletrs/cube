@@ -192,22 +192,21 @@ curl -ksSf -X POST https://<traefik-host>/proxy/<domain_id>/attestation \
 
 #### Step 2: Generate Attestation Policy
 
-Use the Rust-based attestation policy tool in the Cocos repository:
+`cocos-cli policy` does not have a dedicated `snp` subcommand. Start from the baseline SEV-SNP policy template in the Cocos repository (`scripts/attestation_policy/sev-snp/attestation_policy.json`) and update it with `cocos-cli policy measurement` / `hostdata`:
 
 ```bash
-cd cocos/scripts/attestation_policy/sev-snp
-make
+cp <path-to-cocos>/scripts/attestation_policy/sev-snp/attestation_policy.json ./attestation_policy.json
 
-cd target/release
-./attestation_policy --policy 196608 --pcr ../../pcr_values.json
+cocos-cli policy measurement <base64_measurement> attestation_policy.json
+cocos-cli policy hostdata <base64_hostdata> attestation_policy.json
 ```
 
-**Parameters:**
-- `--policy`: 64-bit guest policy value (default: 196608)
-- `--pcr`: Path to PCR values JSON file (optional)
+> **Note:** The baseline template contains PCR values and product configuration (`Milan`, VMPL 2) from the reference Cocos IGVM image. Update the measurement, host data, and product fields to match your CVM image.
+
+Refer to the [Cocos CLI documentation](https://docs.cocos.ultraviolet.rs/cli) for full `cocos-cli policy measurement` and `cocos-cli policy hostdata` usage.
 
 **Output:**
-- `attestation_policy.json`: Generated attestation policy file
+- `attestation_policy.json`: Updated policy file
 
 ---
 
