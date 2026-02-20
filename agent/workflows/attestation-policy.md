@@ -126,22 +126,25 @@ Azure CVMs use AMD SEV-SNP with Microsoft Azure Attestation (MAA).
 
 #### Step 1: Obtain the MAA Token
 
-The `cocos-cli policy azure` command requires a Microsoft Azure Attestation (MAA) JWT token. This token is obtained by the agent internally when it fetches the attestation report, but the Cube Proxy API returns the combined vTPM + SNP attestation protobuf rather than the raw MAA token.
-
-To obtain the MAA token, use the `cocos-cli` directly on the Azure CVM:
+The `cocos-cli policy azure` command requires a Microsoft Azure Attestation (MAA) JWT token. This token is not available through the Cube Proxy REST API (which returns a vTPM + SNP protobuf). Instead, use `cocos-cli` to retrieve it directly from the agent:
 
 ```bash
-cocos-cli attestation get --maa-token -o maa_token.txt
+# Generate a 32-byte hex nonce (or use all zeros)
+TOKEN_NONCE=$(openssl rand -hex 32)
+
+cocos-cli attestation get azure-token \
+  --token "$TOKEN_NONCE" \
+  --azurejwt
 ```
 
-If the `cocos-cli` is not available on the CVM, you can retrieve the MAA token programmatically using the Azure Guest Attestation SDK from within the CVM.
+This saves the MAA JWT to `azure_attest_token.jwt`. The `cocos-cli` must be configured to connect to the agent (set `AGENT_GRPC_URL` or equivalent to the agent's address).
 
 #### Step 2: Generate Attestation Policy
 
 Run the Cocos CLI command:
 
 ```bash
-cocos-cli policy azure maa_token.txt <product_name>
+cocos-cli policy azure azure_attest_token.jwt <product_name>
 ```
 
 **Parameters:**
