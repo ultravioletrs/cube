@@ -223,7 +223,6 @@ cocos-cli policy tdx attestation.bin [flags]
 ```
 
 **Optional flags** (from `cocos-cli policy tdx --help`):
-- `--config <path>`: Path to a serialized JSON `check.Config` protobuf file (overrides individual flags)
 - `--qe_vendor_id <hex>`: Expected QE_VENDOR_ID field (16 bytes hex, unchecked if unset)
 - `--mr_seam <hex>`: Expected MR_SEAM field (48 bytes hex, unchecked if unset)
 - `--td_attributes <hex>`: Expected TD_ATTRIBUTES field (8 bytes hex, unchecked if unset)
