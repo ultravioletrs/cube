@@ -143,7 +143,8 @@ func (r *repository) UpdateRoute(ctx context.Context, name string, route *router
 	enabled := route.Enabled == nil || *route.Enabled
 
 	row := r.db.QueryRowxContext(
-		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix, enabled, name)
+		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule,
+		route.StripPrefix, enabled, name)
 
 	if err := row.Scan(
 		&updatedRoute.Name, &updatedRoute.TargetURL, &returnedMatchersJSON,
