@@ -21,6 +21,11 @@ import (
 func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 	t.Parallel()
 
+	const (
+		domainTypeConst = "domain"
+		domainIDConst   = "domain1"
+	)
+
 	cases := []struct {
 		name               string
 		path               string
@@ -205,7 +210,7 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 					return false
 				}
 
-				if req.ObjectType != "domain" {
+				if req.ObjectType != domainTypeConst {
 					return false
 				}
 
@@ -216,7 +221,7 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 
 			// Inject method into context manually as the transport would
 			ctx := context.WithValue(context.Background(), proxy.MethodContextKey, tc.method)
-			session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+			session := &authn.Session{DomainID: domainIDConst, UserID: "user1", DomainUserID: "domainUser1"}
 
 			err := authMiddleware.ProxyRequest(ctx, session, tc.path)
 			if err != nil {
@@ -229,6 +234,11 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 func TestAuthMiddleware_UpdateAttestationPolicy(t *testing.T) {
 	t.Parallel()
 
+	const (
+		domainIDConst   = "domain1"
+		domainTypeConst = "domain"
+	)
+
 	policy := []byte("policy")
 
 	t.Run("domain admin allowed", func(t *testing.T) {
@@ -240,16 +250,16 @@ func TestAuthMiddleware_UpdateAttestationPolicy(t *testing.T) {
 		auth := new(authzmocks.Authorization)
 		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
 			return req.Permission == policies.AdminPermission &&
-				req.ObjectType == "domain" &&
-				req.Object == "domain1" &&
-				req.Domain == "domain1" &&
+				req.ObjectType == domainTypeConst &&
+				req.Object == domainIDConst &&
+				req.Domain == domainIDConst &&
 				req.SubjectType == "user" &&
 				req.SubjectKind == "users" &&
 				req.Subject == "domainUser1"
 		})).Return(nil).Once()
 
 		authMiddleware := middleware.AuthMiddleware(auth)(svc)
-		session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+		session := &authn.Session{DomainID: domainIDConst, UserID: "user1", DomainUserID: "domainUser1"}
 
 		err := authMiddleware.UpdateAttestationPolicy(context.Background(), session, policy)
 		if err != nil {
@@ -268,8 +278,8 @@ func TestAuthMiddleware_UpdateAttestationPolicy(t *testing.T) {
 
 		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
 			return req.Permission == policies.AdminPermission &&
-				req.ObjectType == "domain" &&
-				req.Object == "domain1"
+				req.ObjectType == domainTypeConst &&
+				req.Object == domainIDConst
 		})).Return(svcerr.ErrAuthorization).Once()
 
 		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
@@ -279,7 +289,7 @@ func TestAuthMiddleware_UpdateAttestationPolicy(t *testing.T) {
 		})).Return(svcerr.ErrAuthorization).Once()
 
 		authMiddleware := middleware.AuthMiddleware(auth)(svc)
-		session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+		session := &authn.Session{DomainID: domainIDConst, UserID: "user1", DomainUserID: "domainUser1"}
 
 		err := authMiddleware.UpdateAttestationPolicy(context.Background(), session, policy)
 		if err == nil {
@@ -299,8 +309,8 @@ func TestAuthMiddleware_UpdateAttestationPolicy(t *testing.T) {
 		auth := new(authzmocks.Authorization)
 		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
 			return req.Permission == policies.AdminPermission &&
-				req.ObjectType == "domain" &&
-				req.Object == "domain1"
+				req.ObjectType == domainTypeConst &&
+				req.Object == domainIDConst
 		})).Return(svcerr.ErrAuthorization).Once()
 
 		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
@@ -310,7 +320,7 @@ func TestAuthMiddleware_UpdateAttestationPolicy(t *testing.T) {
 		})).Return(nil).Once()
 
 		authMiddleware := middleware.AuthMiddleware(auth)(svc)
-		session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+		session := &authn.Session{DomainID: domainIDConst, UserID: "user1", DomainUserID: "domainUser1"}
 
 		err := authMiddleware.UpdateAttestationPolicy(context.Background(), session, policy)
 		if err != nil {
