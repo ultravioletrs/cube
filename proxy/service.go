@@ -106,9 +106,9 @@ func (s *service) GetRoute(ctx context.Context, _ *authn.Session, name string) (
 
 // UpdateRoute implements Service.
 func (s *service) UpdateRoute(
-	ctx context.Context, _ *authn.Session, route *router.RouteRule,
+	ctx context.Context, _ *authn.Session, name string, route *router.RouteRule,
 ) (*router.RouteRule, error) {
-	if router.IsSystemRoute(route.Name) {
+	if router.IsSystemRoute(name) || router.IsSystemRoute(route.Name) {
 		return nil, router.ErrSystemRouteProtected
 	}
 
@@ -124,7 +124,7 @@ func (s *service) UpdateRoute(
 	var otherRoutes []router.RouteRule
 
 	for _, r := range existingRoutes {
-		if r.Name != route.Name {
+		if r.Name != name {
 			otherRoutes = append(otherRoutes, r)
 		}
 	}
@@ -133,7 +133,7 @@ func (s *service) UpdateRoute(
 		return nil, err
 	}
 
-	updatedRoute, err := s.repo.UpdateRoute(ctx, route)
+	updatedRoute, err := s.repo.UpdateRoute(ctx, name, route)
 	if err != nil {
 		return nil, err
 	}

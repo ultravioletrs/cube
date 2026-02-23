@@ -174,6 +174,7 @@ func MakeGetRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 
 type UpdateRouteRequest struct {
 	Session *authn.Session
+	Name    string
 	Route   *router.RouteRule
 }
 
@@ -193,7 +194,7 @@ func MakeUpdateRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 			return UpdateRouteResponse{Err: errInvalidRequestType}, nil
 		}
 
-		route, err := s.UpdateRoute(ctx, req.Session, req.Route)
+		route, err := s.UpdateRoute(ctx, req.Session, req.Name, req.Route)
 
 		return UpdateRouteResponse{Route: route, Err: err}, nil
 	}

@@ -74,13 +74,13 @@ func (l *loggingMiddleware) CreateRoute(
 
 // UpdateRoute implements proxy.Service.
 func (l *loggingMiddleware) UpdateRoute(
-	ctx context.Context, session *authn.Session, route *router.RouteRule,
+	ctx context.Context, session *authn.Session, name string, route *router.RouteRule,
 ) (updatedRoute *router.RouteRule, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("UpdateRoute", "took", time.Since(begin), "error", err)
 	}(time.Now())
 
-	return l.svc.UpdateRoute(ctx, session, route)
+	return l.svc.UpdateRoute(ctx, session, name, route)
 }
 
 // DeleteRoute implements proxy.Service.
