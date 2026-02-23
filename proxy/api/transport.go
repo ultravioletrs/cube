@@ -100,16 +100,16 @@ func MakeHandler(
 			encodeGetAttestationPolicyResponse,
 		).ServeHTTP)
 
+		r.Post("/attestation/policy", kithttp.NewServer(
+			endpoints.UpdateAttestationPolicy,
+			decodeUpdateAttestationPolicyRequest,
+			encodeUpdateAttestationPolicyResponse,
+		).ServeHTTP)
+
 		// Proxy all other requests using the router
 		// When guardrails is enabled, /api/chat is routed to guardrails service via config.json
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
-
-	mux.Post("/attestation/policy", kithttp.NewServer(
-		endpoints.UpdateAttestationPolicy,
-		decodeUpdateAttestationPolicyRequest,
-		encodeUpdateAttestationPolicyResponse,
-	).ServeHTTP)
 
 	return mux
 }

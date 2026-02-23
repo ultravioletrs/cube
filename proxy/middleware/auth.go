@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"context"
+	"log"
 	"strings"
 
 	"github.com/absmach/supermq/pkg/authn"
@@ -137,8 +138,17 @@ func (am *authMiddleware) GetAttestationPolicy(ctx context.Context, session *aut
 
 // UpdateAttestationPolicy implements proxy.Service.
 func (am *authMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
-	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
-		return err
+	log.Printf("UpdateAttestationPolicy: role=%v domainID=%s domainUserID=%s",
+		session.Role, session.DomainID, session.DomainUserID)
+
+	if session.DomainID == "" {
+		return svcerr.ErrAuthorization
+	}
+
+	if err := am.authorize(ctx, session, session.DomainID, policies.AdminPermission); err != nil {
+		if errSuper := am.checkSuperAdmin(ctx, session.UserID); errSuper != nil {
+			return err
+		}
 	}
 
 	return am.next.UpdateAttestationPolicy(ctx, session, policy)

@@ -24,7 +24,7 @@ API for managing attestation policies at the proxy level. Policies define trust 
 
 **Key Endpoints:**
 
-- `POST /attestation/policy` - Update global attestation policy
+- `POST /{domainID}/attestation/policy` - Update attestation policy for a domain (domain admin only)
 - `GET /{domainID}/attestation/policy` - Get attestation policy for a domain
 
 #### `proxy-request-forwarding.yaml`

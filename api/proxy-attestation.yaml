@@ -17,15 +17,22 @@ servers:
     description: Production server
 
 paths:
-  /attestation/policy:
+  /{domainID}/attestation/policy:
     post:
-      summary: Update attestation policy
-      description: Updates the global attestation policy for all domains
+      summary: Update attestation policy for a domain
+      description: Updates the attestation policy for a specific domain (domain admin only)
       operationId: updateAttestationPolicy
       tags:
         - Attestation
       security:
         - bearerAuth: []
+      parameters:
+        - name: domainID
+          in: path
+          required: true
+          description: The domain identifier
+          schema:
+            type: string
       requestBody:
         required: true
         description: The attestation policy document
@@ -40,12 +47,8 @@ paths:
               type: object
               description: JSON attestation policy document
       responses:
-        "200":
+        "201":
           description: Policy updated successfully
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UpdatePolicyResponse"
         "400":
           description: Invalid policy document
           content:
@@ -65,7 +68,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /{domainID}/attestation/policy:
     get:
       summary: Get attestation policy for a domain
       description: Retrieves the attestation policy for a specific domain
@@ -115,14 +117,6 @@ paths:
 
 components:
   schemas:
-    UpdatePolicyResponse:
-      type: object
-      properties:
-        message:
-          type: string
-          description: Confirmation message
-          example: "Policy updated successfully"
-
     Error:
       type: object
       required:

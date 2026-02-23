@@ -10,6 +10,7 @@ import (
 	"github.com/absmach/supermq/pkg/authn"
 	"github.com/absmach/supermq/pkg/authz"
 	authzmocks "github.com/absmach/supermq/pkg/authz/mocks"
+	svcerr "github.com/absmach/supermq/pkg/errors/service"
 	"github.com/absmach/supermq/pkg/policies"
 	"github.com/stretchr/testify/mock"
 	"github.com/ultravioletrs/cube/proxy"
@@ -223,4 +224,118 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestAuthMiddleware_UpdateAttestationPolicy(t *testing.T) {
+	t.Parallel()
+
+	policy := []byte("policy")
+
+	t.Run("domain admin allowed", func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mocks.Service)
+		svc.On("UpdateAttestationPolicy", mock.Anything, mock.Anything, policy).Return(nil)
+
+		auth := new(authzmocks.Authorization)
+		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
+			return req.Permission == policies.AdminPermission &&
+				req.ObjectType == "domain" &&
+				req.Object == "domain1" &&
+				req.Domain == "domain1" &&
+				req.SubjectType == "user" &&
+				req.SubjectKind == "users" &&
+				req.Subject == "domainUser1"
+		})).Return(nil).Once()
+
+		authMiddleware := middleware.AuthMiddleware(auth)(svc)
+		session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+
+		err := authMiddleware.UpdateAttestationPolicy(context.Background(), session, policy)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		svc.AssertCalled(t, "UpdateAttestationPolicy", mock.Anything, session, policy)
+		auth.AssertExpectations(t)
+	})
+
+	t.Run("non-admin denied", func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mocks.Service)
+		auth := new(authzmocks.Authorization)
+
+		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
+			return req.Permission == policies.AdminPermission &&
+				req.ObjectType == "domain" &&
+				req.Object == "domain1"
+		})).Return(svcerr.ErrAuthorization).Once()
+
+		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
+			return req.Permission == policies.AdminPermission &&
+				req.ObjectType == policies.PlatformType &&
+				req.Object == policies.SuperMQObject
+		})).Return(svcerr.ErrAuthorization).Once()
+
+		authMiddleware := middleware.AuthMiddleware(auth)(svc)
+		session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+
+		err := authMiddleware.UpdateAttestationPolicy(context.Background(), session, policy)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+
+		svc.AssertNotCalled(t, "UpdateAttestationPolicy", mock.Anything, mock.Anything, mock.Anything)
+		auth.AssertExpectations(t)
+	})
+
+	t.Run("super admin allowed", func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mocks.Service)
+		svc.On("UpdateAttestationPolicy", mock.Anything, mock.Anything, policy).Return(nil)
+
+		auth := new(authzmocks.Authorization)
+		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
+			return req.Permission == policies.AdminPermission &&
+				req.ObjectType == "domain" &&
+				req.Object == "domain1"
+		})).Return(svcerr.ErrAuthorization).Once()
+
+		auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
+			return req.Permission == policies.AdminPermission &&
+				req.ObjectType == policies.PlatformType &&
+				req.Object == policies.SuperMQObject
+		})).Return(nil).Once()
+
+		authMiddleware := middleware.AuthMiddleware(auth)(svc)
+		session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+
+		err := authMiddleware.UpdateAttestationPolicy(context.Background(), session, policy)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		svc.AssertCalled(t, "UpdateAttestationPolicy", mock.Anything, session, policy)
+		auth.AssertExpectations(t)
+	})
+
+	t.Run("missing domain ID", func(t *testing.T) {
+		t.Parallel()
+
+		svc := new(mocks.Service)
+		auth := new(authzmocks.Authorization)
+
+		authMiddleware := middleware.AuthMiddleware(auth)(svc)
+		session := &authn.Session{DomainID: "", UserID: "user1", DomainUserID: "domainUser1"}
+
+		err := authMiddleware.UpdateAttestationPolicy(context.Background(), session, policy)
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+
+		svc.AssertNotCalled(t, "UpdateAttestationPolicy", mock.Anything, mock.Anything, mock.Anything)
+		auth.AssertNotCalled(t, "Authorize", mock.Anything, mock.Anything)
+	})
 }

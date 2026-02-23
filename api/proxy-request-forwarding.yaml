@@ -101,7 +101,6 @@ paths:
         Forwards a GET request to a backend service based on the routing rules defined for this domain.
 
         Examples of requests that can be forwarded:
-        - GET /{domainID}/attestation/policy - Get attestation policy from agent
         - GET /{domainID}/health - Health check on backend service
         - GET /{domainID}/api/resources - Fetch resources from backend
       operationId: forwardGetRequest
