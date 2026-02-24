@@ -96,6 +96,11 @@ func (it *InstrumentedTransport) RoundTrip(req *http.Request) (*http.Response, e
 	// Check if aTLS is expected based on configuration
 	atlsExpected := it.attestationType != "" && it.attestationType != "NoCC"
 
+	// Check if expectation is overridden via context
+	if expected, ok := req.Context().Value(ATLSExpectedCtxKey).(bool); ok {
+		atlsExpected = expected
+	}
+
 	// Capture attestation result
 	result := &AttestationResult{
 		ATLSHandshake:     false, // Will be set to true only if we have actual TLS state

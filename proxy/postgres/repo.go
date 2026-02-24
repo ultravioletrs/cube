@@ -46,17 +46,19 @@ func (r *repository) UpdateAttestationPolicy(ctx context.Context, policy []byte)
 
 // CreateRoute implements proxy.Repository.
 func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) (*router.RouteRule, error) {
-	q := `INSERT INTO routes (name, target_url, matchers, priority, default_rule, strip_prefix, enabled)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+	q := `INSERT INTO routes (name, target_url, matchers, priority, default_rule, strip_prefix, enabled, event_type, atls)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (name) DO UPDATE SET
 			target_url = EXCLUDED.target_url,
 			matchers = EXCLUDED.matchers,
 			priority = EXCLUDED.priority,
 			default_rule = EXCLUDED.default_rule,
 			strip_prefix = EXCLUDED.strip_prefix,
-			enabled = EXCLUDED.enabled,			
+			enabled = EXCLUDED.enabled,	
+			event_type = EXCLUDED.event_type,
+			atls = EXCLUDED.atls,		
 			updated_at = CURRENT_TIMESTAMP
-		RETURNING name, target_url, matchers, priority, default_rule, strip_prefix, enabled`
+		RETURNING name, target_url, matchers, priority, default_rule, strip_prefix, enabled, event_type, atls`
 
 	matchersJSON, err := json.Marshal(route.Matchers)
 	if err != nil {
@@ -71,11 +73,11 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) (
 	enabled := route.Enabled == nil || *route.Enabled
 
 	row := r.db.QueryRowxContext(
-		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix, enabled)
+		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix, enabled, route.EventType, route.ATLS)
 
 	if err := row.Scan(
 		&createdRoute.Name, &createdRoute.TargetURL, &returnedMatchersJSON,
-		&createdRoute.Priority, &createdRoute.DefaultRule, &createdRoute.StripPrefix, &enabled); err != nil {
+		&createdRoute.Priority, &createdRoute.DefaultRule, &createdRoute.StripPrefix, &enabled, &createdRoute.EventType, &createdRoute.ATLS); err != nil {
 		return nil, err
 	}
 
@@ -88,7 +90,7 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) (
 
 // GetRoute implements proxy.Repository.
 func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRule, error) {
-	q := `SELECT id, name, target_url, matchers, priority, default_rule, strip_prefix, enabled
+	q := `SELECT id, name, target_url, matchers, priority, default_rule, strip_prefix, enabled, event_type, atls
 		FROM routes WHERE name = $1`
 
 	var (
@@ -102,7 +104,7 @@ func (r *repository) GetRoute(ctx context.Context, name string) (*router.RouteRu
 
 	err := row.Scan(
 		&id, &route.Name, &route.TargetURL, &matchersJSON, &route.Priority,
-		&route.DefaultRule, &route.StripPrefix, &enabled)
+		&route.DefaultRule, &route.StripPrefix, &enabled, &route.EventType, &route.ATLS)
 	if err != nil {
 		return nil, err
 	}
@@ -126,9 +128,11 @@ func (r *repository) UpdateRoute(ctx context.Context, name string, route *router
 		default_rule = $5,
 		strip_prefix = $6,
 		enabled = $7,
+		event_type = $8,
+		atls = $9,
 		updated_at = CURRENT_TIMESTAMP
-		WHERE name = $8
-		RETURNING name, target_url, matchers, priority, default_rule, strip_prefix, enabled`
+		WHERE name = $10
+		RETURNING name, target_url, matchers, priority, default_rule, strip_prefix, enabled, event_type, atls`
 
 	matchersJSON, err := json.Marshal(route.Matchers)
 	if err != nil {
@@ -144,11 +148,11 @@ func (r *repository) UpdateRoute(ctx context.Context, name string, route *router
 
 	row := r.db.QueryRowxContext(
 		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule,
-		route.StripPrefix, enabled, name)
+		route.StripPrefix, enabled, route.EventType, route.ATLS, name)
 
 	if err := row.Scan(
 		&updatedRoute.Name, &updatedRoute.TargetURL, &returnedMatchersJSON,
-		&updatedRoute.Priority, &updatedRoute.DefaultRule, &updatedRoute.StripPrefix, &enabled); err != nil {
+		&updatedRoute.Priority, &updatedRoute.DefaultRule, &updatedRoute.StripPrefix, &enabled, &updatedRoute.EventType, &updatedRoute.ATLS); err != nil {
 		return nil, err
 	}
 
@@ -189,7 +193,7 @@ func (r *repository) ListRoutes(ctx context.Context, offset, limit uint64) ([]ro
 
 		if err := rows.Scan(
 			&route.Name, &route.TargetURL, &matchersJSON, &route.Priority, &route.DefaultRule,
-			&route.StripPrefix, &enabled); err != nil {
+			&route.StripPrefix, &enabled, &route.EventType, &route.ATLS); err != nil {
 			return nil, 0, err
 		}
 

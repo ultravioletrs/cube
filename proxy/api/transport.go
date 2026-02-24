@@ -218,6 +218,15 @@ func serveReverseProxy(
 	targetURL := rule.TargetURL
 	stripPrefix := rule.StripPrefix
 
+	// Inject metadata for audit logging
+	ctx := r.Context()
+	ctx = context.WithValue(ctx, audit.ATLSExpectedCtxKey, rule.ATLS)
+	r = r.WithContext(ctx)
+
+	if rule.EventType != "" {
+		w.Header().Set("X-Event-Type", rule.EventType)
+	}
+
 	target, err := url.Parse(targetURL)
 	if err != nil {
 		log.Printf("Invalid target URL %s: %v", targetURL, err)

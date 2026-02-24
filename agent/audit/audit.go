@@ -24,8 +24,11 @@ import (
 type contextKey string
 
 const (
-	RequestIDCtxKey contextKey = "request_id"
-	TraceIDCtxKey   contextKey = "trace_id"
+	RequestIDCtxKey    contextKey = "request_id"
+	TraceIDCtxKey      contextKey = "trace_id"
+	ATLSExpectedCtxKey contextKey = "atls_expected"
+
+	HeaderXEventType = "X-Event-Type"
 )
 
 // Event represents a complete audit log entry.
@@ -234,7 +237,7 @@ func (am *auditMiddleware) createAuditEvent(
 		TraceID:          traceID,
 		RequestID:        requestID,
 		Timestamp:        start,
-		EventType:        "llm_request",
+		EventType:        am.ExtractEventType(capture.responseHeaders),
 		Session:          *session,
 		Method:           r.Method,
 		Path:             r.URL.Path,
@@ -348,6 +351,15 @@ func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Hea
 
 	// Check for attestation type header (indicates aTLS was configured)
 	am.extractAttestationDetails(headers, event)
+}
+
+// extractAttestationDetails extracts aTLS/attestation information from response headers.
+func (am *auditMiddleware) ExtractEventType(headers http.Header) string {
+	if et := headers.Get(HeaderXEventType); et != "" {
+		return et
+	}
+
+	return "llm_request"
 }
 
 // extractAttestationDetails extracts aTLS/attestation information from response headers.

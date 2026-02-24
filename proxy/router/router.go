@@ -22,6 +22,8 @@ type RouteRule struct {
 	DefaultRule bool           `json:"default_rule"`           // If true, this rule matches when no others do
 	StripPrefix string         `json:"strip_prefix,omitempty"` // Prefix to strip from the path
 	Enabled     *bool          `json:"enabled,omitempty"`      // If false, route is skipped. Defaults to true if not set.
+	EventType   string         `json:"event_type,omitempty"`   // Event type for audit logging
+	ATLS        bool           `json:"atls,omitempty"`         // Whether aTLS is expected for this route
 
 	// Internal compiled matcher (not serialized)
 	compiledMatcher Matcher `json:"-"`
