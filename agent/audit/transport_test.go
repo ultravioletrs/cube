@@ -29,9 +29,6 @@ func (m *mockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 func TestInstrumentedTransportATLSExpected(t *testing.T) {
 	t.Parallel()
 
-	mock := &mockRoundTripper{}
-	it := audit.NewInstrumentedTransport(mock, "aTLS")
-
 	tests := []struct {
 		name     string
 		ctxValue any
@@ -57,6 +54,9 @@ func TestInstrumentedTransportATLSExpected(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
+
+			mock := &mockRoundTripper{}
+			it := audit.NewInstrumentedTransport(mock, "aTLS")
 
 			req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.com", http.NoBody)
 			if tt.ctxValue != nil {
