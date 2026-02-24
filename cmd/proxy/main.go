@@ -60,7 +60,7 @@ type config struct {
 	OpenSearchURL       string  `env:"UV_CUBE_OPENSEARCH_URL"      envDefault:"http://opensearch:9200"`
 	RouterConfig        string  `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
 	AgentURL            string  `env:"UV_CUBE_AGENT_URL"           envDefault:"http://cube-agent:8901"`
-	AllowUnverifiedUser bool    `env:"SMQ_ALLOW_UNVERIFIED_USER"   envDefault:"true"`
+	AllowUnverifiedUser bool    `env:"SMQ_ALLOW_UNVERIFIED_USER"   envDefault:"false"`
 }
 
 type fileConfig struct {
