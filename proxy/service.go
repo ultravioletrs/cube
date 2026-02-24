@@ -108,6 +108,10 @@ func (s *service) GetRoute(ctx context.Context, _ *authn.Session, name string) (
 func (s *service) UpdateRoute(
 	ctx context.Context, _ *authn.Session, name string, route *router.RouteRule,
 ) (*router.RouteRule, error) {
+	if route.Name == "" {
+		route.Name = name
+	}
+
 	if router.IsSystemRoute(name) || router.IsSystemRoute(route.Name) {
 		return nil, router.ErrSystemRouteProtected
 	}
