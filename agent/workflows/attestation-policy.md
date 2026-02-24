@@ -190,18 +190,61 @@ curl -ksSf -X POST https://<traefik-host>/proxy/<domain_id>/attestation \
   -o attestation.bin
 ```
 
-#### Step 2: Generate Attestation Policy
+#### Step 2: Compute the Launch Measurement
 
-`cocos-cli policy` does not have a dedicated `snp` subcommand. Start from the baseline SEV-SNP policy template in the Cocos repository (`scripts/attestation_policy/sev-snp/attestation_policy.json`) and update it with `cocos-cli policy measurement` / `hostdata`:
+Use `cocos-cli` to compute the expected launch measurement from the guest image files. The measurement is a cryptographic hash of the initial guest memory contents (firmware, kernel, initrd) calculated by the AMD PSP during launch.
+
+**For COCONUT-SVSM (IGVM) guests:**
 
 ```bash
-cp <path-to-cocos>/scripts/attestation_policy/sev-snp/attestation_policy.json ./attestation_policy.json
-
-cocos-cli policy measurement <base64_measurement> attestation_policy.json
-cocos-cli policy hostdata <base64_hostdata> attestation_policy.json
+cocos-cli igvmmeasure <path-to-igvm-file>
 ```
 
-> **Note:** The baseline template contains PCR values and product configuration (`Milan`, VMPL 2) from the reference Cocos IGVM image. Update the measurement, host data, and product fields to match your CVM image.
+**For OVMF-based guests:**
+
+```bash
+cocos-cli sevsnpmeasure \
+  --mode snp \
+  --ovmf <path-to-OVMF.fd> \
+  --kernel <path-to-kernel> \
+  --initrd <path-to-initrd> \
+  --append "<kernel-cmdline>" \
+  --vcpus <vcpu-count> \
+  --vcpu-type EPYC
+```
+
+Both commands output the measurement as a hex string. Convert it to base64 and store it in `$MEASUREMENT` for the next step:
+
+```bash
+# For IGVM guests:
+MEASUREMENT=$(cocos-cli igvmmeasure <path-to-igvm-file> | xxd -r -p | base64 -w0)
+
+# For OVMF guests:
+MEASUREMENT=$(cocos-cli sevsnpmeasure --mode snp --ovmf <OVMF.fd> --kernel <kernel> --initrd <initrd> --append "<cmdline>" --vcpus <N> --vcpu-type EPYC | xxd -r -p | base64 -w0)
+
+echo "Measurement (base64): $MEASUREMENT"
+```
+
+Refer to `cocos-cli sevsnpmeasure --help` and `cocos-cli igvmmeasure --help` for full flag details.
+
+#### Step 3: Generate Attestation Policy
+
+Download the sample SEV-SNP attestation policy and populate it with the `$MEASUREMENT` from Step 2:
+
+```bash
+curl -o attestation_policy.json \
+  https://raw.githubusercontent.com/ultravioletrs/cocos/main/scripts/attestation_policy/sev-snp/attestation_policy.json
+
+cocos-cli policy measurement "$MEASUREMENT" attestation_policy.json
+```
+
+If your deployment sets host data at launch time, update that field as well:
+
+```bash
+cocos-cli policy hostdata "<base64_hostdata>" attestation_policy.json
+```
+
+> **Note:** Review the product (`Milan` vs `Genoa`), VMPL, and PCR values in the downloaded policy and update them to match your CVM configuration.
 
 Refer to the [Cocos CLI documentation](https://docs.cocos.ultraviolet.rs/cli) for full `cocos-cli policy measurement` and `cocos-cli policy hostdata` usage.
 
