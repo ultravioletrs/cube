@@ -229,17 +229,29 @@ Refer to `cocos-cli sevsnpmeasure --help` and `cocos-cli igvmmeasure --help` for
 
 #### Step 3: Generate the Base Attestation Policy
 
-On the **SNP host machine**, run the `attestation_policy` binary to generate a base policy from the platform firmware. This binary reads the SEV firmware status via `/dev/sev` to populate TCB versions, chip ID, build number, and product type (Milan/Genoa) — values specific to the physical host:
+On the **SNP host machine**, build and run the `attestation_policy` binary to generate a base policy from the platform firmware. This binary reads the SEV firmware status via `/dev/sev` to populate TCB versions, chip ID, build number, and product type (Milan/Genoa) — values specific to the physical host.
+
+**Build the binary:**
 
 ```bash
-sudo attestation_policy --policy 196608 --pcr <path-to-pcr_values.json> > attestation_policy.json
+git clone https://github.com/ultravioletrs/cocos.git
+cd cocos/scripts/attestation_policy/sev-snp
+make
+```
+
+This produces the binary at `./target/release/attestation_policy`. It requires a Rust toolchain (`rustc`, `cargo`).
+
+**Run the binary:**
+
+```bash
+sudo ./target/release/attestation_policy --policy 196608 > attestation_policy.json
 ```
 
 **Parameters:**
-- `--policy 196608`: Guest policy bitmask (196608 = SMT enabled)
-- `--pcr <file>`: Optional path to a PCR values JSON file (merge TPM PCR measurements into the policy)
+- `--policy 196608`: Guest policy bitmask (196608 = SMT enabled, see [AMD SEV-SNP ABI spec §4.3](https://www.amd.com/en/developer/sev.html) for other values)
+- `--pcr <file>` *(optional)*: Path to a PCR values JSON file to merge TPM PCR measurements into the policy. Only needed when the CVM guest runs a vTPM (e.g., COCONUT-SVSM with swtpm). A sample file is provided at `cocos/scripts/attestation_policy/sev-snp/pcr_values.json`. PCR (Platform Configuration Register) values are SHA-256 and SHA-384 hashes recorded by the TPM at boot — each register (PCR0–PCR9) captures a different stage of the boot chain (firmware, bootloader, kernel, etc.).
 
-The binary is built from `scripts/attestation_policy/sev-snp/` in the [Cocos repository](https://github.com/ultravioletrs/cocos/tree/main/scripts/attestation_policy/sev-snp#rust-project-for-fetching-attestation-policy) and requires root access to `/dev/sev`.
+The binary requires root access to `/dev/sev`.
 
 > **Note:** The output contains placeholder zeros for the `measurement` and `host_data` fields — these are populated in Step 4.
 
@@ -259,8 +271,7 @@ cocos-cli policy hostdata "<base64_hostdata>" attestation_policy.json
 
 Refer to the [Cocos CLI documentation](https://docs.cocos.ultraviolet.rs/cli) for full `cocos-cli policy measurement` and `cocos-cli policy hostdata` usage.
 
-**Output:**
-- `attestation_policy.json`: Complete attestation policy with platform-specific values and launch measurement
+After this step, `attestation_policy.json` contains the complete attestation policy: platform-specific TCB values from Step 3 plus the launch measurement from Step 2. This file is ready to be uploaded to the Cube Proxy).
 
 ---
 
