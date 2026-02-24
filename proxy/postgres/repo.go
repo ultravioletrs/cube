@@ -176,7 +176,7 @@ func (r *repository) DeleteRoute(ctx context.Context, name string) error {
 
 // ListRoutes implements proxy.Repository.
 func (r *repository) ListRoutes(ctx context.Context, offset, limit uint64) ([]router.RouteRule, uint64, error) {
-	q := `SELECT name, target_url, matchers, priority, default_rule, strip_prefix, enabled
+	q := `SELECT name, target_url, matchers, priority, default_rule, strip_prefix, enabled, event_type, atls
 		FROM routes ORDER BY priority DESC, name ASC OFFSET $1 LIMIT $2`
 
 	rows, err := r.db.QueryxContext(ctx, q, offset, limit)
