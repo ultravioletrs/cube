@@ -157,13 +157,13 @@ func (am *authMiddleware) CreateRoute(
 
 // UpdateRoute implements proxy.Service.
 func (am *authMiddleware) UpdateRoute(
-	ctx context.Context, session *authn.Session, route *router.RouteRule,
+	ctx context.Context, session *authn.Session, name string, route *router.RouteRule,
 ) (*router.RouteRule, error) {
 	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
 		return nil, err
 	}
 
-	return am.next.UpdateRoute(ctx, session, route)
+	return am.next.UpdateRoute(ctx, session, name, route)
 }
 
 // DeleteRoute implements proxy.Service.

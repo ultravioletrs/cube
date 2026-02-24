@@ -42,6 +42,143 @@ func (_m *Service) EXPECT() *Service_Expecter {
 	return &Service_Expecter{mock: &_m.Mock}
 }
 
+// CreateRoute provides a mock function for the type Service
+func (_mock *Service) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
+	ret := _mock.Called(ctx, session, route)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateRoute")
+	}
+
+	var r0 *router.RouteRule
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) (*router.RouteRule, error)); ok {
+		return returnFunc(ctx, session, route)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) *router.RouteRule); ok {
+		r0 = returnFunc(ctx, session, route)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*router.RouteRule)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+		r1 = returnFunc(ctx, session, route)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Service_CreateRoute_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateRoute'
+type Service_CreateRoute_Call struct {
+	*mock.Call
+}
+
+// CreateRoute is a helper method to define mock.On call
+//   - ctx context.Context
+//   - session *authn.Session
+//   - route *router.RouteRule
+func (_e *Service_Expecter) CreateRoute(ctx interface{}, session interface{}, route interface{}) *Service_CreateRoute_Call {
+	return &Service_CreateRoute_Call{Call: _e.mock.On("CreateRoute", ctx, session, route)}
+}
+
+func (_c *Service_CreateRoute_Call) Run(run func(ctx context.Context, session *authn.Session, route *router.RouteRule)) *Service_CreateRoute_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *authn.Session
+		if args[1] != nil {
+			arg1 = args[1].(*authn.Session)
+		}
+		var arg2 *router.RouteRule
+		if args[2] != nil {
+			arg2 = args[2].(*router.RouteRule)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *Service_CreateRoute_Call) Return(routeRule *router.RouteRule, err error) *Service_CreateRoute_Call {
+	_c.Call.Return(routeRule, err)
+	return _c
+}
+
+func (_c *Service_CreateRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error)) *Service_CreateRoute_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteRoute provides a mock function for the type Service
+func (_mock *Service) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
+	ret := _mock.Called(ctx, session, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteRoute")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string) error); ok {
+		r0 = returnFunc(ctx, session, name)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// Service_DeleteRoute_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteRoute'
+type Service_DeleteRoute_Call struct {
+	*mock.Call
+}
+
+// DeleteRoute is a helper method to define mock.On call
+//   - ctx context.Context
+//   - session *authn.Session
+//   - name string
+func (_e *Service_Expecter) DeleteRoute(ctx interface{}, session interface{}, name interface{}) *Service_DeleteRoute_Call {
+	return &Service_DeleteRoute_Call{Call: _e.mock.On("DeleteRoute", ctx, session, name)}
+}
+
+func (_c *Service_DeleteRoute_Call) Run(run func(ctx context.Context, session *authn.Session, name string)) *Service_DeleteRoute_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *authn.Session
+		if args[1] != nil {
+			arg1 = args[1].(*authn.Session)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *Service_DeleteRoute_Call) Return(err error) *Service_DeleteRoute_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *Service_DeleteRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, name string) error) *Service_DeleteRoute_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetAttestationPolicy provides a mock function for the type Service
 func (_mock *Service) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
 	ret := _mock.Called(ctx, session)
@@ -106,6 +243,166 @@ func (_c *Service_GetAttestationPolicy_Call) Return(bytes []byte, err error) *Se
 }
 
 func (_c *Service_GetAttestationPolicy_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session) ([]byte, error)) *Service_GetAttestationPolicy_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetRoute provides a mock function for the type Service
+func (_mock *Service) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+	ret := _mock.Called(ctx, session, name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetRoute")
+	}
+
+	var r0 *router.RouteRule
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string) (*router.RouteRule, error)); ok {
+		return returnFunc(ctx, session, name)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string) *router.RouteRule); ok {
+		r0 = returnFunc(ctx, session, name)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*router.RouteRule)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, string) error); ok {
+		r1 = returnFunc(ctx, session, name)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// Service_GetRoute_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetRoute'
+type Service_GetRoute_Call struct {
+	*mock.Call
+}
+
+// GetRoute is a helper method to define mock.On call
+//   - ctx context.Context
+//   - session *authn.Session
+//   - name string
+func (_e *Service_Expecter) GetRoute(ctx interface{}, session interface{}, name interface{}) *Service_GetRoute_Call {
+	return &Service_GetRoute_Call{Call: _e.mock.On("GetRoute", ctx, session, name)}
+}
+
+func (_c *Service_GetRoute_Call) Run(run func(ctx context.Context, session *authn.Session, name string)) *Service_GetRoute_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *authn.Session
+		if args[1] != nil {
+			arg1 = args[1].(*authn.Session)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *Service_GetRoute_Call) Return(routeRule *router.RouteRule, err error) *Service_GetRoute_Call {
+	_c.Call.Return(routeRule, err)
+	return _c
+}
+
+func (_c *Service_GetRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error)) *Service_GetRoute_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListRoutes provides a mock function for the type Service
+func (_mock *Service) ListRoutes(ctx context.Context, session *authn.Session, offset uint64, limit uint64) ([]router.RouteRule, uint64, error) {
+	ret := _mock.Called(ctx, session, offset, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListRoutes")
+	}
+
+	var r0 []router.RouteRule
+	var r1 uint64
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, uint64, uint64) ([]router.RouteRule, uint64, error)); ok {
+		return returnFunc(ctx, session, offset, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, uint64, uint64) []router.RouteRule); ok {
+		r0 = returnFunc(ctx, session, offset, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]router.RouteRule)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, uint64, uint64) uint64); ok {
+		r1 = returnFunc(ctx, session, offset, limit)
+	} else {
+		r1 = ret.Get(1).(uint64)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, *authn.Session, uint64, uint64) error); ok {
+		r2 = returnFunc(ctx, session, offset, limit)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// Service_ListRoutes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListRoutes'
+type Service_ListRoutes_Call struct {
+	*mock.Call
+}
+
+// ListRoutes is a helper method to define mock.On call
+//   - ctx context.Context
+//   - session *authn.Session
+//   - offset uint64
+//   - limit uint64
+func (_e *Service_Expecter) ListRoutes(ctx interface{}, session interface{}, offset interface{}, limit interface{}) *Service_ListRoutes_Call {
+	return &Service_ListRoutes_Call{Call: _e.mock.On("ListRoutes", ctx, session, offset, limit)}
+}
+
+func (_c *Service_ListRoutes_Call) Run(run func(ctx context.Context, session *authn.Session, offset uint64, limit uint64)) *Service_ListRoutes_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *authn.Session
+		if args[1] != nil {
+			arg1 = args[1].(*authn.Session)
+		}
+		var arg2 uint64
+		if args[2] != nil {
+			arg2 = args[2].(uint64)
+		}
+		var arg3 uint64
+		if args[3] != nil {
+			arg3 = args[3].(uint64)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *Service_ListRoutes_Call) Return(routes []router.RouteRule, total uint64, err error) *Service_ListRoutes_Call {
+	_c.Call.Return(routes, total, err)
+	return _c
+}
+
+func (_c *Service_ListRoutes_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, offset uint64, limit uint64) ([]router.RouteRule, uint64, error)) *Service_ListRoutes_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -280,41 +577,9 @@ func (_c *Service_UpdateAttestationPolicy_Call) RunAndReturn(run func(ctx contex
 	return _c
 }
 
-// CreateRoute provides a mock function with given fields: ctx, session, route
-func (_m *Service) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
-	ret := _m.Called(ctx, session, route)
-
-	if len(ret) == 0 {
-		panic("no return value specified for CreateRoute")
-	}
-
-	var r0 *router.RouteRule
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) (*router.RouteRule, error)); ok {
-		return rf(ctx, session, route)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) *router.RouteRule); ok {
-		r0 = rf(ctx, session, route)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*router.RouteRule)
-		}
-	}
-
-	if len(ret) > 1 {
-		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
-			r1 = rf(ctx, session, route)
-		} else {
-			r1 = ret.Error(1)
-		}
-	}
-
-	return r0, r1
-}
-
-// UpdateRoute provides a mock function with given fields: ctx, session, route
-func (_m *Service) UpdateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
-	ret := _m.Called(ctx, session, route)
+// UpdateRoute provides a mock function for the type Service
+func (_mock *Service) UpdateRoute(ctx context.Context, session *authn.Session, name string, route *router.RouteRule) (*router.RouteRule, error) {
+	ret := _mock.Called(ctx, session, name, route)
 
 	if len(ret) == 0 {
 		panic("no return value specified for UpdateRoute")
@@ -322,134 +587,39 @@ func (_m *Service) UpdateRoute(ctx context.Context, session *authn.Session, rout
 
 	var r0 *router.RouteRule
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) (*router.RouteRule, error)); ok {
-		return rf(ctx, session, route)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string, *router.RouteRule) (*router.RouteRule, error)); ok {
+		return returnFunc(ctx, session, name, route)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) *router.RouteRule); ok {
-		r0 = rf(ctx, session, route)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string, *router.RouteRule) *router.RouteRule); ok {
+		r0 = returnFunc(ctx, session, name, route)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*router.RouteRule)
 		}
 	}
-
-	if len(ret) > 1 {
-		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
-			r1 = rf(ctx, session, route)
-		} else {
-			r1 = ret.Error(1)
-		}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, string, *router.RouteRule) error); ok {
+		r1 = returnFunc(ctx, session, name, route)
+	} else {
+		r1 = ret.Error(1)
 	}
-
 	return r0, r1
 }
 
-// DeleteRoute provides a mock function with given fields: ctx, session, name
-func (_m *Service) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
-	ret := _m.Called(ctx, session, name)
-
-	if len(ret) == 0 {
-		panic("no return value specified for DeleteRoute")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, string) error); ok {
-		r0 = rf(ctx, session, name)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
-// GetRoute provides a mock function with given fields: ctx, session, name
-func (_m *Service) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
-	ret := _m.Called(ctx, session, name)
-
-	if len(ret) == 0 {
-		panic("no return value specified for GetRoute")
-	}
-
-	var r0 *router.RouteRule
-	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, string) (*router.RouteRule, error)); ok {
-		return rf(ctx, session, name)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, string) *router.RouteRule); ok {
-		r0 = rf(ctx, session, name)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*router.RouteRule)
-		}
-	}
-
-	if len(ret) > 1 {
-		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session, string) error); ok {
-			r1 = rf(ctx, session, name)
-		} else {
-			r1 = ret.Error(1)
-		}
-	}
-
-	return r0, r1
-}
-
-// ListRoutes provides a mock function with given fields: ctx, session, offset, limit
-func (_m *Service) ListRoutes(ctx context.Context, session *authn.Session, offset, limit uint64) ([]router.RouteRule, uint64, error) {
-	ret := _m.Called(ctx, session, offset, limit)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListRoutes")
-	}
-
-	var r0 []router.RouteRule
-	var r1 uint64
-	var r2 error
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, uint64, uint64) ([]router.RouteRule, uint64, error)); ok {
-		return rf(ctx, session, offset, limit)
-	}
-	if rf, ok := ret.Get(0).(func(context.Context, *authn.Session, uint64, uint64) []router.RouteRule); ok {
-		r0 = rf(ctx, session, offset, limit)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]router.RouteRule)
-		}
-	}
-
-	if len(ret) > 1 {
-		if rf, ok := ret.Get(1).(func(context.Context, *authn.Session, uint64, uint64) uint64); ok {
-			r1 = rf(ctx, session, offset, limit)
-		} else {
-			r1 = ret.Get(1).(uint64)
-		}
-	}
-
-	if len(ret) > 2 {
-		if rf, ok := ret.Get(2).(func(context.Context, *authn.Session, uint64, uint64) error); ok {
-			r2 = rf(ctx, session, offset, limit)
-		} else {
-			r2 = ret.Error(2)
-		}
-	}
-
-	return r0, r1, r2
-}
-
-// Service_ListRoutes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListRoutes'
-type Service_ListRoutes_Call struct {
+// Service_UpdateRoute_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateRoute'
+type Service_UpdateRoute_Call struct {
 	*mock.Call
 }
 
-// ListRoutes is a helper method to define mock.On call
+// UpdateRoute is a helper method to define mock.On call
 //   - ctx context.Context
 //   - session *authn.Session
-//   - offset uint64
-//   - limit uint64
-func (_e *Service_Expecter) ListRoutes(ctx interface{}, session interface{}, offset interface{}, limit interface{}) *Service_ListRoutes_Call {
-	return &Service_ListRoutes_Call{Call: _e.mock.On("ListRoutes", ctx, session, offset, limit)}
+//   - name string
+//   - route *router.RouteRule
+func (_e *Service_Expecter) UpdateRoute(ctx interface{}, session interface{}, name interface{}, route interface{}) *Service_UpdateRoute_Call {
+	return &Service_UpdateRoute_Call{Call: _e.mock.On("UpdateRoute", ctx, session, name, route)}
 }
 
-func (_c *Service_ListRoutes_Call) Run(run func(ctx context.Context, session *authn.Session, offset uint64, limit uint64)) *Service_ListRoutes_Call {
+func (_c *Service_UpdateRoute_Call) Run(run func(ctx context.Context, session *authn.Session, name string, route *router.RouteRule)) *Service_UpdateRoute_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -459,13 +629,13 @@ func (_c *Service_ListRoutes_Call) Run(run func(ctx context.Context, session *au
 		if args[1] != nil {
 			arg1 = args[1].(*authn.Session)
 		}
-		var arg2 uint64
+		var arg2 string
 		if args[2] != nil {
-			arg2 = args[2].(uint64)
+			arg2 = args[2].(string)
 		}
-		var arg3 uint64
+		var arg3 *router.RouteRule
 		if args[3] != nil {
-			arg3 = args[3].(uint64)
+			arg3 = args[3].(*router.RouteRule)
 		}
 		run(
 			arg0,
@@ -477,12 +647,12 @@ func (_c *Service_ListRoutes_Call) Run(run func(ctx context.Context, session *au
 	return _c
 }
 
-func (_c *Service_ListRoutes_Call) Return(rules []router.RouteRule, total uint64, err error) *Service_ListRoutes_Call {
-	_c.Call.Return(rules, total, err)
+func (_c *Service_UpdateRoute_Call) Return(routeRule *router.RouteRule, err error) *Service_UpdateRoute_Call {
+	_c.Call.Return(routeRule, err)
 	return _c
 }
 
-func (_c *Service_ListRoutes_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, offset, limit uint64) ([]router.RouteRule, uint64, error)) *Service_ListRoutes_Call {
+func (_c *Service_UpdateRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, name string, route *router.RouteRule) (*router.RouteRule, error)) *Service_UpdateRoute_Call {
 	_c.Call.Return(run)
 	return _c
 }

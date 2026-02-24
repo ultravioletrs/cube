@@ -151,6 +151,11 @@ func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 		return nil, errUnauthorized
 	}
 
+	name := r.PathValue("name")
+	if name == "" {
+		return nil, errRouteNameRequired
+	}
+
 	var route router.RouteRule
 	if err := json.NewDecoder(r.Body).Decode(&route); err != nil {
 		return nil, err
@@ -158,6 +163,7 @@ func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error)
 
 	return endpoint.UpdateRouteRequest{
 		Session: &session,
+		Name:    name,
 		Route:   &route,
 	}, nil
 }

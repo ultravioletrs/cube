@@ -66,14 +66,14 @@ func (m *metricsMiddleware) CreateRoute(
 
 // UpdateRoute implements proxy.Service.
 func (m *metricsMiddleware) UpdateRoute(
-	ctx context.Context, session *authn.Session, route *router.RouteRule,
+	ctx context.Context, session *authn.Session, name string, route *router.RouteRule,
 ) (*router.RouteRule, error) {
 	defer func(begin time.Time) {
 		m.counter.With("method", "update_route").Add(1)
 		m.latency.With("method", "update_route").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
-	return m.svc.UpdateRoute(ctx, session, route)
+	return m.svc.UpdateRoute(ctx, session, name, route)
 }
 
 // DeleteRoute implements proxy.Service.
