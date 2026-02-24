@@ -34,7 +34,8 @@ services:
     networks:
       - cube-network
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      test:
+        ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -76,7 +77,7 @@ services:
     networks:
       - cube-network
     restart: unless-stopped
-  
+
   cube-guardrails-db:
     image: postgres:16.2-alpine
     container_name: cube-guardrails-db
@@ -129,7 +130,6 @@ services:
         max-file: "3"
         labels: "logging,service"
         tag: "guardrails|{{.Name}}"
-
 
   cube-agent:
     container_name: cube-agent
@@ -220,6 +220,7 @@ services:
       UV_CUBE_PROXY_DB_USER: ${UV_CUBE_PROXY_DB_USER}
       UV_CUBE_PROXY_DB_PASS: ${UV_CUBE_PROXY_DB_PASS}
       UV_CUBE_PROXY_DB_NAME: ${UV_CUBE_PROXY_DB_NAME}
+      SMQ_ALLOW_UNVERIFIED_USER: ${SMQ_ALLOW_UNVERIFIED_USER}
       UV_CUBE_PROXY_DB_SSL_MODE: ${UV_CUBE_PROXY_DB_SSL_MODE}
       UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
       UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
