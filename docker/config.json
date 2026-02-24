@@ -12,7 +12,9 @@
           }
         ],
         "priority": 25,
-        "enabled": true
+        "enabled": true,
+        "event_type": "llm_request",
+        "atls": true
       },
       {
         "name": "attestation",
@@ -26,7 +28,9 @@
         ],
         "priority": 15,
         "strip_prefix": "",
-        "enabled": true
+        "enabled": true,
+        "event_type": "attestation_request",
+        "atls": true
       },
       {
         "name": "audit",
@@ -40,7 +44,9 @@
         ],
         "priority": 10,
         "strip_prefix": "/audit",
-        "enabled": true
+        "enabled": true,
+        "event_type": "audit_event",
+        "atls": false
       },
       {
         "name": "forward-to-guardrails",
@@ -54,7 +60,9 @@
         ],
         "priority": 20,
         "strip_prefix": "/api/chat",
-        "enabled": true
+        "enabled": true,
+        "event_type": "guardrails_request",
+        "atls": false
       },
       {
         "name": "guardrails-admin",
@@ -67,13 +75,17 @@
           }
         ],
         "priority": 15,
-        "enabled": true
+        "enabled": true,
+        "event_type": "guardrails_request",
+        "atls": true
       },
       {
         "name": "agent",
         "target_url": "__CUBE_INTERNAL_AGENT_URL__",
         "default_rule": true,
-        "enabled": true
+        "enabled": true,
+        "event_type": "llm_request",
+        "atls": true
       }
     ]
   },

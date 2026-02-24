@@ -290,6 +290,14 @@ components:
           type: boolean
           description: If false, the route is skipped. Defaults to true if not set.
           example: true
+        event_type:
+          type: string
+          description: Event type for audit logging
+          example: "llm_request"
+        atls:
+          type: boolean
+          description: Whether aTLS is expected for this route
+          example: true
 
     RouteMatcher:
       type: object

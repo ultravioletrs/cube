@@ -188,7 +188,7 @@ func main() {
 		"%s service %s client configured to connect to agent at %s with %s",
 		svcName, svc.Secure(), agentConfig.URL, svc.Secure()))
 
-	auditSvc := audit.NewAuditMiddleware(logger, audit.Config{
+	auditSvc := audit.NewMiddleware(logger, audit.Config{
 		ComplianceMode:   true,
 		EnablePIIMask:    true,
 		EnableTokens:     true,
@@ -274,20 +274,21 @@ func loadDatabaseRoutes(
 	if len(routes) == 0 && len(defaultRoutes) > 0 {
 		seededRoutes := make([]router.RouteRule, 0, len(defaultRoutes))
 
-		for _, route := range defaultRoutes {
+		for i := range defaultRoutes {
+			route := &defaultRoutes[i]
 			// Skip disabled routes
 			if route.Enabled != nil && !*route.Enabled {
 				continue
 			}
 
 			// Validate route before inserting
-			if err := router.ValidateRoute(&route); err != nil {
+			if err := router.ValidateRoute(route); err != nil {
 				log.Printf("Skipping invalid default route %s: %s", route.Name, err)
 
 				continue
 			}
 
-			created, err := repo.CreateRoute(ctx, &route)
+			created, err := repo.CreateRoute(ctx, route)
 			if err != nil {
 				log.Printf("Failed to seed default route %s: %s", route.Name, err)
 

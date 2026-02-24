@@ -127,9 +127,9 @@ func (s *service) UpdateRoute(
 
 	var otherRoutes []router.RouteRule
 
-	for _, r := range existingRoutes {
-		if r.Name != name {
-			otherRoutes = append(otherRoutes, r)
+	for i := range existingRoutes {
+		if existingRoutes[i].Name != name {
+			otherRoutes = append(otherRoutes, existingRoutes[i])
 		}
 	}
 

@@ -174,17 +174,17 @@ func IsSystemRoute(name string) bool {
 // More sophisticated conflict detection could check for overlapping matchers.
 func DetectConflict(newRoute *RouteRule, existingRoutes []RouteRule) error {
 	// Check for duplicate names
-	for _, existing := range existingRoutes {
-		if existing.Name == newRoute.Name {
+	for i := range existingRoutes {
+		if existingRoutes[i].Name == newRoute.Name {
 			return fmt.Errorf("%w: route with name '%s' already exists", ErrRouteConflict, newRoute.Name)
 		}
 	}
 
 	// Check for multiple default routes
 	if newRoute.DefaultRule {
-		for _, existing := range existingRoutes {
-			if existing.DefaultRule {
-				return fmt.Errorf("%w: default route '%s' already exists", ErrMultipleDefaultRoutes, existing.Name)
+		for i := range existingRoutes {
+			if existingRoutes[i].DefaultRule {
+				return fmt.Errorf("%w: default route '%s' already exists", ErrMultipleDefaultRoutes, existingRoutes[i].Name)
 			}
 		}
 	}

@@ -24,8 +24,11 @@ import (
 type contextKey string
 
 const (
-	RequestIDCtxKey contextKey = "request_id"
-	TraceIDCtxKey   contextKey = "trace_id"
+	RequestIDCtxKey    contextKey = "request_id"
+	TraceIDCtxKey      contextKey = "trace_id"
+	ATLSExpectedCtxKey contextKey = "atls_expected"
+
+	HeaderXEventType = "X-Event-Type"
 )
 
 // Event represents a complete audit log entry.
@@ -89,8 +92,8 @@ type Event struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
-// AuditMiddleware provides structured audit logging.
-type auditMiddleware struct {
+// Middleware provides structured audit logging.
+type Middleware struct {
 	logger *slog.Logger
 	config Config
 }
@@ -139,20 +142,20 @@ func (rc *responseCapture) Header() http.Header {
 	return rc.ResponseWriter.Header()
 }
 
-// NewAuditMiddleware creates a new audit middleware instance.
-func NewAuditMiddleware(logger *slog.Logger, config Config) Service {
+// NewMiddleware creates a new audit middleware instance.
+func NewMiddleware(logger *slog.Logger, config Config) *Middleware {
 	if config.MaxBodyCapture == 0 {
 		config.MaxBodyCapture = 10240 // 10KB default
 	}
 
-	return &auditMiddleware{
+	return &Middleware{
 		logger: logger,
 		config: config,
 	}
 }
 
 // Middleware returns the HTTP middleware function.
-func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
+func (am *Middleware) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
@@ -217,7 +220,16 @@ func (am *auditMiddleware) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-func (am *auditMiddleware) createAuditEvent(
+// ExtractEventType extracts aTLS/attestation information from response headers.
+func (am *Middleware) ExtractEventType(headers http.Header) string {
+	if et := headers.Get(HeaderXEventType); et != "" {
+		return et
+	}
+
+	return "llm_request"
+}
+
+func (am *Middleware) createAuditEvent(
 	r *http.Request,
 	capture *responseCapture,
 	session *authn.Session,
@@ -234,7 +246,7 @@ func (am *auditMiddleware) createAuditEvent(
 		TraceID:          traceID,
 		RequestID:        requestID,
 		Timestamp:        start,
-		EventType:        "llm_request",
+		EventType:        am.ExtractEventType(capture.responseHeaders),
 		Session:          *session,
 		Method:           r.Method,
 		Path:             r.URL.Path,
@@ -276,7 +288,7 @@ func (am *auditMiddleware) createAuditEvent(
 	return event
 }
 
-func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) {
+func (am *Middleware) extractLLMMetadata(event *Event, requestBody []byte) {
 	var requestData map[string]any
 	if err := json.Unmarshal(requestBody, &requestData); err != nil {
 		return
@@ -310,7 +322,7 @@ func (am *auditMiddleware) extractLLMMetadata(event *Event, requestBody []byte) 
 	}
 }
 
-func (am *auditMiddleware) extractLLMResponse(event *Event, responseBody []byte) {
+func (am *Middleware) extractLLMResponse(event *Event, responseBody []byte) {
 	var responseData map[string]any
 	if err := json.Unmarshal(responseBody, &responseData); err != nil {
 		return
@@ -327,7 +339,7 @@ func (am *auditMiddleware) extractLLMResponse(event *Event, responseBody []byte)
 	}
 }
 
-func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Header) {
+func (am *Middleware) extractAttestationInfo(event *Event, headers http.Header) {
 	if headers == nil {
 		return
 	}
@@ -350,8 +362,7 @@ func (am *auditMiddleware) extractAttestationInfo(event *Event, headers http.Hea
 	am.extractAttestationDetails(headers, event)
 }
 
-// extractAttestationDetails extracts aTLS/attestation information from response headers.
-func (am *auditMiddleware) extractAttestationDetails(headers http.Header, event *Event) {
+func (am *Middleware) extractAttestationDetails(headers http.Header, event *Event) {
 	atlsType := headers.Get("X-Attestation-Type")
 	if atlsType == "" {
 		return
@@ -383,7 +394,7 @@ func (am *auditMiddleware) extractAttestationDetails(headers http.Header, event 
 	}
 }
 
-func (am *auditMiddleware) logAuditEvent(ctx context.Context, event *Event) {
+func (am *Middleware) logAuditEvent(ctx context.Context, event *Event) {
 	logAttrs := []slog.Attr{
 		slog.String("trace_id", event.TraceID),
 		slog.String("request_id", event.RequestID),
@@ -462,11 +473,11 @@ func generateID() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func (am *auditMiddleware) shouldCaptureBody(r *http.Request) bool {
+func (am *Middleware) shouldCaptureBody(r *http.Request) bool {
 	return r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch
 }
 
-func (am *auditMiddleware) extractUserInfo(r *http.Request) authn.Session {
+func (am *Middleware) extractUserInfo(r *http.Request) authn.Session {
 	session, ok := r.Context().Value(authn.SessionKey).(authn.Session)
 	if !ok {
 		return authn.Session{}
@@ -475,7 +486,7 @@ func (am *auditMiddleware) extractUserInfo(r *http.Request) authn.Session {
 	return session
 }
 
-func (am *auditMiddleware) extractClientIP(r *http.Request) string {
+func (am *Middleware) extractClientIP(r *http.Request) string {
 	// Check X-Forwarded-For header first
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		ips := strings.Split(xff, ",")
@@ -497,7 +508,7 @@ func (am *auditMiddleware) extractClientIP(r *http.Request) string {
 	return ip
 }
 
-func (am *auditMiddleware) sanitizeHeaders(headers http.Header) map[string]string {
+func (am *Middleware) sanitizeHeaders(headers http.Header) map[string]string {
 	sanitized := make(map[string]string)
 
 	sensitiveHeaders := map[string]bool{
@@ -518,7 +529,7 @@ func (am *auditMiddleware) sanitizeHeaders(headers http.Header) map[string]strin
 	return sanitized
 }
 
-func (am *auditMiddleware) getTLSVersion(r *http.Request) string {
+func (am *Middleware) getTLSVersion(r *http.Request) string {
 	if r.TLS == nil {
 		return ""
 	}
@@ -537,7 +548,7 @@ func (am *auditMiddleware) getTLSVersion(r *http.Request) string {
 	}
 }
 
-func (am *auditMiddleware) detectPII(requestBody, responseBody []byte) bool {
+func (am *Middleware) detectPII(requestBody, responseBody []byte) bool {
 	// Simple PII detection patterns
 	piiPatterns := []string{
 		`\b\d{3}-\d{2}-\d{4}\b`,                               // SSN
@@ -556,7 +567,7 @@ func (am *auditMiddleware) detectPII(requestBody, responseBody []byte) bool {
 	return false
 }
 
-func (am *auditMiddleware) checkContentFilter(_ *Event) bool {
+func (am *Middleware) checkContentFilter(_ *Event) bool {
 	// Implement content filtering logic
 	// This could integrate with external content filtering services
 	return false

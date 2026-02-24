@@ -56,6 +56,17 @@ func Migration() *migrate.MemoryMigrationSource {
 					`ALTER TABLE routes DROP COLUMN IF EXISTS enabled`,
 				},
 			},
+			{
+				Id: "20260224000005_add_event_type_and_atls_to_routes",
+				Up: []string{
+					`ALTER TABLE routes ADD COLUMN IF NOT EXISTS event_type VARCHAR(255) NOT NULL DEFAULT 'llm_request'`,
+					`ALTER TABLE routes ADD COLUMN IF NOT EXISTS atls BOOLEAN NOT NULL DEFAULT true`,
+				},
+				Down: []string{
+					`ALTER TABLE routes DROP COLUMN IF EXISTS event_type`,
+					`ALTER TABLE routes DROP COLUMN IF EXISTS atls`,
+				},
+			},
 		},
 	}
 }
