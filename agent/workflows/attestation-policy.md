@@ -227,14 +227,27 @@ echo "Measurement (base64): $MEASUREMENT"
 
 Refer to `cocos-cli sevsnpmeasure --help` and `cocos-cli igvmmeasure --help` for full flag details.
 
-#### Step 3: Generate Attestation Policy
+#### Step 3: Generate the Base Attestation Policy
 
-Download the sample SEV-SNP attestation policy and populate it with the `$MEASUREMENT` from Step 2:
+On the **SNP host machine**, run the `attestation_policy` binary to generate a base policy from the platform firmware. This binary reads the SEV firmware status via `/dev/sev` to populate TCB versions, chip ID, build number, and product type (Milan/Genoa) — values specific to the physical host:
 
 ```bash
-curl -o attestation_policy.json \
-  https://raw.githubusercontent.com/ultravioletrs/cocos/main/scripts/attestation_policy/sev-snp/attestation_policy.json
+sudo attestation_policy --policy 196608 --pcr <path-to-pcr_values.json> > attestation_policy.json
+```
 
+**Parameters:**
+- `--policy 196608`: Guest policy bitmask (196608 = SMT enabled)
+- `--pcr <file>`: Optional path to a PCR values JSON file (merge TPM PCR measurements into the policy)
+
+The binary is built from `scripts/attestation_policy/sev-snp/` in the [Cocos repository](https://github.com/ultravioletrs/cocos/tree/main/scripts/attestation_policy/sev-snp#rust-project-for-fetching-attestation-policy) and requires root access to `/dev/sev`.
+
+> **Note:** The output contains placeholder zeros for the `measurement` and `host_data` fields — these are populated in Step 4.
+
+#### Step 4: Populate the Measurement
+
+Update the policy with the `$MEASUREMENT` computed in Step 2:
+
+```bash
 cocos-cli policy measurement "$MEASUREMENT" attestation_policy.json
 ```
 
@@ -244,12 +257,10 @@ If your deployment sets host data at launch time, update that field as well:
 cocos-cli policy hostdata "<base64_hostdata>" attestation_policy.json
 ```
 
-> **Note:** Review the product (`Milan` vs `Genoa`), VMPL, and PCR values in the downloaded policy and update them to match your CVM configuration.
-
 Refer to the [Cocos CLI documentation](https://docs.cocos.ultraviolet.rs/cli) for full `cocos-cli policy measurement` and `cocos-cli policy hostdata` usage.
 
 **Output:**
-- `attestation_policy.json`: Updated policy file
+- `attestation_policy.json`: Complete attestation policy with platform-specific values and launch measurement
 
 ---
 
