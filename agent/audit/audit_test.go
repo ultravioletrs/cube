@@ -1,14 +1,20 @@
-package audit
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
+
+package audit_test
 
 import (
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/ultravioletrs/cube/agent/audit"
 )
 
 func TestExtractEventType(t *testing.T) {
-	am := &auditMiddleware{}
+	t.Parallel()
+
+	am := &audit.Middleware{}
 
 	tests := []struct {
 		name     string
@@ -23,7 +29,7 @@ func TestExtractEventType(t *testing.T) {
 		{
 			name: "Custom event type",
 			headers: http.Header{
-				HeaderXEventType: []string{"audit_event"},
+				audit.HeaderXEventType: []string{"audit_event"},
 			},
 			expected: "audit_event",
 		},
@@ -31,6 +37,8 @@ func TestExtractEventType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := am.ExtractEventType(tt.headers)
 			assert.Equal(t, tt.expected, result)
 		})

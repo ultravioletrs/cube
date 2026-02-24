@@ -73,11 +73,13 @@ func (r *repository) CreateRoute(ctx context.Context, route *router.RouteRule) (
 	enabled := route.Enabled == nil || *route.Enabled
 
 	row := r.db.QueryRowxContext(
-		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority, route.DefaultRule, route.StripPrefix, enabled, route.EventType, route.ATLS)
+		ctx, q, route.Name, route.TargetURL, matchersJSON, route.Priority,
+		route.DefaultRule, route.StripPrefix, enabled, route.EventType, route.ATLS)
 
 	if err := row.Scan(
 		&createdRoute.Name, &createdRoute.TargetURL, &returnedMatchersJSON,
-		&createdRoute.Priority, &createdRoute.DefaultRule, &createdRoute.StripPrefix, &enabled, &createdRoute.EventType, &createdRoute.ATLS); err != nil {
+		&createdRoute.Priority, &createdRoute.DefaultRule, &createdRoute.StripPrefix,
+		&enabled, &createdRoute.EventType, &createdRoute.ATLS); err != nil {
 		return nil, err
 	}
 
@@ -152,7 +154,8 @@ func (r *repository) UpdateRoute(ctx context.Context, name string, route *router
 
 	if err := row.Scan(
 		&updatedRoute.Name, &updatedRoute.TargetURL, &returnedMatchersJSON,
-		&updatedRoute.Priority, &updatedRoute.DefaultRule, &updatedRoute.StripPrefix, &enabled, &updatedRoute.EventType, &updatedRoute.ATLS); err != nil {
+		&updatedRoute.Priority, &updatedRoute.DefaultRule, &updatedRoute.StripPrefix, &enabled,
+		&updatedRoute.EventType, &updatedRoute.ATLS); err != nil {
 		return nil, err
 	}
 

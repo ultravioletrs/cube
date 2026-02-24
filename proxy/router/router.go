@@ -51,13 +51,14 @@ type Router struct {
 
 func New(config Config) *Router {
 	routes := make(RouteRules, 0, len(config.Routes))
-	for _, route := range config.Routes {
+	for i := range config.Routes {
+		route := &config.Routes[i]
 		if route.Enabled != nil && !*route.Enabled {
 			continue
 		}
 
 		route.compiledMatcher = CreateCompositeMatcher(route.Matchers)
-		routes = append(routes, route)
+		routes = append(routes, *route)
 	}
 
 	sort.Sort(routes)
@@ -75,13 +76,14 @@ func (r *Router) UpdateRoutes(newRoutes []RouteRule) {
 	defer r.mu.Unlock()
 
 	routes := make(RouteRules, 0, len(newRoutes))
-	for _, route := range newRoutes {
+	for i := range newRoutes {
+		route := &newRoutes[i]
 		if route.Enabled != nil && !*route.Enabled {
 			continue // Skip disabled routes
 		}
 
 		route.compiledMatcher = CreateCompositeMatcher(route.Matchers)
-		routes = append(routes, route)
+		routes = append(routes, *route)
 	}
 
 	// Sort by priority (descending)
@@ -94,19 +96,21 @@ func (r *Router) DetermineTarget(req *http.Request) (*RouteRule, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	for _, route := range r.routes {
+	for i := range r.routes {
+		route := &r.routes[i]
 		if route.DefaultRule {
 			continue // Skip default rules in main loop
 		}
 
 		if route.compiledMatcher != nil && route.compiledMatcher.Match(req) {
-			return &route, nil
+			return route, nil
 		}
 	}
 
-	for _, route := range r.routes {
+	for i := range r.routes {
+		route := &r.routes[i]
 		if route.DefaultRule {
-			return &route, nil
+			return route, nil
 		}
 	}
 
