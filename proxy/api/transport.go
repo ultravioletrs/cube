@@ -105,11 +105,11 @@ func MakeHandler(
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
 
-	mux.Post("/attestation/policy", kithttp.NewServer(
+	mux.Post("/attestation/policy", authn.Middleware()(kithttp.NewServer(
 		endpoints.UpdateAttestationPolicy,
 		decodeUpdateAttestationPolicyRequest,
 		encodeUpdateAttestationPolicyResponse,
-	).ServeHTTP)
+	)).ServeHTTP)
 
 	return mux
 }

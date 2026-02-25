@@ -9,10 +9,81 @@ This guide explains how to generate attestation policies for Cube AI Confidentia
 ## Prerequisites
 
 - **Cocos CLI** installed and built (`cocos-cli`)
-- Access to the CVM to retrieve attestation reports
+- A running Cube deployment accessible through the **Traefik** reverse proxy (`https://localhost/proxy` for local `make up`)
+- A valid SuperMQ access token and domain ID for authenticated Cube Proxy API calls
 - Appropriate permissions to access cloud provider attestation services (for GCP/Azure)
 
+## Important: Initial Setup Without Attested TLS
+
+When generating an attestation policy for the first time, the Cube Proxy **must not** enforce Attested TLS (aTLS). This is because aTLS requires a policy to verify the agent, but you need to connect to the agent first to obtain the attestation report used to generate that policy.
+
+Before retrieving attestation reports, ensure the proxy is configured with aTLS disabled:
+
+```yaml
+services:
+  cube-proxy:
+    environment:
+      - UV_CUBE_AGENT_ATTESTED_TLS=false
+```
+
+Start the services with this configuration. After generating and uploading the policy, you can enable aTLS as described in [Configuring Cube Proxy](#configuring-cube-proxy).
+
+For this repository's local Docker flow:
+- `make up` already runs `make disable-atls`, so initial attestation-policy bootstrapping works out of the box.
+- If services are already running with aTLS enabled, run `make disable-atls && docker compose -f docker/compose.yaml up -d`.
+
+## Retrieving Attestation Reports via the Cube Proxy API
+
+All platforms use the same Cube Proxy API endpoint to retrieve attestation reports. The agent automatically detects the TEE platform (TDX, SEV-SNP, SNPvTPM, Azure) at startup - there is no `attestation_type` field in the request.
+
+Use the Traefik URL, not the internal container port:
+- Local: `https://localhost/proxy`
+- Cloud: `https://<your-domain>/proxy`
+
+**Endpoint:** `POST <traefik_base_url>/<domain_id>/attestation`
+
+**Request body:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `report_data` | string | Base64-encoded data to embed in the report (max 64 bytes). Use `""` for empty. |
+| `nonce` | string | Base64-encoded nonce (max 32 bytes). Use `""` for empty. |
+| `to_json` | boolean | Keep `false` for policy generation inputs (`attestation.bin`). Use `true` only when you need a human-readable report for inspection. |
+
+**Example — JSON response:**
+
+```bash
+curl -ksSf -X POST https://<traefik-host>/proxy/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "to_json": true}' \
+  -o attestation.json
+```
+
+**Example — Binary response:**
+
+```bash
+curl -ksSf -X POST https://<traefik-host>/proxy/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
+  -o attestation.bin
+```
+
+The response format depends on the platform the agent is running on:
+
+| Platform | Response Content | Format |
+|----------|-----------------|--------|
+| **GCP (SNPvTPM)** | vTPM attestation with embedded SEV-SNP report | Protobuf (`attest.Attestation`) |
+| **Azure** | vTPM attestation with embedded SEV-SNP report | Protobuf (`attest.Attestation`) |
+| **Generic SEV-SNP** | Raw SEV-SNP attestation report | Binary SEV-SNP report |
+| **Intel TDX** | Raw TDX quote | Binary TDX quote |
+
+---
+
 ## Platform-Specific Instructions
+
+For detailed `cocos-cli` usage, refer to the [Cocos CLI documentation](https://docs.cocos.ultraviolet.rs/cli). The sections below cover the Cube-specific retrieval steps and the corresponding `cocos-cli policy` commands.
 
 ### GCP (Google Cloud Platform) - SEV-SNP
 
@@ -20,14 +91,22 @@ GCP CVMs use AMD SEV-SNP with vTPM attestation.
 
 #### Step 1: Obtain vTPM Attestation Report
 
-SSH into your GCP CVM and retrieve the vTPM attestation report:
+Retrieve the vTPM attestation report from the GCP CVM via the Cube Proxy API:
 
 ```bash
-# Inside the CVM
-sudo cat /sys/kernel/security/tpm0/binary_bios_measurements > attestation.bin
+curl -ksSf -X POST https://<traefik-host>/proxy/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
+  -o attestation.bin
 ```
 
-Copy the `attestation.bin` file to your local machine where Cocos CLI is installed.
+`cocos-cli policy gcp` expects binary protobuf by default (`attestation.bin`).
+If you retrieved JSON (`"to_json": true`), pass `--json`:
+
+```bash
+cocos-cli policy gcp --json attestation.json <vcpu_count>
+```
 
 #### Step 2: Generate Attestation Policy
 
@@ -38,11 +117,11 @@ cocos-cli policy gcp attestation.bin <vcpu_count>
 ```
 
 **Parameters:**
-- `attestation.bin`: Path to the vTPM attestation report file
+- `attestation.bin`: Path to the vTPM attestation report file (binary protobuf)
 - `<vcpu_count>`: Number of vCPUs allocated to the CVM (e.g., 4, 8, 16)
 
 **Optional flags:**
-- `--json`: Use if the attestation report is in JSON format instead of binary
+- `--json`: Parse input as JSON attestation instead of binary protobuf
 
 **Output:**
 - `attestation_policy.json`: Generated attestation policy file
@@ -60,31 +139,31 @@ The generated policy includes:
 
 Azure CVMs use AMD SEV-SNP with Microsoft Azure Attestation (MAA).
 
-#### Step 1: Obtain MAA Token
+#### Step 1: Obtain the MAA Token
 
-SSH into your Azure CVM and retrieve the MAA token:
+The `cocos-cli policy azure` command requires a Microsoft Azure Attestation (MAA) JWT token. This token is not available through the Cube Proxy REST API (which returns a vTPM + SNP protobuf).
+
+Generate the MAA JWT **on the Azure CVM itself** using Microsoft's [CVM guest attestation sample app](https://github.com/Azure/confidential-computing-cvm-guest-attestation/tree/main/cvm-attestation-sample-app). Follow the build and usage instructions in that repository's README, then run:
 
 ```bash
-# Inside the CVM
-# Use Azure's attestation client to get the MAA token
-# Save the token to a file
-echo "<maa_token>" > maa_token.txt
+# On the Azure CVM (after building the sample app)
+sudo ./AttestationClient -o token > azure_attest_token.jwt
 ```
 
-Alternatively, use Azure CLI or SDK to retrieve the attestation token.
-
-Copy the `maa_token.txt` file to your local machine.
+Copy `azure_attest_token.jwt` to the machine where you will run `cocos-cli`.
 
 #### Step 2: Generate Attestation Policy
 
-Run the Cocos CLI command:
+`cocos-cli policy azure` parses the JWT offline and extracts SEV-SNP policy fields from the `x-ms-isolation-tee` claims:
 
 ```bash
-cocos-cli policy azure maa_token.txt <product_name>
+cocos-cli policy azure azure_attest_token.jwt <product_name>
 ```
 
+`cocos-cli` validates the JWT signature by fetching the MAA JSON Web Key Set (JWKS) over HTTPS, so the machine running this command needs outbound HTTPS access to the MAA endpoint (defaults to `https://sharedeus2.eus2.attest.azure.net`).
+
 **Parameters:**
-- `maa_token.txt`: Path to the MAA token file
+- `azure_attest_token.jwt`: Path to the MAA token file (JWT string)
 - `<product_name>`: AMD product name (e.g., `Milan`, `Genoa`)
 
 **Optional flags:**
@@ -101,34 +180,98 @@ For generic SEV-SNP platforms not using GCP or Azure.
 
 #### Step 1: Obtain Attestation Report
 
-Retrieve the SEV-SNP attestation report from your CVM:
+Retrieve the SEV-SNP attestation report from the CVM via the Cube Proxy API:
 
 ```bash
-# Inside the CVM
-# Method depends on your platform
-# Example for direct SEV-SNP access:
-sudo cat /dev/sev-guest > attestation_report.bin
+curl -ksSf -X POST https://<traefik-host>/proxy/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
+  -o attestation.bin
 ```
 
-#### Step 2: Generate Attestation Policy
+#### Step 2: Compute the Launch Measurement
 
-Use the Rust-based script in Cocos:
+Use `cocos-cli` to compute the expected launch measurement from the guest image files. The measurement is a cryptographic hash of the initial guest memory contents (firmware, kernel, initrd) calculated by the AMD PSP during launch.
+
+**For COCONUT-SVSM (IGVM) guests:**
 
 ```bash
-cd /path/to/cocos-ai/scripts/attestation_policy/sev-snp
-make
+cocos-cli igvmmeasure <path-to-igvm-file>
+```
 
-# Run the binary
-cd target/release
-./attestation_policy --policy 196608 --pcr ../../pcr_values.json
+**For OVMF-based guests:**
+
+```bash
+cocos-cli sevsnpmeasure \
+  --mode snp \
+  --ovmf <path-to-OVMF.fd> \
+  --kernel <path-to-kernel> \
+  --initrd <path-to-initrd> \
+  --append "<kernel-cmdline>" \
+  --vcpus <vcpu-count> \
+  --vcpu-type EPYC
+```
+
+Both commands output the measurement as a hex string. Convert it to base64 and store it in `$MEASUREMENT` for the next step:
+
+```bash
+# For IGVM guests:
+MEASUREMENT=$(cocos-cli igvmmeasure <path-to-igvm-file> | xxd -r -p | base64 -w0)
+
+# For OVMF guests:
+MEASUREMENT=$(cocos-cli sevsnpmeasure --mode snp --ovmf <OVMF.fd> --kernel <kernel> --initrd <initrd> --append "<cmdline>" --vcpus <N> --vcpu-type EPYC | xxd -r -p | base64 -w0)
+
+echo "Measurement (base64): $MEASUREMENT"
+```
+
+Refer to `cocos-cli sevsnpmeasure --help` and `cocos-cli igvmmeasure --help` for full flag details.
+
+#### Step 3: Generate the Base Attestation Policy
+
+On the **SNP host machine**, build and run the `attestation_policy` binary to generate a base policy from the platform firmware. This binary reads the SEV firmware status via `/dev/sev` to populate TCB versions, chip ID, build number, and product type (Milan/Genoa) — values specific to the physical host.
+
+**Build the binary:**
+
+```bash
+git clone https://github.com/ultravioletrs/cocos.git
+cd cocos/scripts/attestation_policy/sev-snp
+make
+```
+
+This produces the binary at `./target/release/attestation_policy`. It requires a Rust toolchain (`rustc`, `cargo`).
+
+**Run the binary:**
+
+```bash
+sudo ./target/release/attestation_policy --policy 196608 > attestation_policy.json
 ```
 
 **Parameters:**
-- `--policy`: 64-bit policy value (default: 196608)
-- `--pcr`: Path to PCR values JSON file (optional)
+- `--policy 196608`: Guest policy bitmask (196608 = SMT enabled, see [AMD SEV-SNP ABI spec §4.3](https://www.amd.com/en/developer/sev.html) for other values)
+- `--pcr <file>` *(optional)*: Path to a PCR values JSON file to merge TPM PCR measurements into the policy. Only needed when the CVM guest runs a vTPM (e.g., COCONUT-SVSM with swtpm). A sample file is provided at `cocos/scripts/attestation_policy/sev-snp/pcr_values.json`. PCR (Platform Configuration Register) values are SHA-256 and SHA-384 hashes recorded by the TPM at boot — each register (PCR0–PCR9) captures a different stage of the boot chain (firmware, bootloader, kernel, etc.).
 
-**Output:**
-- `attestation_policy.json`: Generated attestation policy file
+The binary requires root access to `/dev/sev`.
+
+> **Note:** The output contains placeholder zeros for the `measurement` and `host_data` fields — these are populated in Step 4.
+
+#### Step 4: Populate the Measurement
+
+Update the policy with the `$MEASUREMENT` computed in Step 2:
+
+```bash
+cocos-cli policy measurement "$MEASUREMENT" attestation_policy.json
+```
+
+If your deployment sets host data at launch time, update that field as well:
+
+```bash
+cocos-cli policy hostdata "<base64_hostdata>" attestation_policy.json
+```
+
+Refer to the [Cocos CLI documentation](https://docs.cocos.ultraviolet.rs/cli) for full `cocos-cli policy measurement` and `cocos-cli policy hostdata` usage.
+
+After this step, `attestation_policy.json` contains the complete attestation policy: platform-specific TCB values from Step 3 plus the launch measurement from Step 2. This file is ready to be uploaded to the Cube Proxy).
 
 ---
 
@@ -138,33 +281,40 @@ For Intel TDX-based CVMs.
 
 #### Step 1: Obtain TDX Attestation Report
 
-Retrieve the TDX quote from your CVM:
+Retrieve the TDX quote from the CVM via the Cube Proxy API:
 
 ```bash
-# Inside the CVM
-# Method depends on your platform
-# Example:
-sudo cat /dev/tdx-guest > tdx_quote.bin
+curl -ksSf -X POST https://<traefik-host>/proxy/<domain_id>/attestation \
+  -H "Authorization: Bearer <access_token>" \
+  -H "Content-Type: application/json" \
+  -d '{"report_data": "", "nonce": "", "to_json": false}' \
+  -o attestation.bin
 ```
+
+Prefer keeping `"to_json": false` for policy generation inputs.
 
 #### Step 2: Generate Attestation Policy
 
 Run the Cocos CLI command:
 
 ```bash
-cocos-cli policy tdx tdx_quote.bin [flags]
+cocos-cli policy tdx attestation.bin [flags]
 ```
 
-**Optional flags:**
-- `--qe_vendor_id <hex>`: Expected QE_VENDOR_ID (16 bytes hex)
-- `--mr_seam <hex>`: Expected MR_SEAM measurement (48 bytes hex)
-- `--td_attributes <hex>`: Expected TD_ATTRIBUTES (8 bytes hex)
-- `--xfam <hex>`: Expected XFAM (8 bytes hex)
-- `--mr_td <hex>`: Expected MR_TD measurement (48 bytes hex)
-- `--rtmrs <hex,hex,hex,hex>`: Comma-separated RTMR values (4 values, 48 bytes each)
-- `--minimum_tee_tcb_svn <hex>`: Minimum TEE_TCB_SVN (16 bytes hex)
-- `--minimum_qe_svn <value>`: Minimum QE_SVN
-- `--minimum_pce_svn <value>`: Minimum PCE_SVN
+**Optional flags** (from `cocos-cli policy tdx --help`):
+- `--qe_vendor_id <hex>`: Expected QE_VENDOR_ID field (16 bytes hex, unchecked if unset)
+- `--mr_seam <hex>`: Expected MR_SEAM field (48 bytes hex, unchecked if unset)
+- `--td_attributes <hex>`: Expected TD_ATTRIBUTES field (8 bytes hex, unchecked if unset)
+- `--xfam <hex>`: Expected XFAM field (8 bytes hex, unchecked if unset)
+- `--mr_td <hex>`: Expected MR_TD field (48 bytes hex, unchecked if unset)
+- `--mr_config_id <hex>`: Expected MR_CONFIG_ID field (48 bytes hex, unchecked if unset)
+- `--mr_owner <hex>`: Expected MR_OWNER field (48 bytes hex, unchecked if unset)
+- `--mr_config_owner <hex>`: Expected MR_OWNER_CONFIG field (48 bytes hex, unchecked if unset)
+- `--rtmrs <hex,hex,hex,hex>`: Comma-separated expected RTMR values (4 strings, each 48 bytes hex, unchecked if unset)
+- `--minimum_tee_tcb_svn <hex>`: Minimum TEE_TCB_SVN field (16 bytes hex, unchecked if unset)
+- `--minimum_qe_svn <value>`: Minimum QE_SVN field (uint32)
+- `--minimum_pce_svn <value>`: Minimum PCE_SVN field (uint32)
+- `--trusted_root <paths>`: Comma-separated paths to PEM CA bundles for Intel TDX root certificates (uses embedded root certificate if unset)
 - `--get_collateral`: Download necessary collaterals for additional checks
 
 **Output:**
@@ -225,67 +375,61 @@ Once you have generated the `attestation_policy.json` file:
 
 1. **Store the policy securely**: This file contains the expected measurements and configuration for your CVM.
 
-2. **Configure Cube AI**: Provide the policy file to Cube AI's attestation verification system.
+2. **Upload to Cube Proxy**: Seed the policy into the Cube Proxy database using the API (requires super admin privileges):
 
-3. **Verify attestation**: When clients connect to your Cube AI CVM, they will use this policy to verify that the CVM is running the expected code in a genuine TEE.
+    ```bash
+    curl -ksSf -X POST https://<traefik-host>/proxy/attestation/policy \
+      -H "Authorization: Bearer <access_token>" \
+      -H "Content-Type: application/json" \
+      -d @attestation_policy.json
+    ```
+
+    A `201 Created` response confirms the policy was stored successfully. Each upload creates a new version; the proxy always serves the latest.
+
+3. **Retrieve the policy**: The current attestation policy can be fetched via the Cube Proxy API:
+
+    ```bash
+    curl -ksSf -X GET https://<traefik-host>/proxy/<domain_id>/attestation/policy \
+      -H "Authorization: Bearer <access_token>"
+    ```
+
+    This returns the raw attestation policy JSON. The UI also uses this endpoint to display the policy.
+
+4. **Verify attestation**: When clients connect to your Cube AI CVM, the proxy uses this policy to verify that the CVM is running the expected code in a genuine TEE.
+
 ---
 
 ## Configuring Cube Proxy
 
-To enable attestation verification in the Cube Proxy, you must configure it to use the generated `attestation_policy.json` file.
+To enable attestation verification in the Cube Proxy, you must configure it to use the generated attestation policy.
 
-### Proxy Configuration for GCP and Azure
+#### Step 1: Mount the Policy
 
-On platforms like GCP and Azure, the agent cannot fetch attestation reports if the proxy is already enforcing attestation (aTLS or mTLS) because the policy hasn't been generated yet. You must follow a two-step process:
+Mount `attestation_policy.json` into the proxy container.
+For this repository's local Compose files, the default mount target is `/etc/cube/attestation-policy.json`:
 
-#### Step 1: Initial Launch (No-TLS)
+```yaml
+services:
+  cube-proxy:
+    volumes:
+      - ./attestation_policy.json:/etc/cube/attestation-policy.json:ro
+```
 
-1.  Configure the proxy to **disable** Attested TLS. This allows the agent to start without verifying the CVM's identity, which is necessary to fetch the initial attestation materials.
+#### Step 2: Enable Attested TLS
 
-    ```yaml
-    services:
-      cube-proxy:
-        environment:
-          - UV_CUBE_AGENT_ATTESTED_TLS=false
-    ```
+Update the environment variables to point to the mounted policy path and enable Attested TLS (or Mutual aTLS):
 
-2.  Start the services.
+```yaml
+services:
+  cube-proxy:
+    environment:
+      - UV_CUBE_AGENT_ATTESTATION_POLICY=/etc/cube/attestation-policy.json
+      - UV_CUBE_AGENT_ATTESTED_TLS=true  # or 'mutual' for Mutual aTLS
+```
 
-#### Step 2: Fetch Attestation Materials
+#### Step 3: Restart Proxy
 
-Retrieve the necessary attestation data from the running CVM:
-
-*   **GCP**: Fetch the vTPM attestation report (`attestation.bin`).
-*   **Azure**: Fetch the MAA token (`maa_token.txt`) and the attestation report.
-
-#### Step 3: Generate Policy
-
-Generate the `attestation_policy.json` using the `cocos-cli` as described in the platform-specific sections above.
-
-#### Step 4: Enable Attested TLS
-
-Once the policy is generated:
-
-1.  **Mount the Policy**: Update your configuration to mount the `attestation_policy.json` into the proxy container.
-
-    ```yaml
-    services:
-      cube-proxy:
-        volumes:
-          - ./attestation_policy.json:/etc/cube/proxy/attestation_policy.json:ro
-    ```
-
-2.  **Enable aTLS**: Update the environment variables to point to the policy and enable Attested TLS (or Mutual aTLS).
-
-    ```yaml
-    services:
-      cube-proxy:
-        environment:
-          - UV_CUBE_AGENT_ATTESTATION_POLICY=/etc/cube/proxy/attestation_policy.json
-          - UV_CUBE_AGENT_ATTESTED_TLS=true  # or 'mutual' for Mutual aTLS
-    ```
-
-3.  **Restart Proxy**: Restart the `cube-proxy` service to apply the changes. Now, all connections to the agent will be verified against your policy.
+Restart the `cube-proxy` service to apply the changes. Now, all connections to the agent will be verified against your policy.
 
 ---
 
