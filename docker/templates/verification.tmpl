@@ -1,15 +1,58 @@
-Dear {{.User}},
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Verification</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f5fbf7; font-family:Arial, sans-serif; color:#24262b;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f5fbf7; padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width:600px; background-color:#ffffff; border-radius:12px; overflow:hidden; border:1px solid #e6e8ec;">
+          <tr>
+            <td style="padding:32px 32px 16px 32px; background-color:#3f6f49; color:#ffffff; font-size:24px; font-weight:bold;">
+              Verify your email
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px 0; font-size:16px; line-height:1.5;">Hello {{.User}},</p>
+              <p style="margin:0 0 16px 0; font-size:16px; line-height:1.5;">
+                Welcome to {{.Host}}. Please verify your email address to complete your registration.
+              </p>
+              <p style="margin:0 0 24px 0; font-size:16px; line-height:1.5;">
+                Click the button below to verify your account:
+              </p>
 
-Welcome to {{.Host}}! To complete your account registration, please verify your email address by clicking on the link below:
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
+                <tr>
+                  <td align="center" style="border-radius:8px; background-color:#3f6f49;">
+                    <a href="{{.Content}}" style="display:inline-block; padding:12px 20px; color:#ffffff; text-decoration:none; font-size:16px; font-weight:600;">
+                      Verify Email
+                    </a>
+                  </td>
+                </tr>
+              </table>
 
-{{.Content}}
+              <p style="margin:0 0 8px 0; font-size:14px; line-height:1.5; color:#6f7280;">
+                If the button does not work, copy and paste this link into your browser:
+              </p>
+              <p style="margin:0 0 24px 0; font-size:14px; line-height:1.5; word-break:break-all;">
+                <a href="{{.Content}}" style="color:#3f8a61;">{{.Content}}</a>
+              </p>
 
-This verification link will expire in 24 hours. If you did not create an account on {{.Host}}, please disregard this message.
-
-Once verified, you'll have full access to all features on {{.Host}}.
-
-Thank you for joining {{.Host}}!
-
-Best regards,
-
-{{.Footer}}
+              <p style="margin:0 0 16px 0; font-size:14px; line-height:1.5; color:#6f7280;">
+                This verification link will expire in 24 hours. If you did not create an account on {{.Host}}, you can ignore this email.
+              </p>
+              <p style="margin:0; font-size:16px; line-height:1.5;">
+                Best regards,<br>{{.Footer}}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
