@@ -308,17 +308,30 @@ func prepareProxyRequest(req *http.Request, target *url.URL, rule *router.RouteR
 }
 
 // injectAuditFilter modifies the request to filter audit logs by event.session.DomainID.keyword.
-// It handles both query string (q parameter) and JSON body queries.
+// It injects the filter into both the JSON body and the q URL parameter.
 func injectAuditFilter(req *http.Request, domainID string) {
-	filter := "event.session.DomainID.keyword:" + domainID
-
 	if req.Body != nil && req.ContentLength > 0 {
 		if err := injectAuditFilterIntoBody(req, domainID); err != nil {
 			slog.Error("Failed to inject audit filter into body", "error", err)
 		}
 	}
 
-	injectAuditFilterIntoQuery(req, filter)
+	injectAuditFilterIntoQuery(req, domainID)
+}
+
+func injectAuditFilterIntoQuery(req *http.Request, domainID string) {
+	q := req.URL.Query()
+
+	filter := fmt.Sprintf(`event.session.DomainID.keyword:"%s"`, domainID)
+
+	existingQ := q.Get("q")
+	if existingQ != "" {
+		q.Set("q", fmt.Sprintf("%s AND %s", existingQ, filter))
+	} else {
+		q.Set("q", filter)
+	}
+
+	req.URL.RawQuery = q.Encode()
 }
 
 func injectAuditFilterIntoBody(req *http.Request, domainID string) error {
@@ -388,15 +401,3 @@ func tryInjectFilter(req *http.Request, bodyBytes []byte, domainID string) error
 	return nil
 }
 
-func injectAuditFilterIntoQuery(req *http.Request, filter string) {
-	q := req.URL.Query()
-
-	existingQ := q.Get("q")
-	if existingQ != "" {
-		q.Set("q", fmt.Sprintf("%s AND %s", existingQ, filter))
-	} else {
-		q.Set("q", filter)
-	}
-
-	req.URL.RawQuery = q.Encode()
-}
