@@ -1,15 +1,229 @@
-Dear {{.User}},
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Email Verification - Cube AI</title>
+  </head>
+  <body
+    style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f5fbf7; color: #333;"
+  >
+    <table
+      width="100%"
+      border="0"
+      cellspacing="0"
+      cellpadding="0"
+      style="background-color: #f5fbf7;"
+    >
+      <tr>
+        <td align="center" style="padding: 20px 0;">
+          <table
+            width="600"
+            border="0"
+            cellspacing="0"
+            cellpadding="0"
+            style="background-color: #ffffff; max-width: 600px;"
+          >
+            <!-- Header Section -->
+            <tr>
+              <td
+                style="background-color: #37874d; padding: 40px 30px; text-align: center; color: #ffffff;"
+              >
+                <img
+                  src="https://mg-images.fra1.cdn.digitaloceanspaces.com/Logo/cube-ai_logo.png"
+                  alt="Cube AI Logo"
+                  width="180"
+                  style="display: block; margin: 0 auto 20px auto; max-width: 180px; height: auto;"
+                />
+                <h1
+                  style="margin: 0; font-size: 28px; font-weight: 300; letter-spacing: 1px; color: #ffffff;"
+                >
+                  Welcome to Cube AI!
+                </h1>
+              </td>
+            </tr>
 
-Welcome to {{.Host}}! To complete your account registration, please verify your email address by clicking on the link below:
+            <!-- Main Content -->
+            <tr>
+              <td style="padding: 40px 30px;">
+                <div style="font-size: 18px; color: #2c3e50; margin-bottom: 25px;">
+                  Dear
+                  <strong>{{ .User }}</strong>
+                  ,
+                </div>
 
-{{.Content}}
+                <p style="margin: 0 0 20px 0; color: #333; line-height: 1.6;">
+                  Thank you for signing up for Cube AI! 🎉 We're excited to have you with us as we
+                  build the future of confidential computing and secure collaborative AI.
+                </p>
 
-This verification link will expire in 24 hours. If you did not create an account on {{.Host}}, please disregard this message.
+                <table
+                  width="100%"
+                  border="0"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="margin: 25px 0;"
+                >
+                  <tr>
+                    <td
+                      style="background-color: #f8f9fa; border-left: 4px solid #4a9e60; padding: 25px;"
+                    >
+                      <div
+                        style="font-size: 18px; font-weight: 600; color: #495057; margin-bottom: 15px;"
+                      >
+                        🎉 Just One More Step!
+                      </div>
+                      <div style="color: #6c757d; font-size: 15px; line-height: 1.6;">
+                        To complete your registration and unlock the full power of Cube AI, please
+                        verify your email address by clicking the button below.
+                      </div>
+                    </td>
+                  </tr>
+                </table>
 
-Once verified, you'll have full access to all features on {{.Host}}.
+                <table
+                  width="100%"
+                  border="0"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="margin: 25px 0;"
+                >
+                  <tr>
+                    <td align="center">
+                      <a
+                        href="{{ .Content }}"
+                        style="display: inline-block; background-color: #37874d; color: #ffffff; text-decoration: none; padding: 15px 35px; border-radius: 30px; font-weight: 600; font-size: 16px;"
+                      >
+                        Verify Email Address
+                      </a>
+                    </td>
+                  </tr>
+                </table>
 
-Thank you for joining {{.Host}}!
+                <table
+                  width="100%"
+                  border="0"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="margin: 20px 0;"
+                >
+                  <tr>
+                    <td style="text-align: center;">
+                      <p
+                        style="margin: 0 0 10px 0; color: #6c757d; font-size: 14px; line-height: 1.6;"
+                      >
+                        If the button above doesn't work, copy and paste this link into your
+                        browser:
+                      </p>
+                      <div
+                        style="background-color: #f8f9fa; padding: 12px; border: 1px solid #dee2e6; border-radius: 4px; word-break: break-all; font-size: 13px; color: #495057; font-family: 'Courier New', monospace;"
+                      >
+                        {{ .Content }}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
 
-Best regards,
+                <table
+                  width="100%"
+                  border="0"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="margin: 20px 0;"
+                >
+                  <tr>
+                    <td
+                      style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 6px;"
+                    >
+                      <strong>⏰ Important:</strong>
+                      This verification link will expire in 24 hours for security reasons. If you
+                      need a new verification link, you can request one from the login page.
+                    </td>
+                  </tr>
+                </table>
 
-{{.Footer}}
+                <table
+                  width="100%"
+                  border="0"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="margin: 30px 0;"
+                >
+                  <tr>
+                    <td style="background-color: #f8f9fa; padding: 25px;">
+                      <div
+                        style="font-size: 18px; font-weight: 600; color: #2c3e50; margin-bottom: 15px;"
+                      >
+                        What happens after verification?
+                      </div>
+                      <p style="margin: 0 0 15px 0; color: #495057;">
+                        Once your email is verified, you'll have immediate access to:
+                      </p>
+                      <ul style="color: #495057; margin: 0; padding-left: 20px; line-height: 1.8;">
+                        <li style="margin-bottom: 10px;">
+                          Full access to all Cube AI features and capabilities
+                        </li>
+                        <li style="margin-bottom: 10px;">
+                          Collaboration features to work with your team
+                        </li>
+                        <li style="margin-bottom: 0;">
+                          Regular updates and new feature announcements
+                        </li>
+                      </ul>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin: 30px 0 0 0; color: #6c757d; font-size: 14px; line-height: 1.6;">
+                  If you did not create an account on
+                  <strong>https://dev.cube.ultraviolet.rs</strong>
+                  , please disregard this message. No action is needed on your part, and no account
+                  will be created.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer Section -->
+            <tr>
+              <td
+                style="background-color: #37874d; color: #ecf0f1; padding: 30px; text-align: center;"
+              >
+                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 500; color: #ecf0f1;">
+                  Thank you for choosing Cube AI!
+                </p>
+
+                <div style="margin-top: 20px; font-size: 14px; color: #bdc3c7;">
+                  <p style="margin: 0 0 10px 0;">Need help getting started? We're here to help!</p>
+                  <p style="margin: 0;">
+                    Visit our
+                    <a
+                      href="https://ultravioletrs.github.io/cube-docs/"
+                      style="color: #e8f8ec; text-decoration: none;"
+                    >
+                      documentation
+                    </a>
+                    or contact us at
+                    <a
+                      href="mailto:info@ultraviolet.rs"
+                      style="color: #e8f8ec; text-decoration: none;"
+                    >
+                      info@ultraviolet.rs
+                    </a>
+                  </p>
+                </div>
+
+                <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #2f6f41;">
+                  <p style="margin: 0; font-weight: 600; color: #ecf0f1;">Best regards,</p>
+                  <p style="margin: 5px 0 0 0; color: #e8f8ec; font-size: 18px;">{{ .Footer }}</p>
+                  <p style="margin: 5px 0 0 0; font-size: 14px; color: #bdc3c7;">
+                    info@ultraviolet.rs
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

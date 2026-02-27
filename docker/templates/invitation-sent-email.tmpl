@@ -1,106 +1,127 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{{.Subject}}</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            background-color: #f5f7fa;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 600px;
-            margin: 30px auto;
-            background-color: #ffffff;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-        }
-        .header {
-            background: linear-gradient(135deg, #083662 0%, #0a4d8f 100%);
-            padding: 30px 40px;
-            text-align: center;
-        }
-        .header h1 {
-            color: #ffffff;
-            margin: 0;
-            font-size: 24px;
-            font-weight: 600;
-        }
-        .content {
-            padding: 40px;
-        }
-        .content p {
-            margin: 0 0 15px 0;
-            font-size: 15px;
-        }
-        .invitation-details {
-            background-color: #f8f9fb;
-            border-left: 4px solid #083662;
-            padding: 20px;
-            margin: 25px 0;
-            border-radius: 4px;
-        }
-        .invitation-details p {
-            margin: 0;
-            font-size: 16px;
-            line-height: 1.8;
-        }
-        .cta-button {
-            display: inline-block;
-            background-color: #083662;
-            color: #ffffff;
-            padding: 14px 32px;
-            text-decoration: none;
-            border-radius: 6px;
-            margin: 20px 0;
-            font-weight: 600;
-            font-size: 15px;
-        }
-        .footer {
-            background-color: #f8f9fb;
-            padding: 25px 40px;
-            text-align: center;
-            font-size: 13px;
-            color: #666;
-        }
-        .footer-divider {
-            border: none;
-            border-top: 1px solid #e0e3e8;
-            margin: 30px 0 20px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>Domain Invitation</h1>
-        </div>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workspace Invitation - Cube AI</title>
+  </head>
+  <body
+    style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f5fbf7; color: #333;"
+  >
+    <table
+      width="100%"
+      border="0"
+      cellspacing="0"
+      cellpadding="0"
+      style="background-color: #f5fbf7;"
+    >
+      <tr>
+        <td align="center" style="padding: 20px 0;">
+          <table
+            width="600"
+            border="0"
+            cellspacing="0"
+            cellpadding="0"
+            style="background-color: #ffffff; max-width: 600px;"
+          >
+            <!-- Header Section -->
+            <tr>
+              <td
+                style="background-color: #37874d; padding: 40px 30px; text-align: center; color: #ffffff;"
+              >
+                <img
+                  src="https://mg-images.fra1.cdn.digitaloceanspaces.com/Logo/cube-ai_logo.png"
+                  alt="Cube AI Logo"
+                  width="180"
+                  style="display: block; margin: 0 auto 20px auto; max-width: 180px; height: auto;"
+                />
+                <h1
+                  style="margin: 0; font-size: 28px; font-weight: 300; letter-spacing: 1px; color: #ffffff;"
+                >
+                  Workspace Invitation
+                </h1>
+              </td>
+            </tr>
 
-        <div class="content">
-            <p>Dear <strong>{{.User}}</strong>,</p>
+            <!-- Main Content -->
+            <tr>
+              <td style="padding: 40px 30px;">
+                <div style="font-size: 18px; color: #2c3e50; margin-bottom: 25px;">
+                  Dear
+                  <strong>{{ .User }}</strong>
+                  ,
+                </div>
 
-            <div class="invitation-details">
-                <p>{{.Content}}</p>
-            </div>
+                <p style="margin: 0 0 20px 0; color: #333; line-height: 1.6;">
+                  {{ .Content }}
+                </p>
 
-            <p>Please log in to your account to view and respond to this invitation.</p>
+                <table
+                  width="100%"
+                  border="0"
+                  cellspacing="0"
+                  cellpadding="0"
+                  style="margin: 25px 0;"
+                >
+                  <tr>
+                    <td
+                      style="background-color: #f8f9fa; border-left: 4px solid #4a9e60; padding: 25px;"
+                    >
+                      <div
+                        style="font-size: 18px; font-weight: 600; color: #495057; margin-bottom: 15px;"
+                      >
+                        📩 What's Next?
+                      </div>
+                      <div style="color: #6c757d; font-size: 15px; line-height: 1.6;">
+                        Please log in to your account to view and respond to this invitation. You
+                        can accept or decline the invitation from your dashboard.
+                      </div>
+                    </td>
+                  </tr>
+                </table>
 
-            <p>If you have any questions, please don't hesitate to contact us.</p>
+                <p style="margin: 30px 0 0 0; color: #6c757d; font-size: 14px; line-height: 1.6;">
+                  If you have any questions or need assistance, please don't hesitate to contact us.
+                </p>
+              </td>
+            </tr>
 
-            <hr class="footer-divider">
+            <!-- Footer Section -->
+            <tr>
+              <td
+                style="background-color: #37874d; color: #ecf0f1; padding: 30px; text-align: center;"
+              >
+                <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 500; color: #ecf0f1;">
+                  Thank you for using Cube AI!
+                </p>
 
-            <p>Best regards,<br><strong>{{.Footer}}</strong></p>
-        </div>
+                <div style="margin-top: 20px; font-size: 14px; color: #bdc3c7;">
+                  <p style="margin: 0 0 10px 0;">
+                    Need help or have questions? We're here to support you.
+                  </p>
+                  <p style="margin: 0;">
+                    Contact our support team at
+                    <a
+                      href="mailto:info@ultraviolet.rs"
+                      style="color: #e8f8ec; text-decoration: none;"
+                    >
+                      info@ultraviolet.rs
+                    </a>
+                  </p>
+                </div>
 
-        <div class="footer">
-            <p>This is an automated email. Please do not reply directly to this message.</p>
-            <p style="margin-top: 10px; color: #999;">Powered by Magistrala</p>
-        </div>
-    </div>
-</body>
+                <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #2f6f41;">
+                  <p style="margin: 0; font-weight: 600; color: #ecf0f1;">Best regards,</p>
+                  <p style="margin: 5px 0 0 0; color: #e8f8ec; font-size: 18px;">{{ .Footer }}</p>
+                  <p style="margin: 5px 0 0 0; font-size: 14px; color: #bdc3c7;">
+                    info@ultraviolet.rs
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
 </html>
