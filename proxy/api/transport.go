@@ -322,7 +322,7 @@ func injectAuditFilter(req *http.Request, domainID string) {
 func injectAuditFilterIntoQuery(req *http.Request, domainID string) {
 	q := req.URL.Query()
 
-	filter := "event.session.DomainID.keyword:" + domainID
+	filter := fmt.Sprintf("event.session.DomainID.keyword:%q", domainID)
 
 	existingQ := q.Get("q")
 	if existingQ != "" {
