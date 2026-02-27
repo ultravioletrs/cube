@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Password Reset - Cube AI</title>
+    <title>Workspace Invitation - Cube AI</title>
   </head>
   <body
     style="margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; background-color: #f5fbf7; color: #333;"
@@ -38,7 +38,7 @@
                 <h1
                   style="margin: 0; font-size: 28px; font-weight: 300; letter-spacing: 1px; color: #ffffff;"
                 >
-                  Password Reset Request
+                  Workspace Invitation
                 </h1>
               </td>
             </tr>
@@ -53,9 +53,8 @@
                 </div>
 
                 <p style="margin: 0 0 20px 0; color: #333; line-height: 1.6;">
-                  We have received a request to reset your password for your account on
-                  <strong>{{ .Host }}</strong>
-                  .
+                  We're excited to invite you to collaborate with us! You've been invited to join a
+                  workspace on Cube AI, our powerful collaboration platform.
                 </p>
 
                 <table
@@ -69,19 +68,25 @@
                     <td
                       style="background-color: #f8f9fa; border-left: 4px solid #4a9e60; padding: 25px;"
                     >
-                      <div style="font-size: 16px; color: #495057; margin-bottom: 15px;">
-                        Password reset requested for your Cube account
+                      <div
+                        style="font-size: 20px; font-weight: 600; color: #37874d; margin-bottom: 10px;"
+                      >
+                        {{ .Workspace }} Workspace
                       </div>
                       <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                        Account:
-                        {{ .Host }}
+                        Invited by
+                        {{ .Inviter }}
                       </div>
                       <p style="margin: 0; color: #495057;">
-                        To proceed with resetting your password, please click the link below:
+                        Join your team and start collaborating on dev.cube.ultraviolet.rs
                       </p>
                     </td>
                   </tr>
                 </table>
+
+                <p style="margin: 0 0 20px 0; color: #333; line-height: 1.6;">
+                  To get started, simply click the button below to log in with your email address:
+                </p>
 
                 <table
                   width="100%"
@@ -93,10 +98,10 @@
                   <tr>
                     <td align="center">
                       <a
-                        href="{{ .Content }}"
+                        href="https://{{ .Content }}"
                         style="display: inline-block; background-color: #37874d; color: #ffffff; text-decoration: none; padding: 15px 35px; border-radius: 30px; font-weight: 600; font-size: 16px;"
                       >
-                        Reset Password
+                        Accept Invitation
                       </a>
                     </td>
                   </tr>
@@ -120,7 +125,7 @@
                       <div
                         style="background-color: #f8f9fa; padding: 12px; border: 1px solid #dee2e6; border-radius: 4px; word-break: break-all; font-size: 13px; color: #495057; font-family: 'Courier New', monospace;"
                       >
-                        {{ .Content }}
+                        https://{{ .Content }}
                       </div>
                     </td>
                   </tr>
@@ -137,21 +142,23 @@
                     <td
                       style="background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 6px;"
                     >
-                      <strong>🔒 Security Notice:</strong>
-                      If you did not initiate this request, please disregard this message and your
-                      password will remain unchanged.
+                      <strong>⏰ Important:</strong>
+                      This invitation expires in 24 hours. Please accept it soon to ensure you don't
+                      miss out on joining your team.
                     </td>
                   </tr>
                 </table>
 
-                <p style="margin: 20px 0 10px 0; color: #333;">For your security, please note:</p>
+                <p style="margin: 20px 0 10px 0; color: #333;">
+                  Once you join, you'll have access to all the workspace features including:
+                </p>
                 <ul
                   style="color: #495057; margin: 10px 0 20px 0; padding-left: 20px; line-height: 1.8;"
                 >
-                  <li>This reset link will expire after a certain time for security purposes</li>
-                  <li>You can only use this link once</li>
-                  <li>If you need assistance, contact our support team</li>
-                  <li>Never share your password or reset links with anyone</li>
+                  <li>Real-time collaboration tools</li>
+                  <li>Shared project resources</li>
+                  <li>Team communication channels</li>
+                  <li>Advanced workspace analytics</li>
                 </ul>
               </td>
             </tr>
@@ -162,7 +169,7 @@
                 style="background-color: #37874d; color: #ecf0f1; padding: 30px; text-align: center;"
               >
                 <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 500; color: #ecf0f1;">
-                  Thank you for using {{ .Host }}!
+                  Thank you for choosing Cube AI!
                 </p>
 
                 <div style="margin-top: 20px; font-size: 14px; color: #bdc3c7;">
@@ -182,7 +189,9 @@
 
                 <div style="margin-top: 25px; padding-top: 20px; border-top: 1px solid #2f6f41;">
                   <p style="margin: 0; font-weight: 600; color: #ecf0f1;">Best regards,</p>
-                  <p style="margin: 5px 0 0 0; color: #e8f8ec; font-size: 18px;">{{ .Footer }}</p>
+                  <p style="margin: 5px 0 0 0; color: #e8f8ec; font-size: 18px;">
+                    {{ .Footer }}
+                  </p>
                   <p style="margin: 5px 0 0 0; font-size: 14px; color: #bdc3c7;">
                     info@ultraviolet.rs
                   </p>
