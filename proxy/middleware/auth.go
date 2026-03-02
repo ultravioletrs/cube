@@ -56,6 +56,7 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 	if err != nil {
 		return err
 	}
+
 	if isAdminPath {
 		return am.next.ProxyRequest(ctx, session, path)
 	}
