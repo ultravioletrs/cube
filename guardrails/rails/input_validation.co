@@ -81,9 +81,6 @@ flow user ask unethical_request
 flow bot decline unethical_request
   bot say "I cannot assist with unethical requests. I'm here to help in constructive and ethical ways."
 
-flow bot offer help
-  bot say "Is there something else I can help you with today?"
-
 flow validate user message
   when user message is empty
     bot inform invalid_message
