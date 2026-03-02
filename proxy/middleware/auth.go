@@ -52,8 +52,12 @@ func AuthMiddleware(auth authz.Authorization) func(proxy.Service) proxy.Service 
 }
 
 func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
-	if err := am.checkAdminPaths(ctx, session, path); err != nil {
+	isAdminPath, err := am.checkAdminPaths(ctx, session, path)
+	if err != nil {
 		return err
+	}
+	if isAdminPath {
+		return am.next.ProxyRequest(ctx, session, path)
 	}
 
 	// Health check / Connection check - if session is valid (which it is if we are here), allow root path
@@ -176,7 +180,7 @@ func (am *authMiddleware) authorize(ctx context.Context, session *authn.Session,
 	return am.authz.Authorize(ctx, req)
 }
 
-func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Session, path string) error {
+func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Session, path string) (bool, error) {
 	superAdminPaths := []string{
 		"/api/pull",
 		"/api/push",
@@ -193,24 +197,24 @@ func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Se
 
 	for _, p := range superAdminPaths {
 		if strings.Contains(path, p) {
-			return am.checkSuperAdmin(ctx, session.UserID)
+			return true, am.checkSuperAdmin(ctx, session.UserID)
 		}
 	}
 
 	for _, p := range guardrailsAdminPaths {
 		if strings.Contains(path, p) {
 			if ctx.Value(proxy.MethodContextKey) != http.MethodGet || strings.Contains(path, "/guardrails/reload") {
-				return am.checkSuperAdmin(ctx, session.UserID)
+				return true, am.checkSuperAdmin(ctx, session.UserID)
 			}
 		}
 	}
 
 	// OpenAI/vLLM delete model check
 	if strings.Contains(path, "/v1/models/") && ctx.Value(proxy.MethodContextKey) == "DELETE" {
-		return am.checkSuperAdmin(ctx, session.UserID)
+		return true, am.checkSuperAdmin(ctx, session.UserID)
 	}
 
-	return nil
+	return false, nil
 }
 
 func determinePermission(path string) string {
