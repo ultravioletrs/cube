@@ -5,6 +5,7 @@ package middleware
 
 import (
 	"context"
+	"net/http"
 	"strings"
 
 	"github.com/absmach/supermq/pkg/authn"
@@ -57,7 +58,9 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 		"/api/create",
 		"/api/copy",
 		"/api/delete",
-		// Guardrails admin endpoints
+	}
+
+	guardrailsAdminPaths := []string{
 		"/guardrails/configs",
 		"/guardrails/versions",
 		"/guardrails/reload",
@@ -101,6 +104,14 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 	for _, p := range superAdminPaths {
 		if strings.Contains(path, p) {
 			return am.checkSuperAdmin(ctx, session.UserID)
+		}
+	}
+
+	for _, p := range guardrailsAdminPaths {
+		if strings.Contains(path, p) {
+			if ctx.Value(proxy.MethodContextKey) != http.MethodGet || strings.Contains(path, "/guardrails/reload") {
+				return am.checkSuperAdmin(ctx, session.UserID)
+			}
 		}
 	}
 
