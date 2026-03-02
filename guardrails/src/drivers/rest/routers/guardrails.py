@@ -96,6 +96,12 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
         response_content = res.response if res.response else ""
         response_content = clean_response(response_content)
 
+        # Calculate token usage (rough estimate: ~4 chars per token)
+        input_chars = sum(len(m.content) for m in req.messages)
+        output_chars = len(response_content)
+        prompt_tokens = max(1, input_chars // 4)
+        completion_tokens = max(1, output_chars // 4)
+
         return {
             "model": req.model,
             "message": {
@@ -103,6 +109,11 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
                 "content": response_content,
             },
             "done": True,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": prompt_tokens + completion_tokens,
+            },
         }
 
     except Exception as e:
