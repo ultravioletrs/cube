@@ -70,78 +70,6 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 	return am.next.ProxyRequest(ctx, session, path)
 }
 
-func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Session, path string) error {
-	superAdminPaths := []string{
-		"/api/pull",
-		"/api/push",
-		"/api/create",
-		"/api/copy",
-		"/api/delete",
-	}
-
-	guardrailsAdminPaths := []string{
-		"/guardrails/configs",
-		"/guardrails/versions",
-		"/guardrails/reload",
-	}
-
-	for _, p := range superAdminPaths {
-		if strings.Contains(path, p) {
-			return am.checkSuperAdmin(ctx, session.UserID)
-		}
-	}
-
-	for _, p := range guardrailsAdminPaths {
-		if strings.Contains(path, p) {
-			if ctx.Value(proxy.MethodContextKey) != http.MethodGet || strings.Contains(path, "/guardrails/reload") {
-				return am.checkSuperAdmin(ctx, session.UserID)
-			}
-		}
-	}
-
-	// OpenAI/vLLM delete model check
-	if strings.Contains(path, "/v1/models/") && ctx.Value(proxy.MethodContextKey) == "DELETE" {
-		return am.checkSuperAdmin(ctx, session.UserID)
-	}
-
-	return nil
-}
-
-func determinePermission(path string) string {
-	switch {
-	case strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit"):
-		return auditLogPerm
-	case strings.Contains(path, "/v1/chat/completions") || strings.Contains(path, "/api/chat"):
-		return llmChatCompletionsPerm
-	case strings.Contains(path, "/v1/completions") || strings.Contains(path, "/api/generate"):
-		return llmCompletionsPerm
-	case strings.Contains(path, "/v1/embeddings") || strings.Contains(path, "/api/embeddings"):
-		return llmEmbeddingsPerm
-	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") ||
-		strings.Contains(path, "/api/show"):
-		return llmReadPerm
-	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") ||
-		strings.Contains(path, "/api/system"):
-		return llmReadPerm
-	case strings.Contains(path, "/v1/audio/transcriptions"):
-		return llmTranscriptionPerm
-	case strings.Contains(path, "/v1/audio/translations"):
-		return llmTranslationPerm
-	case strings.Contains(path, "/tokenize") || strings.Contains(path, "/detokenize"):
-		return llmUtilityPerm
-	case strings.Contains(path, "/pooling"):
-		return llmPoolingPerm
-	case strings.Contains(path, "/classify"):
-		return llmClassificationPerm
-	case strings.Contains(path, "/score"):
-		return llmScoringPerm
-	case strings.Contains(path, "/rerank"):
-		return llmRerankPerm
-	}
-
-	return membershipPerm
-}
-
 func (am *authMiddleware) Secure() string {
 	return am.next.Secure()
 }
@@ -246,4 +174,76 @@ func (am *authMiddleware) authorize(ctx context.Context, session *authn.Session,
 	}
 
 	return am.authz.Authorize(ctx, req)
+}
+
+func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Session, path string) error {
+	superAdminPaths := []string{
+		"/api/pull",
+		"/api/push",
+		"/api/create",
+		"/api/copy",
+		"/api/delete",
+	}
+
+	guardrailsAdminPaths := []string{
+		"/guardrails/configs",
+		"/guardrails/versions",
+		"/guardrails/reload",
+	}
+
+	for _, p := range superAdminPaths {
+		if strings.Contains(path, p) {
+			return am.checkSuperAdmin(ctx, session.UserID)
+		}
+	}
+
+	for _, p := range guardrailsAdminPaths {
+		if strings.Contains(path, p) {
+			if ctx.Value(proxy.MethodContextKey) != http.MethodGet || strings.Contains(path, "/guardrails/reload") {
+				return am.checkSuperAdmin(ctx, session.UserID)
+			}
+		}
+	}
+
+	// OpenAI/vLLM delete model check
+	if strings.Contains(path, "/v1/models/") && ctx.Value(proxy.MethodContextKey) == "DELETE" {
+		return am.checkSuperAdmin(ctx, session.UserID)
+	}
+
+	return nil
+}
+
+func determinePermission(path string) string {
+	switch {
+	case strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit"):
+		return auditLogPerm
+	case strings.Contains(path, "/v1/chat/completions") || strings.Contains(path, "/api/chat"):
+		return llmChatCompletionsPerm
+	case strings.Contains(path, "/v1/completions") || strings.Contains(path, "/api/generate"):
+		return llmCompletionsPerm
+	case strings.Contains(path, "/v1/embeddings") || strings.Contains(path, "/api/embeddings"):
+		return llmEmbeddingsPerm
+	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") ||
+		strings.Contains(path, "/api/show"):
+		return llmReadPerm
+	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") ||
+		strings.Contains(path, "/api/system"):
+		return llmReadPerm
+	case strings.Contains(path, "/v1/audio/transcriptions"):
+		return llmTranscriptionPerm
+	case strings.Contains(path, "/v1/audio/translations"):
+		return llmTranslationPerm
+	case strings.Contains(path, "/tokenize") || strings.Contains(path, "/detokenize"):
+		return llmUtilityPerm
+	case strings.Contains(path, "/pooling"):
+		return llmPoolingPerm
+	case strings.Contains(path, "/classify"):
+		return llmClassificationPerm
+	case strings.Contains(path, "/score"):
+		return llmScoringPerm
+	case strings.Contains(path, "/rerank"):
+		return llmRerankPerm
+	}
+
+	return membershipPerm
 }
