@@ -52,6 +52,25 @@ func AuthMiddleware(auth authz.Authorization) func(proxy.Service) proxy.Service 
 }
 
 func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
+	if err := am.checkAdminPaths(ctx, session, path); err != nil {
+		return err
+	}
+
+	// Health check / Connection check - if session is valid (which it is if we are here), allow root path
+	if path == "/" {
+		return am.next.ProxyRequest(ctx, session, path)
+	}
+
+	permission := determinePermission(path)
+
+	if err := am.authorize(ctx, session, session.DomainID, permission); err != nil {
+		return err
+	}
+
+	return am.next.ProxyRequest(ctx, session, path)
+}
+
+func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Session, path string) error {
 	superAdminPaths := []string{
 		"/api/pull",
 		"/api/push",
@@ -64,41 +83,6 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 		"/guardrails/configs",
 		"/guardrails/versions",
 		"/guardrails/reload",
-	}
-
-	permission := membershipPerm
-
-	// Check for audit log endpoints
-	switch {
-	case strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit"):
-		permission = auditLogPerm
-	case strings.Contains(path, "/v1/chat/completions") || strings.Contains(path, "/api/chat"):
-		// Check for LLM endpoints
-		permission = llmChatCompletionsPerm
-	case strings.Contains(path, "/v1/completions") || strings.Contains(path, "/api/generate"):
-		permission = llmCompletionsPerm
-	case strings.Contains(path, "/v1/embeddings") || strings.Contains(path, "/api/embeddings"):
-		permission = llmEmbeddingsPerm
-	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") ||
-		strings.Contains(path, "/api/show"):
-		permission = llmReadPerm
-	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") ||
-		strings.Contains(path, "/api/system"):
-		permission = llmReadPerm
-	case strings.Contains(path, "/v1/audio/transcriptions"):
-		permission = llmTranscriptionPerm
-	case strings.Contains(path, "/v1/audio/translations"):
-		permission = llmTranslationPerm
-	case strings.Contains(path, "/tokenize") || strings.Contains(path, "/detokenize"):
-		permission = llmUtilityPerm
-	case strings.Contains(path, "/pooling"):
-		permission = llmPoolingPerm
-	case strings.Contains(path, "/classify"):
-		permission = llmClassificationPerm
-	case strings.Contains(path, "/score"):
-		permission = llmScoringPerm
-	case strings.Contains(path, "/rerank"):
-		permission = llmRerankPerm
 	}
 
 	for _, p := range superAdminPaths {
@@ -120,16 +104,42 @@ func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Sessi
 		return am.checkSuperAdmin(ctx, session.UserID)
 	}
 
-	// Health check / Connection check - if session is valid (which it is if we are here), allow root path
-	if path == "/" {
-		return am.next.ProxyRequest(ctx, session, path)
+	return nil
+}
+
+func determinePermission(path string) string {
+	switch {
+	case strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit"):
+		return auditLogPerm
+	case strings.Contains(path, "/v1/chat/completions") || strings.Contains(path, "/api/chat"):
+		return llmChatCompletionsPerm
+	case strings.Contains(path, "/v1/completions") || strings.Contains(path, "/api/generate"):
+		return llmCompletionsPerm
+	case strings.Contains(path, "/v1/embeddings") || strings.Contains(path, "/api/embeddings"):
+		return llmEmbeddingsPerm
+	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") ||
+		strings.Contains(path, "/api/show"):
+		return llmReadPerm
+	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") ||
+		strings.Contains(path, "/api/system"):
+		return llmReadPerm
+	case strings.Contains(path, "/v1/audio/transcriptions"):
+		return llmTranscriptionPerm
+	case strings.Contains(path, "/v1/audio/translations"):
+		return llmTranslationPerm
+	case strings.Contains(path, "/tokenize") || strings.Contains(path, "/detokenize"):
+		return llmUtilityPerm
+	case strings.Contains(path, "/pooling"):
+		return llmPoolingPerm
+	case strings.Contains(path, "/classify"):
+		return llmClassificationPerm
+	case strings.Contains(path, "/score"):
+		return llmScoringPerm
+	case strings.Contains(path, "/rerank"):
+		return llmRerankPerm
 	}
 
-	if err := am.authorize(ctx, session, session.DomainID, permission); err != nil {
-		return err
-	}
-
-	return am.next.ProxyRequest(ctx, session, path)
+	return membershipPerm
 }
 
 func (am *authMiddleware) Secure() string {
