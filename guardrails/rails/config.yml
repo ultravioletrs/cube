@@ -37,8 +37,6 @@ rails:
           LOCATION: LOCATION
           ORG: ORGANIZATION
           ORGANIZATION: ORGANIZATION
-          DATE: DATE_TIME
-          TIME: DATE_TIME
         low_confidence_score_multiplier: 0.4
         low_score_entity_names: []
         labels_to_ignore:
@@ -94,6 +92,8 @@ rails:
           - MEDICAL_LICENSE
   input:
     parallel: true
+    flows:
+      - mask sensitive data on input
   output:
     parallel: true
   dialog:

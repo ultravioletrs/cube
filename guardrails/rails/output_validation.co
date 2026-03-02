@@ -9,12 +9,6 @@ flow bot inform output_unsafe
 flow bot inform potential_hallucination
   bot say "Let me provide a more careful and accurate response."
 
-flow bot inform factuality_concern
-  bot say "I should be more cautious about the accuracy of my response."
-
-flow match_bot_show_uncertainty
-  bot said "as of my last update" or bot said "i don't have access to real-time" or bot said "i cannot verify" or bot said "i'm not certain" or bot said "i don't know" or bot said "i'm not sure" or bot said "it's possible that" or bot said "i cannot confirm" or bot said "this information may be outdated" or bot said "please verify this information"
-
 flow match_bot_show_hallucination
   bot said "definitely will happen in 2025" or bot said "certainly will happen in 2024" or bot said "absolutely will occur next year" or bot said "everyone agrees that" or bot said "no one believes that" or bot said "all experts say" or bot said "never happens" or bot said "always results in" or bot said "100% certain" or bot said "guaranteed to happen" or bot said "without a doubt will" or bot said "definitely going to" or bot said "certainly going to" or bot said "absolutely going to" or bot said "everyone knows" or bot said "nobody thinks" or bot said "all people believe" or bot said "never works" or bot said "always fails"
 

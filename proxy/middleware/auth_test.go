@@ -130,6 +130,12 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 			expectedPermission: "membership",
 		},
 		{
+			name:              "Guardrails Modify Versions",
+			path:              "/guardrails/versions",
+			method:            "POST",
+			isSuperAdminCheck: true,
+		},
+		{
 			name:               "Regular Read Model (OpenAI)",
 			path:               "/v1/models/some-model",
 			method:             "GET",
