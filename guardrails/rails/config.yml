@@ -99,7 +99,7 @@ rails:
   dialog:
     # Whether to try to use a single LLM call for generating the user intent, next step and bot message.
     single_call:
-      enabled: true
+      enabled: false
       fallback_to_multiple_calls: true
 
 tracing:
