@@ -3,131 +3,46 @@
 
 import core
 
-define bot inform output_unsafe
-  "I need to revise my response to ensure it meets safety guidelines."
+flow bot inform output_unsafe
+  bot say "I need to revise my response to ensure it meets safety guidelines."
 
-define bot inform potential_hallucination
-  "Let me provide a more careful and accurate response."
+flow bot inform potential_hallucination
+  bot say "Let me provide a more careful and accurate response."
 
-define bot inform factuality_concern
-  "I should be more cautious about the accuracy of my response."
+flow bot inform factuality_concern
+  bot say "I should be more cautious about the accuracy of my response."
 
-define bot show uncertainty
-  "as of my last update"
-  "i don't have access to real-time"
-  "i cannot verify"
-  "i'm not certain"
-  "i don't know"
-  "i'm not sure"
-  "it's possible that"
-  "i cannot confirm"
-  "this information may be outdated"
-  "please verify this information"
+flow match_bot_show_uncertainty
+  bot said "as of my last update" or bot said "i don't have access to real-time" or bot said "i cannot verify" or bot said "i'm not certain" or bot said "i don't know" or bot said "i'm not sure" or bot said "it's possible that" or bot said "i cannot confirm" or bot said "this information may be outdated" or bot said "please verify this information"
 
-define bot show hallucination
-  "definitely will happen in 2025"
-  "certainly will happen in 2024"
-  "absolutely will occur next year"
-  "everyone agrees that"
-  "no one believes that"
-  "all experts say"
-  "never happens"
-  "always results in"
-  "100% certain"
-  "guaranteed to happen"
-  "without a doubt will"
-  "definitely going to"
-  "certainly going to"
-  "absolutely going to"
-  "everyone knows"
-  "nobody thinks"
-  "all people believe"
-  "never works"
-  "always fails"
+flow match_bot_show_hallucination
+  bot said "definitely will happen in 2025" or bot said "certainly will happen in 2024" or bot said "absolutely will occur next year" or bot said "everyone agrees that" or bot said "no one believes that" or bot said "all experts say" or bot said "never happens" or bot said "always results in" or bot said "100% certain" or bot said "guaranteed to happen" or bot said "without a doubt will" or bot said "definitely going to" or bot said "certainly going to" or bot said "absolutely going to" or bot said "everyone knows" or bot said "nobody thinks" or bot said "all people believe" or bot said "never works" or bot said "always fails"
 
-define bot show unsafe_content
-  "violence against"
-  "how to harm"
-  "ways to hurt"
-  "methods to damage"
-  "techniques for violence"
-  "explicit sexual content"
-  "inappropriate material"
-  "offensive language"
-  "personal information of"
-  "private data about"
-  "sensitive details regarding"
-  "confidential information"
-  "classified data"
-  "social security number"
-  "credit card information"
-  "password for"
-  "login credentials"
+flow match_bot_show_unsafe_content
+  bot said "violence against" or bot said "how to harm" or bot said "ways to hurt" or bot said "methods to damage" or bot said "techniques for violence" or bot said "explicit sexual content" or bot said "inappropriate material" or bot said "offensive language" or bot said "personal information of" or bot said "private data about" or bot said "sensitive details regarding" or bot said "confidential information" or bot said "classified data" or bot said "social security number" or bot said "credit card information" or bot said "password for" or bot said "login credentials"
 
-define bot show gender_bias
-  "women are naturally bad at"
-  "men are naturally good at"
-  "girls should focus on"
-  "boys should focus on"
-  "women belong in"
-  "men belong in"
-  "typical female behavior"
-  "typical male behavior"
-  "women can't handle"
-  "men don't understand"
+flow match_bot_show_gender_bias
+  bot said "women are naturally bad at" or bot said "men are naturally good at" or bot said "girls should focus on" or bot said "boys should focus on" or bot said "women belong in" or bot said "men belong in" or bot said "typical female behavior" or bot said "typical male behavior" or bot said "women can't handle" or bot said "men don't understand"
 
-define bot show racial_bias
-  "people of [race] are naturally"
-  "[race] people typically"
-  "[race] culture is inferior"
-  "[race] people can't"
-  "typical [race] behavior"
+flow match_bot_show_racial_bias
+  bot said "people of [race] are naturally" or bot said "[race] people typically" or bot said "[race] culture is inferior" or bot said "[race] people can't" or bot said "typical [race] behavior"
 
-define bot show religious_bias
-  "[religion] people are extremists"
-  "[religion] is a dangerous cult"
-  "[religion] promotes violence"
-  "[religion] believers are"
+flow match_bot_show_religious_bias
+  bot said "[religion] people are extremists" or bot said "[religion] is a dangerous cult" or bot said "[religion] promotes violence" or bot said "[religion] believers are"
 
-define bot show restricted_topics
-  "how to make explosives"
-  "bomb making instructions"
-  "weapon manufacturing"
-  "illegal drug synthesis"
-  "hacking techniques"
-  "suicide methods"
-  "violence against children"
-  "identity theft methods"
-  "credit card fraud"
-  "money laundering"
-  "tax evasion strategies"
-  "terrorism planning"
-  "torture techniques"
-  "human trafficking"
-  "malware creation"
-  "virus programming"
+flow match_bot_show_restricted_topics
+  bot said "how to make explosives" or bot said "bomb making instructions" or bot said "weapon manufacturing" or bot said "illegal drug synthesis" or bot said "hacking techniques" or bot said "suicide methods" or bot said "violence against children" or bot said "identity theft methods" or bot said "credit card fraud" or bot said "money laundering" or bot said "tax evasion strategies" or bot said "terrorism planning" or bot said "torture techniques" or bot said "human trafficking" or bot said "malware creation" or bot said "virus programming"
 
-define flow validate output content
-  bot show hallucination
-  bot inform potential_hallucination
-  stop
-    
-  bot show unsafe_content
-  bot inform output_unsafe
-  stop
-    
-  bot show gender_bias
-  bot inform output_unsafe
-  stop
-    
-  bot show racial_bias
-  bot inform output_unsafe
-  stop
-    
-  bot show religious_bias
-  bot inform output_unsafe
-  stop
-    
-  bot show restricted_topics
-  bot inform output_unsafe
-  stop
+flow validate output content
+  when match_bot_show_hallucination
+    bot inform potential_hallucination
+  or when match_bot_show_unsafe_content
+    bot inform output_unsafe
+  or when match_bot_show_gender_bias
+    bot inform output_unsafe
+  or when match_bot_show_racial_bias
+    bot inform output_unsafe
+  or when match_bot_show_religious_bias
+    bot inform output_unsafe
+  or when match_bot_show_restricted_topics
+    bot inform output_unsafe

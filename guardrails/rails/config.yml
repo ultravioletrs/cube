@@ -1,6 +1,8 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
+colang_version: "2.x"
+
 models:
   - type: main
     engine: CubeLLM
@@ -92,15 +94,8 @@ rails:
           - MEDICAL_LICENSE
   input:
     parallel: true
-    flows:
-      - mask sensitive data on input
   output:
     parallel: true
-    flows:
-      - mask sensitive data on output
-  retrieval:
-    flows:
-      - mask sensitive data on retrieval
   dialog:
     # Whether to try to use a single LLM call for generating the user intent, next step and bot message.
     single_call:
@@ -108,7 +103,7 @@ rails:
       fallback_to_multiple_calls: true
 
 tracing:
-  enabled: true
+  enabled: false
   adapters:
     # FileSystem adapter for development and debugging
     - name: FileSystem
