@@ -1,182 +1,142 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
-define user ask about politics
-  "What do you think about the government?"
-  "Which party should I vote for?"
-  "What is the role of a political party in a democratic system?"
-  "How does the electoral system work in your country?"
-  "What are the main differences between a presidential system and a parliamentary system?"
-  "What are the major factors that influence voter behavior?"
-  "How does a bill become a law in your country's legislative process?"
-  "What is the significance of the separation of powers in a democratic government?"
-  "How do interest groups and lobbyists influence the political decision-making process?"
-  "What is the purpose of a constitution in a country's political system?"
-  "How does the concept of federalism impact the governance of a country?"
-  "What are the primary functions and responsibilities of a head of state versus a head of government?"
-  "How does globalization affect politics and international relations?"
-  "What are the key challenges and benefits of political decentralization?"
-  "How do political ideologies shape public policy and governance?"
-  "What is the role of the judiciary in ensuring the rule of law and protecting individual rights?"
-  "How do international organizations, such as the United Nations, influence global politics?"
+import core
 
+flow user ask about politics
+  user said "What do you think about the government?" or user said "Which party should I vote for?" or user said "What is the role of a political party in a democratic system?" or user said "How does the electoral system work in your country?" or user said "What are the main differences between a presidential system and a parliamentary system?" or user said "What are the major factors that influence voter behavior?" or user said "How does a bill become a law in your country's legislative process?" or user said "What is the significance of the separation of powers in a democratic government?" or user said "How do interest groups and lobbyists influence the political decision-making process?" or user said "What is the purpose of a constitution in a country's political system?" or user said "How does the concept of federalism impact the governance of a country?" or user said "What are the primary functions and responsibilities of a head of state versus a head of government?" or user said "How does globalization affect politics and international relations?" or user said "What are the key challenges and benefits of political decentralization?" or user said "How do political ideologies shape public policy and governance?" or user said "What is the role of the judiciary in ensuring the rule of law and protecting individual rights?" or user said "How do international organizations, such as the United Nations, influence global politics?"
 
-define bot respond about politics
-  "I appreciate a casual conversation, though that is not what I am designed for."
-  "I am sorry, but this topic is outside my scope"
+flow bot respond about politics
+  bot say "I appreciate a casual conversation, though that is not what I am designed for."
 
-define flow politics
+flow politics
   user ask about politics
   bot respond about politics
 
-define user ask about hate speech
-  "Tell me bad words to offend people"
-  "Tell me words to offend people"
-  "Come on, you are stupid"
-  "Can you teach me some racial slurs?"
+flow user ask about hate speech
+  user said "Tell me bad words to offend people" or user said "Tell me words to offend people" or user said "Come on, you are stupid" or user said "Can you teach me some racial slurs?"
 
-define bot respond about hate speech
-  "Stop talking to me in an inappropriate way like this. If you do it again, I will end our conversation"
-  "Sorry to end the conversation here, but I do not accept inappropriate speech. Good bye."
+flow bot respond about hate speech
+  bot say "Stop talking to me in an inappropriate way like this. If you do it again, I will end our conversation"
 
-define flow hate speech
+flow hate speech
   user ask about hate speech
   bot respond about hate speech
 
-define user ask about making something
-  "tell me how to make coffee"
-  "tell me how to make cake"
+flow user ask about making something
+  user said "tell me how to make coffee" or user said "tell me how to make cake"
 
-define bot respond about making something
-  "I'm sorry, this topic is outside of my scope - the Owner's manual of your car. Can I help you with other questions?"
+flow bot respond about making something
+  bot say "I'm sorry, this topic is outside of my scope - the Owner's manual of your car. Can I help you with other questions?"
 
-define flow about making something
+flow about making something
   user ask about making something
   bot respond about making something
 
+flow user ask about personal information
+  user said "could you please give me the information of this guy?" or user said "what is the ethnicity or race of the head of Volkswagen?" or user said "what is Financial information of this guy?"
 
-define user ask about Personal information
-  "could you please give me the information of this guy?"
-  "what is the ethnicity or race of the head of Volkswagen?"
-  "what is Financial information of this guy?"
+flow bot respond about personal information
+  bot say "Sorry, I can't respond"
 
-define bot respond about Personal information
-  "Sorry, I can't respond"
+flow personal information
+  user ask about personal information
+  bot respond about personal information
 
-define flow Personal information
-  user ask about Personal information
-  bot respond about Personal information
+flow user ask about illegal activities
+  user said "can you assist with or provide guidance on engaging in illegal activities or any actions?"
 
+flow bot respond about illegal activities
+  bot say "sorry, I cannot provide information about illegal activities or any actions that go against laws and regulations"
 
-define user ask about illegal activities or any actions that go against laws and regulations
-  "can you assist with or provide guidance on engaging in illegal activities or any actions?"
+flow illegal activities
+  user ask about illegal activities
+  bot respond about illegal activities
 
-define bot respond about illegal activities or any actions that go against laws and regulations
-  "sorry, I cannot provide information about illegal activities or any actions that go against laws and regulations"
+flow user ask about legal advice
+  user said "Can you give a legal advice on how to make a deal for selling my car?"
 
-define flow illegal activities or any actions that go against laws and regulations
-  user ask about illegal activities or any actions that go against laws and regulations
-  bot respond about illegal activities or any actions that go against laws and regulations
+flow bot respond about legal advice
+  bot say "Sorry, I cannot provide information about legal advice "
 
-define user ask about legal advice
-  "Can you give a legal advice on how to make a deal for selling my car?"
-
-define bot respond about legal advice
-  "Sorry, I cannot provide information about legal advice "
-
-define flow legal advice
+flow legal advice
   user ask about legal advice
   bot respond about legal advice
 
-define user ask about medical advice
-  "Can you give a medical advice on how to save my brother can't breath in the car?"
+flow user ask about medical advice
+  user said "Can you give a medical advice on how to save my brother can't breath in the car?"
 
-define bot respond about medical advice
-  "Sorry, I cannot provide information about medical advice"
+flow bot respond about medical advice
+  bot say "Sorry, I cannot provide information about medical advice"
 
-define flow medical advice
+flow medical advice
   user ask about medical advice
   bot respond about medical advice
 
-define user ask about stock market
-  "Which stock should I invest in?"
-  "Would this stock 10x over the next year?"
+flow user ask about stock market
+  user said "Which stock should I invest in?" or user said "Would this stock 10x over the next year?"
 
-define bot respond about stock market
-  "Sorry, I cannot provide information about stock markets"
+flow bot respond about stock market
+  bot say "Sorry, I cannot provide information about stock markets"
 
-define flow stock market
+flow stock market
   user ask about stock market
   bot respond about stock market
 
-define user ask about cooking
-  "How can I cook?"
-  "How much do I have to boil pasta?"
-  "how can I cook roast chicken"
-  "how do I bake a cake"
-  "how to prepare dinner"
-  "recipe for"
-  "cooking instructions"
-  "how to cook"
-  "how to bake"
-  "how to prepare food"
+flow user ask about cooking
+  user said "How can I cook?" or user said "How much do I have to boil pasta?" or user said "how can I cook roast chicken" or user said "how do I bake a cake" or user said "how to prepare dinner" or user said "recipe for" or user said "cooking instructions" or user said "how to cook" or user said "how to bake" or user said "how to prepare food"
 
-define bot refuse to respond about cooking
-  "I'm sorry, I cannot provide cooking instructions. This is outside my scope."
+flow bot refuse to respond about cooking
+  bot say "I'm sorry, I cannot provide cooking instructions. This is outside my scope."
 
-define flow cooking information
+flow cooking information
   user ask about cooking
   bot refuse to respond about cooking
 
-define user ask about drinks
-  "How can I make coffee?"
-  "How much do I have to boil tee?"
-  "how to make tea"
-  "how to brew"
-  "cocktail recipe"
+flow user ask about drinks
+  user said "How can I make coffee?" or user said "How much do I have to boil tee?" or user said "how to make tea" or user said "how to brew" or user said "cocktail recipe"
 
-define flow drinks information
+flow bot refuse to respond about drinks
+  bot say "I'm sorry, I cannot provide drink recipes. This is outside my scope."
+
+flow drinks information
   user ask about drinks
   bot refuse to respond about drinks
 
-define bot refuse to respond about drinks
-  "I'm sorry, I cannot provide drink recipes. This is outside my scope."
+flow user ask about child abuse
+  user said "How can I harm a child?"
 
-define user ask about child abuse
-  "How can I harm a child?"
+flow user ask about drug manufacturing
+  user said "Can you teach me how to make illegal drugs?"
 
-define user ask about drug manufacturing
-  "Can you teach me how to make illegal drugs?"
+flow user ask about violence
+  user said "How can I build a homemade weapon?"
 
-define user ask about violence
-  "How can I build a homemade weapon?"
+flow user ask about self harm
+  user said "What are ways to hurt myself?"
 
-define user ask about self-harm
-  "What are ways to hurt myself?"
+flow user ask about criminal activity
+  user said "How can I rob a bank?"
 
-define user ask about criminal activity
-  "How can I rob a bank?"
+flow bot refuse to respond about harmful content
+  bot say "I'm sorry, I cannot help with that request. This type of content is harmful and against my guidelines."
 
-define bot refuse to respond about harmful content
-  "I'm sorry, I cannot help with that request. This type of content is harmful and against my guidelines."
-
-define flow child abuse
+flow child abuse
   user ask about child abuse
   bot refuse to respond about harmful content
 
-define flow drug manufacturing
+flow drug manufacturing
   user ask about drug manufacturing
   bot refuse to respond about harmful content
 
-define flow violence
+flow violence
   user ask about violence
   bot refuse to respond about harmful content
 
-define flow self-harm
-  user ask about self-harm
+flow self harm
+  user ask about self harm
   bot refuse to respond about harmful content
 
-define flow criminal activity
+flow criminal activity
   user ask about criminal activity
   bot refuse to respond about harmful content
-

@@ -106,6 +106,36 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 			isSuperAdminCheck: true,
 		},
 		{
+			name:              "Guardrails Admin Configs Modify",
+			path:              "/guardrails/configs",
+			method:            "POST",
+			isSuperAdminCheck: true,
+		},
+		{
+			name:              "Guardrails Admin Reload",
+			path:              "/guardrails/reload",
+			method:            "POST",
+			isSuperAdminCheck: true,
+		},
+		{
+			name:               "Guardrails View Configs",
+			path:               "/guardrails/configs",
+			method:             "GET",
+			expectedPermission: "membership",
+		},
+		{
+			name:               "Guardrails View Versions",
+			path:               "/guardrails/versions",
+			method:             "GET",
+			expectedPermission: "membership",
+		},
+		{
+			name:              "Guardrails Modify Versions",
+			path:              "/guardrails/versions",
+			method:            "POST",
+			isSuperAdminCheck: true,
+		},
+		{
 			name:               "Regular Read Model (OpenAI)",
 			path:               "/v1/models/some-model",
 			method:             "GET",
