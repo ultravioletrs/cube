@@ -213,6 +213,9 @@ config-local:
 	@sed -i 's|__SMQ_GOOGLE_CLIENT_ID__||g' docker/.env
 	@sed -i 's|__SMQ_GOOGLE_CLIENT_SECRET__||g' docker/.env
 	@sed -i 's|__SMQ_GOOGLE_STATE__||g' docker/.env
+	@sed -i 's|__MG_MAILCHIMP_API_KEY__||g' docker/.env
+	@sed -i 's|__MG_MAILCHIMP_SERVER_PREFIX__||g' docker/.env
+	@sed -i 's|__MG_MAILCHIMP_AUDIENCE_ID__||g' docker/.env
 	@sed -i 's|__CUBE_PUBLIC_URL__|localhost|g' docker/.env
 	@sed -i 's|^TRAEFIK_HTTP_PORT=.*|TRAEFIK_HTTP_PORT=80|g' docker/.env
 	@sed -i 's|^TRAEFIK_HTTPS_PORT=.*|TRAEFIK_HTTPS_PORT=443|g' docker/.env
@@ -334,6 +337,7 @@ help:
 	@echo "  config-cloud-local Configure cloud deployment with localhost defaults"
 	@echo "  restore-config       Restore placeholder values in config files"
 	@echo ""
+
 	@echo "Logs:"
 	@echo "  logs               Show all logs"
 	@echo "  logs-cloud         Show cloud deployment logs"
