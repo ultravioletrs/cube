@@ -30,7 +30,7 @@ const (
 
 	HeaderXEventType = "X-Event-Type"
 
-	// Guardrails detection header names for audit logging
+	// HeaderGuardrailsProcessed and other guardrails detection header names for audit logging.
 	HeaderGuardrailsProcessed  = "X-Guardrails-Processed"
 	HeaderGuardrailsDecision   = "X-Guardrails-Decision"
 	HeaderGuardrailsViolations = "X-Guardrails-Violations"
@@ -44,11 +44,12 @@ const (
 	HeaderHallucinationRisk    = "X-Hallucination-Risk"
 	HeaderGuardrailsLatencyMs  = "X-Guardrails-Latency-Ms"
 	HeaderGuardrailsError      = "X-Guardrails-Error"
+	strTrue                    = "true"
 )
 
 // GuardrailsResult represents a single guardrails detection/violation result.
 type GuardrailsResult struct {
-	Type        string  `json:"type"`                  // e.g., "pii", "prompt_injection", "jailbreak", "toxic", "off_topic"
+	Type        string  `json:"type"`                  // e.g., "pii", "prompt_injection"
 	Category    string  `json:"category,omitempty"`    // e.g., "input_validation", "output_validation"
 	Severity    string  `json:"severity,omitempty"`    // e.g., "low", "medium", "high", "critical"
 	Description string  `json:"description,omitempty"` // Human-readable description
@@ -111,9 +112,9 @@ type Event struct {
 	TriggeredInputRails  []string           `json:"triggered_input_rails,omitempty"`
 	TriggeredOutputRails []string           `json:"triggered_output_rails,omitempty"`
 	SensitiveDataMasked  bool               `json:"sensitive_data_masked"`
-	PromptInjection      bool               `json:"prompt_injection_detected"`
-	JailbreakAttempt     bool               `json:"jailbreak_attempt_detected"`
-	ToxicContent         bool               `json:"toxic_content_detected"`
+	PromptInjection      bool               `json:"prompt_injection"`
+	JailbreakAttempt     bool               `json:"jailbreak_attempt"`
+	ToxicContent         bool               `json:"toxic_content"`
 	OffTopicDetected     bool               `json:"off_topic_detected"`
 	HallucinationRisk    bool               `json:"hallucination_risk"`
 	GuardrailsLatencyMs  float64            `json:"guardrails_latency_ms,omitempty"`
@@ -414,8 +415,8 @@ func (am *Middleware) extractAttestationDetails(headers http.Header, event *Even
 	}
 
 	event.AttestationType = atlsType
-	event.ATLSHandshake = headers.Get("X-Atls-Handshake") == "true"
-	event.AttestationOK = headers.Get("X-Attestation-Ok") == "true"
+	event.ATLSHandshake = headers.Get("X-Atls-Handshake") == strTrue
+	event.AttestationOK = headers.Get("X-Attestation-Ok") == strTrue
 
 	if atlsError := headers.Get("X-Attestation-Error"); atlsError != "" {
 		event.AttestationError = atlsError
@@ -442,48 +443,7 @@ func (am *Middleware) extractAttestationDetails(headers http.Header, event *Even
 // extractGuardrailsInfo extracts guardrails detection information from response headers and body.
 func (am *Middleware) extractGuardrailsInfo(event *Event, headers http.Header, responseBody []byte) {
 	// Extract from response headers (if guardrails service sets them)
-	if headers != nil {
-		if processed := headers.Get(HeaderGuardrailsProcessed); processed == "true" {
-			event.GuardrailsProcessed = true
-		}
-
-		if decision := headers.Get(HeaderGuardrailsDecision); decision != "" {
-			event.GuardrailsDecision = decision
-		}
-
-		if inputRails := headers.Get(HeaderInputRailsTriggered); inputRails != "" {
-			event.TriggeredInputRails = strings.Split(inputRails, ",")
-		}
-
-		if outputRails := headers.Get(HeaderOutputRailsTriggered); outputRails != "" {
-			event.TriggeredOutputRails = strings.Split(outputRails, ",")
-		}
-
-		event.SensitiveDataMasked = headers.Get(HeaderSensitiveDataMasked) == "true"
-		event.PromptInjection = headers.Get(HeaderPromptInjection) == "true"
-		event.JailbreakAttempt = headers.Get(HeaderJailbreakAttempt) == "true"
-		event.ToxicContent = headers.Get(HeaderToxicContent) == "true"
-		event.OffTopicDetected = headers.Get(HeaderOffTopic) == "true"
-		event.HallucinationRisk = headers.Get(HeaderHallucinationRisk) == "true"
-
-		if latencyStr := headers.Get(HeaderGuardrailsLatencyMs); latencyStr != "" {
-			if latency, err := strconv.ParseFloat(latencyStr, 64); err == nil {
-				event.GuardrailsLatencyMs = latency
-			}
-		}
-
-		if grError := headers.Get(HeaderGuardrailsError); grError != "" {
-			event.GuardrailsError = grError
-		}
-
-		// Parse violations from JSON header if present
-		if violationsJSON := headers.Get(HeaderGuardrailsViolations); violationsJSON != "" {
-			var violations []GuardrailsResult
-			if err := json.Unmarshal([]byte(violationsJSON), &violations); err == nil {
-				event.GuardrailsViolations = violations
-			}
-		}
-	}
+	am.extractGuardrailsFromHeaders(event, headers)
 
 	// Extract guardrails info from response body (JSON format)
 	if len(responseBody) > 0 {
@@ -494,6 +454,53 @@ func (am *Middleware) extractGuardrailsInfo(event *Event, headers http.Header, r
 	am.deriveDetectionFlags(event)
 }
 
+func (am *Middleware) extractGuardrailsFromHeaders(event *Event, headers http.Header) {
+	if headers == nil {
+		return
+	}
+
+	if processed := headers.Get(HeaderGuardrailsProcessed); processed == strTrue {
+		event.GuardrailsProcessed = true
+	}
+
+	if decision := headers.Get(HeaderGuardrailsDecision); decision != "" {
+		event.GuardrailsDecision = decision
+	}
+
+	if inputRails := headers.Get(HeaderInputRailsTriggered); inputRails != "" {
+		event.TriggeredInputRails = strings.Split(inputRails, ",")
+	}
+
+	if outputRails := headers.Get(HeaderOutputRailsTriggered); outputRails != "" {
+		event.TriggeredOutputRails = strings.Split(outputRails, ",")
+	}
+
+	event.SensitiveDataMasked = headers.Get(HeaderSensitiveDataMasked) == strTrue
+	event.PromptInjection = headers.Get(HeaderPromptInjection) == strTrue
+	event.JailbreakAttempt = headers.Get(HeaderJailbreakAttempt) == strTrue
+	event.ToxicContent = headers.Get(HeaderToxicContent) == strTrue
+	event.OffTopicDetected = headers.Get(HeaderOffTopic) == strTrue
+	event.HallucinationRisk = headers.Get(HeaderHallucinationRisk) == strTrue
+
+	if latencyStr := headers.Get(HeaderGuardrailsLatencyMs); latencyStr != "" {
+		if latency, err := strconv.ParseFloat(latencyStr, 64); err == nil {
+			event.GuardrailsLatencyMs = latency
+		}
+	}
+
+	if grError := headers.Get(HeaderGuardrailsError); grError != "" {
+		event.GuardrailsError = grError
+	}
+
+	// Parse violations from JSON header if present
+	if violationsJSON := headers.Get(HeaderGuardrailsViolations); violationsJSON != "" {
+		var violations []GuardrailsResult
+		if err := json.Unmarshal([]byte(violationsJSON), &violations); err == nil {
+			event.GuardrailsViolations = violations
+		}
+	}
+}
+
 // extractGuardrailsFromResponseBody parses guardrails response body for detection info.
 func (am *Middleware) extractGuardrailsFromResponseBody(event *Event, responseBody []byte) {
 	var responseData map[string]any
@@ -501,74 +508,95 @@ func (am *Middleware) extractGuardrailsFromResponseBody(event *Event, responseBo
 		return
 	}
 
-	// Check for guardrails field in response
-	if guardrails, ok := responseData["guardrails"].(map[string]any); ok {
-		event.GuardrailsProcessed = true
+	guardrails, ok := responseData["guardrails"].(map[string]any)
+	if !ok {
+		return
+	}
 
-		if decision, ok := guardrails["decision"].(string); ok {
-			event.GuardrailsDecision = decision
-		}
+	event.GuardrailsProcessed = true
 
-		// Extract triggered rails
-		if inputRails, ok := guardrails["triggered_input_rails"].([]any); ok {
-			for _, rail := range inputRails {
-				if railStr, ok := rail.(string); ok {
-					event.TriggeredInputRails = append(event.TriggeredInputRails, railStr)
-				}
+	if decision, ok := guardrails["decision"].(string); ok {
+		event.GuardrailsDecision = decision
+	}
+
+	am.extractTriggeredRails(event, guardrails)
+	am.extractViolations(event, guardrails)
+
+	// Extract latency if present
+	if latency, ok := guardrails["latency_ms"].(float64); ok {
+		event.GuardrailsLatencyMs = latency
+	}
+
+	// Extract error if present
+	if grError, ok := guardrails["error"].(string); ok {
+		event.GuardrailsError = grError
+	}
+}
+
+func (am *Middleware) extractTriggeredRails(event *Event, guardrails map[string]any) {
+	if inputRails, ok := guardrails["triggered_input_rails"].([]any); ok {
+		for _, rail := range inputRails {
+			if railStr, ok := rail.(string); ok {
+				event.TriggeredInputRails = append(event.TriggeredInputRails, railStr)
 			}
 		}
+	}
 
-		if outputRails, ok := guardrails["triggered_output_rails"].([]any); ok {
-			for _, rail := range outputRails {
-				if railStr, ok := rail.(string); ok {
-					event.TriggeredOutputRails = append(event.TriggeredOutputRails, railStr)
-				}
+	if outputRails, ok := guardrails["triggered_output_rails"].([]any); ok {
+		for _, rail := range outputRails {
+			if railStr, ok := rail.(string); ok {
+				event.TriggeredOutputRails = append(event.TriggeredOutputRails, railStr)
 			}
 		}
+	}
+}
 
-		// Extract violations array
-		if violations, ok := guardrails["violations"].([]any); ok {
-			for _, v := range violations {
-				if vMap, ok := v.(map[string]any); ok {
-					violation := GuardrailsResult{}
-					if t, ok := vMap["type"].(string); ok {
-						violation.Type = t
-					}
-					if cat, ok := vMap["category"].(string); ok {
-						violation.Category = cat
-					}
-					if sev, ok := vMap["severity"].(string); ok {
-						violation.Severity = sev
-					}
-					if desc, ok := vMap["description"].(string); ok {
-						violation.Description = desc
-					}
-					if entity, ok := vMap["entity"].(string); ok {
-						violation.Entity = entity
-					}
-					if conf, ok := vMap["confidence"].(float64); ok {
-						violation.Confidence = conf
-					}
-					if action, ok := vMap["action"].(string); ok {
-						violation.Action = action
-					}
-					if rail, ok := vMap["rail"].(string); ok {
-						violation.Rail = rail
-					}
-					event.GuardrailsViolations = append(event.GuardrailsViolations, violation)
-				}
-			}
+func (am *Middleware) extractViolations(event *Event, guardrails map[string]any) {
+	violations, ok := guardrails["violations"].([]any)
+	if !ok {
+		return
+	}
+
+	for _, v := range violations {
+		vMap, ok := v.(map[string]any)
+		if !ok {
+			continue
 		}
 
-		// Extract latency if present
-		if latency, ok := guardrails["latency_ms"].(float64); ok {
-			event.GuardrailsLatencyMs = latency
+		violation := GuardrailsResult{}
+		if t, ok := vMap["type"].(string); ok {
+			violation.Type = t
 		}
 
-		// Extract error if present
-		if grError, ok := guardrails["error"].(string); ok {
-			event.GuardrailsError = grError
+		if cat, ok := vMap["category"].(string); ok {
+			violation.Category = cat
 		}
+
+		if sev, ok := vMap["severity"].(string); ok {
+			violation.Severity = sev
+		}
+
+		if desc, ok := vMap["description"].(string); ok {
+			violation.Description = desc
+		}
+
+		if entity, ok := vMap["entity"].(string); ok {
+			violation.Entity = entity
+		}
+
+		if conf, ok := vMap["confidence"].(float64); ok {
+			violation.Confidence = conf
+		}
+
+		if action, ok := vMap["action"].(string); ok {
+			violation.Action = action
+		}
+
+		if rail, ok := vMap["rail"].(string); ok {
+			violation.Rail = rail
+		}
+
+		event.GuardrailsViolations = append(event.GuardrailsViolations, violation)
 	}
 }
 
@@ -594,25 +622,33 @@ func (am *Middleware) deriveDetectionFlags(event *Event) {
 	}
 
 	// Check triggered rails for detection patterns
-	allRails := append(event.TriggeredInputRails, event.TriggeredOutputRails...)
+	allRails := make([]string, 0, len(event.TriggeredInputRails)+len(event.TriggeredOutputRails))
+	allRails = append(allRails, event.TriggeredInputRails...)
+	allRails = append(allRails, event.TriggeredOutputRails...)
+
 	for _, rail := range allRails {
 		railLower := strings.ToLower(rail)
 		if strings.Contains(railLower, "pii") || strings.Contains(railLower, "mask sensitive") {
 			event.PIIDetected = true
 			event.SensitiveDataMasked = true
 		}
+
 		if strings.Contains(railLower, "jailbreak") {
 			event.JailbreakAttempt = true
 		}
+
 		if strings.Contains(railLower, "injection") || strings.Contains(railLower, "prompt injection") {
 			event.PromptInjection = true
 		}
+
 		if strings.Contains(railLower, "toxic") {
 			event.ToxicContent = true
 		}
+
 		if strings.Contains(railLower, "off_topic") || strings.Contains(railLower, "off topic") {
 			event.OffTopicDetected = true
 		}
+
 		if strings.Contains(railLower, "hallucination") {
 			event.HallucinationRisk = true
 		}
@@ -722,9 +758,9 @@ func (am *Middleware) logAuditEvent(ctx context.Context, event *Event) {
 	if event.PromptInjection || event.JailbreakAttempt || event.ToxicContent ||
 		event.OffTopicDetected || event.HallucinationRisk || event.SensitiveDataMasked {
 		logAttrs = append(logAttrs,
-			slog.Bool("prompt_injection_detected", event.PromptInjection),
-			slog.Bool("jailbreak_attempt_detected", event.JailbreakAttempt),
-			slog.Bool("toxic_content_detected", event.ToxicContent),
+			slog.Bool("prompt_injection", event.PromptInjection),
+			slog.Bool("jailbreak_attempt", event.JailbreakAttempt),
+			slog.Bool("toxic_content", event.ToxicContent),
 			slog.Bool("off_topic_detected", event.OffTopicDetected),
 			slog.Bool("hallucination_risk", event.HallucinationRisk),
 			slog.Bool("sensitive_data_masked", event.SensitiveDataMasked),

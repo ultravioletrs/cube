@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/ultravioletrs/cube/agent/audit"
 )
 
@@ -121,11 +122,12 @@ func TestGuardrailsResult(t *testing.T) {
 
 			// Test JSON serialization
 			data, err := json.Marshal(tt.result)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			var decoded map[string]any
+
 			err = json.Unmarshal(data, &decoded)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 
 			// Verify key fields are present
 			assert.Equal(t, tt.expected["type"], decoded["type"])
@@ -166,27 +168,30 @@ func TestEventGuardrailsFields(t *testing.T) {
 
 	// Test JSON serialization
 	data, err := json.Marshal(event)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var decoded map[string]any
+
 	err = json.Unmarshal(data, &decoded)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Verify guardrails fields are properly serialized
 	assert.Equal(t, true, decoded["guardrails_processed"])
 	assert.Equal(t, "BLOCK", decoded["guardrails_decision"])
-	assert.Equal(t, 125.5, decoded["guardrails_latency_ms"])
-	assert.Equal(t, true, decoded["jailbreak_attempt_detected"])
+	assert.InEpsilon(t, 125.5, decoded["guardrails_latency_ms"], 0.001)
+	assert.Equal(t, true, decoded["jailbreak_attempt"])
 	assert.Equal(t, true, decoded["sensitive_data_masked"])
-	assert.Equal(t, false, decoded["prompt_injection_detected"])
+	assert.Equal(t, false, decoded["prompt_injection"])
 
 	// Check triggered rails
-	inputRails := decoded["triggered_input_rails"].([]any)
+	inputRails, ok := decoded["triggered_input_rails"].([]any)
+	require.True(t, ok, "triggered_input_rails should be []any")
 	assert.Len(t, inputRails, 2)
 	assert.Contains(t, inputRails, "check jailbreak")
 
 	// Check violations
-	violations := decoded["guardrails_violations"].([]any)
+	violations, ok := decoded["guardrails_violations"].([]any)
+	require.True(t, ok, "guardrails_violations should be []any")
 	assert.Len(t, violations, 1)
 }
 
