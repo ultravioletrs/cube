@@ -8,6 +8,13 @@
 package_update: true
 package_upgrade: false
 
+growpart:
+  mode: auto
+  devices: ["/"]
+  ignore_growroot_disabled: false
+
+resize_rootfs: true
+
 users:
   - name: ultraviolet
     plain_text_passwd: password
@@ -104,6 +111,20 @@ write_files:
     permissions: '0644'
 
 runcmd:
+  - |
+    # Install custom SNP-compatible kernel from seed image if present
+    mkdir -p /mnt/seed
+    dev="$(blkid -L cidata || blkid -L CIDATA || true)"
+    if [ -n "$dev" ]; then
+      mount "$dev" /mnt/seed
+      if ls /mnt/seed/debs/*.deb 2>/dev/null; then
+        cp /mnt/seed/debs/*.deb /root/
+        dpkg -i /root/*.deb || apt-get -y -f install
+        update-grub
+        sync
+      fi
+      umount /mnt/seed || true
+    fi
   - echo 'ultraviolet:password' | chpasswd
   - |
     cat > /etc/ssh/sshd_config.d/60-cloudimg-settings.conf << 'SSHEOF'

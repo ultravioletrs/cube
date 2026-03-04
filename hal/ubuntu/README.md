@@ -4,7 +4,7 @@ This directory contains cloud-init configurations and QEMU launch scripts for ru
 
 ## Overview
 
-Ubuntu 24.04 (Noble) has built-in support for both Intel TDX and AMD SEV-SNP confidential computing technologies. No additional kernel modules or packages need to be installed - the guest support is enabled by default in the kernel.
+Ubuntu 24.04 (Noble) has built-in support for Intel TDX confidential computing. For AMD SEV-SNP, a custom kernel is required because the host uses SVSM/Coconut — the standard Ubuntu 24.04 kernel does not support it.
 
 ## Files
 
@@ -12,6 +12,7 @@ Ubuntu 24.04 (Noble) has built-in support for both Intel TDX and AMD SEV-SNP con
 - `user-data-tdx.yaml` - Cloud-init configuration for Intel TDX VMs
 - `user-data-snp.yaml` - Cloud-init configuration for AMD SEV-SNP VMs
 - `user-data-regular.yaml` - Cloud-init configuration for regular (non-CVM) VMs
+- `debs/` - (Optional) Directory for custom kernel `.deb` packages, required only when the SNP host runs Coconut SVSM (see [SNP Kernel](#snp-custom-kernel))
 
 ## Usage
 
@@ -64,9 +65,60 @@ sudo ./qemu.sh detect
 
 ### AMD SEV-SNP (Secure Nested Paging)
 
-- Ubuntu 24.04 kernel has `CONFIG_SEV_GUEST=y` enabled by default
+- If the host runs Coconut SVSM, a custom kernel is required (see [SNP Kernel](#snp-custom-kernel))
 - Guest attestation available via `/dev/sev-guest`
 - Modules: `sev-guest`, `ccp` (loaded automatically)
+- Disk is automatically resized on first boot via `growpart`
+
+### SNP Custom Kernel
+
+A custom kernel is only required when the SNP host runs Coconut SVSM. The standard Ubuntu 24.04 kernel does not support Coconut SVSM, so a kernel built with SVSM support must be bundled into the seed image as `.deb` packages.
+
+**Kernel requirements:**
+
+The custom kernel must be built with the following options:
+- `CONFIG_AMD_MEM_ENCRYPT=y` — AMD memory encryption support
+- `CONFIG_SEV_GUEST=y` — SEV guest driver
+- Coconut SVSM guest support patches applied
+
+The kernel must be packaged as `.deb` files.
+
+**Installing the kernel into the seed image:**
+
+Place the `.deb` files in a `debs/` directory next to `qemu.sh`:
+
+```
+hal/ubuntu/
+  qemu.sh
+  user-data-snp.yaml
+  debs/
+    linux-image-*.deb
+    linux-headers-*.deb
+    linux-modules-*.deb  (if needed)
+```
+
+The `start_snp` command will automatically detect `debs/` and package the files into the seed ISO using `genisoimage`:
+
+```bash
+genisoimage -output seed.img -volid cidata -joliet -rock cidata/
+```
+
+Where the `cidata/` directory contains:
+```
+cidata/
+  meta-data
+  user-data
+  debs/
+    *.deb
+```
+
+On first boot, cloud-init mounts the seed ISO, installs the `.deb` packages, runs `update-grub`, and the VM boots the new SNP-compatible kernel on next start.
+
+**Dependency:**
+
+```bash
+sudo apt-get install genisoimage
+```
 
 ## After First Boot
 
@@ -91,8 +143,10 @@ Default SSH access:
 ### For SNP VMs
 - AMD EPYC CPU with SEV-SNP support (Milan or newer)
 - SEV-SNP enabled in BIOS
-- Host kernel with SEV-SNP support
+- Host kernel with SEV-SNP/SVSM support
 - `/dev/sev` device available
+- `genisoimage` installed (`apt-get install genisoimage`)
+- If using Coconut SVSM: custom kernel `.deb` files in `debs/` (see [SNP Kernel](#snp-custom-kernel))
 
 ### Common Requirements
 - QEMU with confidential computing support

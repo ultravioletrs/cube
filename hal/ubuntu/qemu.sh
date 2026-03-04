@@ -127,6 +127,39 @@ EOF
     cloud-localds "$SEED_IMAGE" "$user_data_file" "$META_DATA"
 }
 
+function create_seed_image_snp() {
+    local user_data_file="$1"
+
+    echo "Creating SNP seed image with $user_data_file..."
+
+    if ! command -v genisoimage &> /dev/null; then
+        echo "genisoimage is not installed. Please install genisoimage and try again."
+        exit 1
+    fi
+
+    local cidata_dir
+    cidata_dir="$(mktemp -d)"
+    trap "rm -rf $cidata_dir" RETURN
+
+    # Write meta-data
+    cat <<EOF > "$cidata_dir/meta-data"
+instance-id: iid-${VM_NAME}
+local-hostname: $VM_NAME
+EOF
+
+    # Copy user-data
+    cp "$user_data_file" "$cidata_dir/user-data"
+
+    # Include kernel .deb files if present (required for SNP-compatible kernel)
+    if [ -d "${SCRIPT_DIR}/debs" ] && ls "${SCRIPT_DIR}/debs"/*.deb 2>/dev/null; then
+        mkdir -p "$cidata_dir/debs"
+        cp "${SCRIPT_DIR}/debs"/*.deb "$cidata_dir/debs/"
+        echo "Included kernel .deb files from ${SCRIPT_DIR}/debs/"
+    fi
+
+    genisoimage -output "$SEED_IMAGE" -volid cidata -joliet -rock "$cidata_dir"
+}
+
 function start_regular() {
     echo "Starting QEMU VM in regular mode (no CVM)..."
 
@@ -185,30 +218,30 @@ function start_tdx() {
 function start_snp() {
     echo "Starting QEMU VM with AMD SEV-SNP (Confidential VM)..."
 
+    local SNP_QEMU="/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64"
     local QEMU_OVMF_CODE="${QEMU_OVMF_CODE:-/var/cube-ai/OVMF.fd}"
 
-    create_seed_image "${SCRIPT_DIR}/user-data-snp.yaml"
+    create_seed_image_snp "${SCRIPT_DIR}/user-data-snp.yaml"
 
-    $QEMU_BINARY \
+    $SNP_QEMU \
         -name "$VM_NAME" \
-        -m "$RAM" \
-        -smp "$CPU" \
-        -cpu EPYC-v4 \
-        -machine q35 \
         -enable-kvm \
-        -drive if=pflash,format=raw,unit=0,file="$QEMU_OVMF_CODE",readonly=on \
-        -object memory-backend-memfd-private,id=ram1,size="$RAM",share=true \
-        -machine memory-encryption=sev0,memory-backend=ram1,kvm-type=protected \
-        -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1,discard=none \
+        -machine q35,confidential-guest-support=sev0,memory-backend=ram1 \
+        -cpu EPYC \
+        -smp "$CPU" \
+        -m "$RAM" \
+        -object memory-backend-memfd,id=ram1,size="$RAM",share=true,prealloc=false \
+        -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
+        -bios "$QEMU_OVMF_CODE" \
         -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001 \
-        -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
-        -nographic \
-        -no-reboot \
+        -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,addr=0x2,romfile= \
         -drive file="$SEED_IMAGE",media=cdrom \
         -drive file="$CUSTOM_IMAGE",if=none,id=disk0,format=qcow2 \
-        -device virtio-scsi-pci,id=scsi,disable-legacy=on \
+        -device virtio-scsi-pci,id=scsi,disable-legacy=on,iommu_platform=true \
         -device scsi-hd,drive=disk0 \
-        -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198
+        -nographic \
+        -monitor pty \
+        -no-reboot
 }
 
 function print_help() {
