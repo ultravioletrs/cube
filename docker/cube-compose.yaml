@@ -8,6 +8,7 @@ volumes:
   cube-certs-db-volume:
   openbao-data:
   openbao-ca:
+  magistrala-ui-backend-db-volume:
 
 services:
   cloudflared:
@@ -99,6 +100,8 @@ services:
     restart: unless-stopped
     depends_on:
       - cube-guardrails-db
+    ports:
+      - "8001:8001"
     environment:
       - PYTHONPATH=/app
       - UVICORN_HOST=0.0.0.0
@@ -382,3 +385,127 @@ services:
       - ./openbao-entrypoint.sh:/entrypoint.sh
     entrypoint: /bin/sh
     command: /entrypoint.sh
+
+  magistrala-backend:
+    image: ghcr.io/absmach/magistrala/ui-backend:latest
+    container_name: magistrala-backend
+    restart: on-failure
+    ports:
+      - ${MG_BACKEND_HTTP_PORT}:${MG_BACKEND_HTTP_PORT}
+    networks:
+      - cube-network
+    environment:
+      MG_BACKEND_LOG_LEVEL: ${MG_BACKEND_LOG_LEVEL}
+      MG_BACKEND_HTTP_HOST: ${MG_BACKEND_HTTP_HOST}
+      MG_BACKEND_HTTP_PORT: ${MG_BACKEND_HTTP_PORT}
+      MG_BACKEND_HTTP_SERVER_CERT: ${MG_BACKEND_HTTP_SERVER_CERT}
+      MG_BACKEND_HTTP_SERVER_KEY: ${MG_BACKEND_HTTP_SERVER_KEY}
+      MG_BACKEND_DB_HOST: ${MG_BACKEND_DB_HOST}
+      MG_BACKEND_DB_PORT: ${MG_BACKEND_DB_PORT}
+      MG_BACKEND_DB_USER: ${MG_BACKEND_DB_USER}
+      MG_BACKEND_DB_PASS: ${MG_BACKEND_DB_PASS}
+      MG_BACKEND_DB_NAME: ${MG_BACKEND_DB_NAME}
+      MG_BACKEND_DB_SSL_MODE: ${MG_BACKEND_DB_SSL_MODE}
+      MG_BACKEND_DB_SSL_CERT: ${MG_BACKEND_DB_SSL_CERT}
+      MG_BACKEND_DB_SSL_KEY: ${MG_BACKEND_DB_SSL_KEY}
+      MG_BACKEND_DB_SSL_ROOT_CERT: ${MG_BACKEND_DB_SSL_ROOT_CERT}
+      MG_BACKEND_INSTANCE_ID: ${MG_BACKEND_INSTANCE_ID}
+      MG_AUTH_GRPC_URL: ${MG_AUTH_GRPC_URL}
+      MG_AUTH_GRPC_TIMEOUT: ${MG_AUTH_GRPC_TIMEOUT}
+      MG_AUTH_GRPC_CLIENT_CERT: ${MG_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
+      MG_AUTH_GRPC_CLIENT_KEY: ${MG_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
+      MG_AUTH_GRPC_SERVER_CA_CERTS: ${MG_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
+      MG_UI_VERIFICATION_TLS: ${MG_UI_VERIFICATION_TLS}
+      MG_UI_CONTENT_TYPE: ${MG_UI_CONTENT_TYPE}
+      MG_UI_DOCKER_ACCEPT_EULA: ${MG_UI_DOCKER_ACCEPT_EULA}
+      MG_TIMESCALE_READER_GRPC_URL: ${MG_TIMESCALE_READER_GRPC_URL}
+      MG_TIMESCALE_READER_GRPC_TIMEOUT: ${MG_TIMESCALE_READER_GRPC_TIMEOUT}
+      MG_TIMESCALE_READER_GRPC_TLS: ${MG_TIMESCALE_READER_GRPC_TLS}
+      MG_CHANNELS_GRPC_URL: ${MG_CHANNELS_GRPC_URL}
+      MG_CHANNELS_GRPC_TIMEOUT: ${MG_CHANNELS_GRPC_TIMEOUT}
+      MG_CHANNELS_GRPC_CLIENT_CERT: ${MG_CHANNELS_GRPC_CLIENT_CERT:+/channels-grpc-client.crt}
+      MG_CHANNELS_GRPC_CLIENT_KEY: ${MG_CHANNELS_GRPC_CLIENT_KEY:+/channels-grpc-client.key}
+      MG_CHANNELS_GRPC_SERVER_CA_CERTS: ${MG_CHANNELS_GRPC_SERVER_CA_CERTS:+/channels-grpc-server-ca.crt}
+      MG_BACKEND_OBJECT_STORAGE_REGION: ${MG_BACKEND_OBJECT_STORAGE_REGION}
+      MG_BACKEND_OBJECT_STORAGE_BUCKET: ${MG_BACKEND_OBJECT_STORAGE_BUCKET}
+      MG_BACKEND_OBJECT_STORAGE_ENDPOINT: ${MG_BACKEND_OBJECT_STORAGE_ENDPOINT}
+      MG_BACKEND_OBJECT_STORAGE_USE_PATH_STYLE: ${MG_BACKEND_OBJECT_STORAGE_USE_PATH_STYLE}
+      MG_BACKEND_OBJECT_STORAGE_REWRITE_URL: ${MG_BACKEND_OBJECT_STORAGE_REWRITE_URL}
+      MG_BACKEND_OBJECT_STORAGE_ACCESS_KEY: ${MG_BACKEND_OBJECT_STORAGE_ACCESS_KEY}
+      MG_BACKEND_OBJECT_STORAGE_SECRET_KEY: ${MG_BACKEND_OBJECT_STORAGE_SECRET_KEY}
+      MG_BACKEND_OBJECT_STORAGE_WRITE_TTL: ${MG_BACKEND_OBJECT_STORAGE_WRITE_TTL}
+      MG_BACKEND_OBJECT_STORAGE_READ_TTL: ${MG_BACKEND_OBJECT_STORAGE_READ_TTL}
+    depends_on:
+      - magistrala-ui-backend-db
+      - magistrala-seaweedfs-s3
+    volumes:
+      - type: bind
+        source: ${MG_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
+        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_CERT:+.crt}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
+        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_KEY:+.key}
+        bind:
+          create_host_path: true
+      - type: bind
+        source: ${MG_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
+        target: /auth-grpc-server-ca${MG_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
+        bind:
+          create_host_path: true
+
+  magistrala-ui-backend-db:
+    image: postgres:16.2-alpine
+    container_name: magistrala-ui-backend-db
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${MG_BACKEND_DB_USER}
+      POSTGRES_PASSWORD: ${MG_BACKEND_DB_PASS}
+      POSTGRES_DB: ${MG_BACKEND_DB_NAME}
+      MG_POSTGRES_MAX_CONNECTIONS: ${MG_POSTGRES_MAX_CONNECTIONS}
+    ports:
+      - 6008:5432
+    networks:
+      - cube-network
+    volumes:
+      - magistrala-ui-backend-db-volume:/var/lib/postgresql/data
+    command: postgres -c "max_connections=${MG_POSTGRES_MAX_CONNECTIONS}"
+
+  magistrala-seaweedfs-s3:
+    image: chrislusf/seaweedfs:latest
+    container_name: magistrala-seaweedfs-s3
+    command: server -s3 -dir=/data
+    ports:
+      - "8333:8333"
+      - "9333:9333"
+      - "19333:19333"
+      - "8888:8888"
+    volumes:
+      - ./data/seaweedfs:/data
+    networks:
+      - cube-network
+
+  magistrala-seaweedfs-init:
+    image: curlimages/curl
+    container_name: magistrala-seaweedfs-init
+    depends_on:
+      - magistrala-seaweedfs-s3
+    command: >
+      /bin/sh -c "
+      echo \"Creating bucket $${BUCKET}, wait for 25s...\";
+      sleep 25;
+      HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -f -X PUT http://magistrala-seaweedfs-s3:8333/$${BUCKET});
+      if [ $${HTTP_CODE} = '200' ] || [ $${HTTP_CODE} = '201' ]; then
+        echo \"[INIT] Bucket $${BUCKET} created successfully!\";
+        curl -s http://magistrala-seaweedfs-s3:8333/ | grep -o '<Name>[^<]*</Name>';
+        exit 0;
+      else
+        echo \"[INIT] Failed to create bucket $${BUCKET}! HTTP code $${HTTP_CODE}.\" >&2;
+        exit 1;
+      fi
+      "
+    networks:
+      - cube-network
+    environment:
+      BUCKET: ${MG_BACKEND_OBJECT_STORAGE_BUCKET}
