@@ -110,6 +110,11 @@ jobs:
             sed -i "s|__SMQ_GOOGLE_CLIENT_SECRET__|${{ secrets.SMQ_GOOGLE_CLIENT_SECRET }}|g" docker/.env
             sed -i "s|__SMQ_GOOGLE_STATE__|${{ secrets.SMQ_GOOGLE_STATE }}|g" docker/.env
 
+            # Replace Mailchimp placeholders
+            sed -i "s|__MG_MAILCHIMP_API_KEY__|${{ secrets.MG_MAILCHIMP_API_KEY }}|g" docker/.env
+            sed -i "s|__MG_MAILCHIMP_SERVER_PREFIX__|${{ secrets.MG_MAILCHIMP_SERVER_PREFIX }}|g" docker/.env
+            sed -i "s|__MG_MAILCHIMP_AUDIENCE_ID__|${{ secrets.MG_MAILCHIMP_AUDIENCE_ID }}|g" docker/.env
+
             # Replace Traefik configuration placeholders
             sed -i "s|__TRAEFIK_HTTP_PORT__|${{ secrets.TRAEFIK_HTTP_PORT }}|g" docker/.env
             sed -i "s|__TRAEFIK_HTTPS_PORT__|${{ secrets.TRAEFIK_HTTPS_PORT }}|g" docker/.env
