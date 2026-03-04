@@ -1,0 +1,47 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+import core
+import llm
+
+flow main
+  # Input validation flows - these intercept harmful requests
+  activate handle jailbreak
+  activate handle prompt_injection
+  activate handle toxicity
+  activate handle restricted_topics
+  activate handle illegal_activity
+  activate handle hate_speech
+  activate handle gender_bias
+  activate handle racial_bias
+  activate handle religious_bias
+  activate handle age_bias
+  activate handle politics
+  activate handle personal_beliefs
+  activate handle unethical_request
+
+  # Topic-specific handlers from off_topic.co
+  activate politics
+  activate hate speech
+  activate about making something
+  activate personal information
+  activate illegal activities
+  activate legal advice
+  activate medical advice
+  activate stock market
+  activate cooking information
+  activate drinks information
+  activate child abuse
+  activate drug manufacturing
+  activate violence
+  activate self harm
+  activate criminal activity
+
+  # General conversation flows
+  activate greeting
+  activate capabilities
+  activate goodbye
+
+  activate validate output content
+
+  activate llm continuation

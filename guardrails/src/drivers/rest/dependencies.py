@@ -1,9 +1,11 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
+import glob
+import hashlib
 import logging
 import os
-from typing import Optional
+from typing import Optional, Tuple
 
 import asyncpg
 
@@ -60,25 +62,20 @@ async def init_dependencies() -> None:
     # Create runtime
     _runtime = NemoRuntime()
 
-    # Try to load active configuration
+    # Sync default configuration
+    try:
+        await _sync_default_config()
+    except Exception as e:
+        logger.error(f"Failed to sync default configuration: {e}")
+
+    # Load active configuration into runtime
     try:
         loader = LoadActiveGuardrail(_repository)
         materialized = await loader.execute()
         await _runtime.swap(materialized)
         logger.info(f"Loaded active configuration revision {materialized.revision}")
     except Exception as e:
-        logger.warning(f"No active configuration found: {e}")
-        logger.info("Initializing default configuration from ./rails...")
-        
-        try:
-            await _create_default_config()
-            # Try loading the newly created config
-            loader = LoadActiveGuardrail(_repository)
-            materialized = await loader.execute()
-            await _runtime.swap(materialized)
-            logger.info(f"Loaded default configuration revision {materialized.revision}")
-        except Exception as ex:
-            logger.error(f"Failed to initialize default configuration: {ex}")
+        logger.error(f"No active configuration available: {e}")
 
     logger.info("Dependencies initialized successfully")
 
@@ -157,38 +154,106 @@ def get_load_active_guardrail() -> LoadActiveGuardrail:
     return LoadActiveGuardrail(get_repository())
 
 
-
-async def _create_default_config() -> None:
-    """Create a default configuration if none exists."""
-    import glob
-    
-    logger.info("Creating default configuration from ./rails...")
-    
-    # Read config files
-    rails_dir = "./rails"
+def _read_rails_files(rails_dir: str = "./rails") -> Tuple[str, str, str]:
     if not os.path.exists(rails_dir):
-        logger.warning(f"Rails directory {rails_dir} not found. Skipping default config creation.")
-        return
+        raise FileNotFoundError(f"Rails directory {rails_dir} not found")
 
-    try:
-        with open(os.path.join(rails_dir, "config.yml"), "r") as f:
-            config_yaml = f.read()
-    except FileNotFoundError:
-        logger.warning("config.yml not found in ./rails")
-        return
+    # Read config.yml (required)
+    config_path = os.path.join(rails_dir, "config.yml")
+    if not os.path.exists(config_path):
+        raise FileNotFoundError("config.yml not found in rails directory")
+
+    with open(config_path, "r") as f:
+        config_yaml = f.read()
 
     prompts_yaml = ""
-    try:
-        with open(os.path.join(rails_dir, "prompts.yml"), "r") as f:
+    prompts_path = os.path.join(rails_dir, "prompts.yml")
+    if os.path.exists(prompts_path):
+        with open(prompts_path, "r") as f:
             prompts_yaml = f.read()
-    except FileNotFoundError:
-        pass
 
     colang = ""
-    for file in glob.glob(os.path.join(rails_dir, "*.co")):
+    co_files = sorted(glob.glob(os.path.join(rails_dir, "*.co")))
+    for file in co_files:
         with open(file, "r") as f:
             colang += f.read() + "\n"
 
+    return config_yaml, prompts_yaml, colang
+
+
+def _compute_content_hash(config_yaml: str, prompts_yaml: str, colang: str) -> str:
+    combined = f"{config_yaml}\n---\n{prompts_yaml}\n---\n{colang}"
+    return hashlib.sha256(combined.encode()).hexdigest()
+
+
+def _content_matches(
+    config_yaml: str, prompts_yaml: str, colang: str,
+    db_config_yaml: str, db_prompts_yaml: str, db_colang: str
+) -> bool:
+    file_hash = _compute_content_hash(config_yaml, prompts_yaml, colang)
+    db_hash = _compute_content_hash(db_config_yaml, db_prompts_yaml, db_colang)
+    return file_hash == db_hash
+
+
+async def _sync_default_config() -> None:
+    logger.info("Synchronizing default configuration from ./rails...")
+
+    rails_dir = "./rails"
+
+    try:
+        config_yaml, prompts_yaml, colang = _read_rails_files(rails_dir)
+    except FileNotFoundError as e:
+        logger.warning(f"Cannot sync config: {e}")
+        return
+
+    repository = get_repository()
+
+    existing_config = await repository.get_config_by_name("default-config")
+
+    if existing_config is None:
+        logger.info("No default config found, creating new configuration...")
+        await _create_new_default_config(config_yaml, prompts_yaml, colang)
+        return
+
+    if _content_matches(
+        config_yaml, prompts_yaml, colang,
+        existing_config.config_yaml, existing_config.prompts_yaml, existing_config.colang
+    ):
+        logger.info("Default config is up to date, no changes detected")
+        return
+
+    logger.info("File changes detected, updating default configuration...")
+
+    update_config_uc = get_update_config()
+    await update_config_uc.execute(
+        config_id=existing_config.id,
+        config_yaml=config_yaml,
+        prompts_yaml=prompts_yaml,
+        colang=colang,
+    )
+    logger.info(f"Updated default config: {existing_config.id}")
+
+    # Create new version
+    create_version_uc = get_create_version()
+    version = await create_version_uc.execute(
+        config_id=existing_config.id,
+        name=f"v{_get_next_version_number(existing_config.id)}",
+        description="Auto-updated from file system changes",
+    )
+    logger.info(f"Created new version: {version.id} (revision {version.revision})")
+
+    activate_version_uc = get_activate_version()
+    await activate_version_uc.execute(version.id)
+    logger.info(f"Activated new version: {version.id}")
+
+
+def _get_next_version_number(config_id) -> int:
+    import time
+    return int(time.time())
+
+
+async def _create_new_default_config(config_yaml: str, prompts_yaml: str, colang: str) -> None:
+    """Create a new default configuration."""
     # Create config
     create_config_uc = get_create_config()
     config = await create_config_uc.execute(
@@ -213,3 +278,7 @@ async def _create_default_config() -> None:
     activate_version_uc = get_activate_version()
     await activate_version_uc.execute(version.id)
     logger.info(f"Activated default version: {version.id}")
+
+
+async def _create_default_config() -> None:
+    await _sync_default_config()
