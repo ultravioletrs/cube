@@ -30,8 +30,9 @@ This will automatically detect available CVM support (TDX or SNP) and launch the
 # Intel TDX
 sudo ./qemu.sh start_tdx
 
-# AMD SEV-SNP
-sudo ./qemu.sh start_snp
+# AMD SEV-SNP (two steps required)
+sudo ./qemu.sh prepare_snp   # Run once: installs custom kernel via cloud-init (regular KVM)
+sudo ./qemu.sh start_snp     # Boot the prepared image with IGVM/SNP
 
 # Regular KVM (no CVM)
 sudo ./qemu.sh start_regular
@@ -47,6 +48,9 @@ ENABLE_CVM=none sudo ./qemu.sh start
 
 # Customize VM resources
 RAM=32768M CPU=16 sudo ./qemu.sh start
+
+# Override IGVM file path (SNP only)
+IGVM=/path/to/coconut-qemu.igvm sudo ./qemu.sh start_snp
 ```
 
 ### Detect Available Support
@@ -65,6 +69,8 @@ sudo ./qemu.sh detect
 
 ### AMD SEV-SNP (Secure Nested Paging)
 
+- Boots via IGVM using the Coconut SVSM QEMU (`/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64`)
+- Requires an IGVM file (default: `/etc/cocos/coconut-qemu.igvm`)
 - If the host runs Coconut SVSM, a custom kernel is required (see [SNP Kernel](#snp-custom-kernel))
 - Guest attestation available via `/dev/sev-guest`
 - Modules: `sev-guest`, `ccp` (loaded automatically)
@@ -145,8 +151,10 @@ Default SSH access:
 - SEV-SNP enabled in BIOS
 - Host kernel with SEV-SNP/SVSM support
 - `/dev/sev` device available
+- Coconut SVSM QEMU binary at `/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64`
+- IGVM file at `/etc/cocos/coconut-qemu.igvm` (or set `IGVM` env var)
 - `genisoimage` installed (`apt-get install genisoimage`)
-- If using Coconut SVSM: custom kernel `.deb` files in `debs/` (see [SNP Kernel](#snp-custom-kernel))
+- Custom kernel `.deb` files in `debs/` (see [SNP Kernel](#snp-custom-kernel))
 
 ### Common Requirements
 - QEMU with confidential computing support

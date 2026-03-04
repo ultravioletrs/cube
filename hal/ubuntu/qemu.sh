@@ -215,33 +215,53 @@ function start_tdx() {
         -device vhost-vsock-pci,guest-cid=3
 }
 
-function start_snp() {
-    echo "Starting QEMU VM with AMD SEV-SNP (Confidential VM)..."
+function prepare_snp() {
+    echo "Preparing SNP image via cloud-init (regular KVM, no SNP)..."
+    echo "This installs the custom kernel into the image. Run start_snp after this completes."
 
     local SNP_QEMU="/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64"
-    local QEMU_OVMF_CODE="${QEMU_OVMF_CODE:-/var/cube-ai/OVMF.fd}"
 
     create_seed_image_snp "${SCRIPT_DIR}/user-data-snp.yaml"
 
     $SNP_QEMU \
         -name "$VM_NAME" \
         -enable-kvm \
-        -machine q35,confidential-guest-support=sev0,memory-backend=ram1 \
-        -cpu EPYC \
-        -smp "$CPU" \
-        -m "$RAM" \
-        -object memory-backend-memfd,id=ram1,size="$RAM",share=true,prealloc=false \
-        -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
-        -bios "$QEMU_OVMF_CODE" \
+        -m 2048 \
+        -smp 2 \
+        -drive "file=$CUSTOM_IMAGE,if=virtio,format=qcow2" \
+        -drive "file=$SEED_IMAGE,if=virtio,format=raw,readonly=on" \
+        -netdev "user,id=n0,hostfwd=tcp::6190-:22" \
+        -device virtio-net-pci,netdev=n0 \
+        -nographic
+}
+
+function start_snp() {
+    echo "Starting QEMU VM with AMD SEV-SNP (Confidential VM)..."
+    echo "Ensure prepare_snp has been run first to install the custom kernel."
+
+    local SNP_QEMU="/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64"
+    local IGVM="${IGVM:-/etc/cocos/coconut-qemu.igvm}"
+
+    $SNP_QEMU \
+        -name "$VM_NAME" \
+        -enable-kvm \
+        -cpu EPYC-v4 \
+        -machine q35 \
+        -smp "$CPU,sockets=1,threads=1" \
+        -m "$RAM,slots=5,maxmem=40G" \
         -netdev user,id=vmnic,hostfwd=tcp::6190-:22,hostfwd=tcp::6191-:80,hostfwd=tcp::6192-:443,hostfwd=tcp::6193-:7001 \
-        -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,addr=0x2,romfile= \
-        -drive file="$SEED_IMAGE",media=cdrom \
+        -device virtio-net-pci,disable-legacy=on,iommu_platform=true,netdev=vmnic,romfile= \
+        -machine confidential-guest-support=sev0,memory-backend=ram1,igvm-cfg=igvm0 \
+        -object memory-backend-memfd,id=ram1,size="$RAM",share=true,prealloc=false,reserve=false \
+        -object sev-snp-guest,id=sev0,cbitpos=51,reduced-phys-bits=1 \
+        -object igvm-cfg,id=igvm0,file="$IGVM" \
         -drive file="$CUSTOM_IMAGE",if=none,id=disk0,format=qcow2 \
-        -device virtio-scsi-pci,id=scsi,disable-legacy=on,iommu_platform=true \
-        -device scsi-hd,drive=disk0 \
+        -device virtio-scsi-pci,id=scsi0,disable-legacy=on,iommu_platform=true \
+        -device scsi-hd,drive=disk0,bus=scsi0.0 \
+        -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=198 \
         -nographic \
-        -monitor pty \
-        -no-reboot
+        -no-reboot \
+        -monitor pty
 }
 
 function print_help() {
@@ -251,7 +271,8 @@ Usage: $0 [command] [options]
 Commands:
   start         Start the QEMU VM (auto-detect CVM support)
   start_tdx     Start the QEMU VM with Intel TDX enabled
-  start_snp     Start the QEMU VM with AMD SEV-SNP enabled
+  prepare_snp   Prepare the image for SNP (run once before start_snp)
+  start_snp     Start the QEMU VM with AMD SEV-SNP enabled (requires prepare_snp)
   start_regular Start the QEMU VM without CVM (regular KVM)
   detect        Detect available CVM support on this host
   help          Show this help message
@@ -304,6 +325,9 @@ function main() {
             ;;
         start_tdx)
             start_tdx
+            ;;
+        prepare_snp)
+            prepare_snp
             ;;
         start_snp)
             start_snp
