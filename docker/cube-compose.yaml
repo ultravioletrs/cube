@@ -457,6 +457,10 @@ services:
         bind:
           create_host_path: true
       - type: bind
+        source: ./ssl/certs/ca.crt
+        target: /etc/ssl/certs/ca.crt
+        read_only: true
+      - type: bind
         source: ${MG_CHANNELS_GRPC_CLIENT_CERT:-ssl/certs/dummy/channels_client_cert}
         target: /channels-grpc-client${MG_CHANNELS_GRPC_CLIENT_CERT:+.crt}
         bind:
@@ -471,6 +475,11 @@ services:
         target: /channels-grpc-server-ca${MG_CHANNELS_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
+      - type: bind
+        source: ./ssl/certs/ca.crt
+        target: /etc/ssl/certs/ca.crt
+        read_only: true
+
 
   magistrala-ui-backend-db:
     image: postgres:16.2-alpine
@@ -513,8 +522,12 @@ services:
       echo \"Creating bucket $${BUCKET}, wait for 25s...\";
       sleep 25;
       HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -f -X PUT http://magistrala-seaweedfs-s3:8333/$${BUCKET});
-      if [ $${HTTP_CODE} = '200' ] || [ $${HTTP_CODE} = '201' ]; then
-        echo \"[INIT] Bucket $${BUCKET} created successfully!\";
+      if [ $${HTTP_CODE} = '200' ] || [ $${HTTP_CODE} = '201' ] || [ $${HTTP_CODE} = '409' ]; then
+        if [ $${HTTP_CODE} = '409' ]; then
+          echo \"[INIT] Bucket $${BUCKET} already exists.\";
+        else
+          echo \"[INIT] Bucket $${BUCKET} created successfully!\";
+        fi
         curl -s http://magistrala-seaweedfs-s3:8333/ | grep -o '<Name>[^<]*</Name>';
         exit 0;
       else
