@@ -227,7 +227,7 @@ config-local:
 .PHONY: restore-config
 restore-config:
 	@echo "Restoring configuration placeholders..."
-	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null && \
+	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json $(GUARDRAILS_CONFIG_FILE) 2>/dev/null && \
 		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
 
 .PHONY: down
