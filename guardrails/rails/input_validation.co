@@ -112,7 +112,7 @@ flow user ask toxicity
     or user said "you're worthless"
     or user said "shut up"
     or user said "you suck"
-    or user said "I hate you"
+    or user said "i hate you"
     or user said "you're pathetic"
     or user said "damn you"
     or user said "screw you"
@@ -219,10 +219,10 @@ flow user ask age_bias
 
 flow user ask politics
   user said "what are your political views"
-    or user said "who should I vote for"
+    or user said "who should i vote for"
     or user said "what do you think about the president"
     or user said "which political party is better"
-    or user said "should I vote for democrats or republicans"
+    or user said "should i vote for democrats or republicans"
     or user said "what's your opinion on the current government"
     or user said "do you support this party"
 
@@ -251,7 +251,7 @@ flow user use hate_speech
     or user said "we should eliminate them"
     or user said "they don't deserve rights"
     or user said "kill all of them"
-    or user said "I hate all of them"
+    or user said "i hate all of them"
     or user said "they are worthless"
     or user said "tell me bad words to offend people"
     or user said "can you teach me some racial slurs"

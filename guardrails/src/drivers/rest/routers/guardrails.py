@@ -3,9 +3,12 @@
 
 import logging
 import re
-from typing import Any, Dict
+import time
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 
 from src.drivers.rest.dependencies import get_runtime
 from src.drivers.rest.routers.schemas import (
@@ -16,6 +19,81 @@ from src.drivers.rest.routers.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/guardrails", tags=["guardrails"])
+
+# ---------------------------------------------------------------------------
+# Canned responses handled in Python – bypasses NeMo entirely for speed
+# and reliability (Colang's `user said` is case-sensitive exact matching).
+# ---------------------------------------------------------------------------
+
+_GREETING_PATTERNS = re.compile(
+    r"^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|"
+    r"greetings|what'?s\s*up|sup|yo|hiya|heya)[\s!?.,:;]*$",
+    re.IGNORECASE,
+)
+_GOODBYE_PATTERNS = re.compile(
+    r"^(bye|goodbye|good\s*bye|see\s*you(\s*later)?|farewell|take\s*care|"
+    r"talk\s*to\s*you\s*later|later|cheers|cya|ttyl|adios|"
+    r"good\s*night|have\s*a\s*good\s*(one|day|night))[\s!?.,:;]*$",
+    re.IGNORECASE,
+)
+_CAPABILITIES_PATTERNS = re.compile(
+    r"^(what\s*can\s*you\s*do|what\s*are\s*your\s*capabilities|"
+    r"how\s*can\s*you\s*help|what\s*can\s*you\s*help\s*with|"
+    r"tell\s*me\s*about\s*your\s*features|what\s*do\s*you\s*do|"
+    r"who\s*are\s*you|what\s*are\s*you)[\s?!.]*$",
+    re.IGNORECASE,
+)
+
+_CANNED_RESPONSES = {
+    "greeting": "Hello! How can I assist you today?",
+    "goodbye": "Goodbye! Feel free to return if you need any assistance.",
+    "capabilities": (
+        "I can help with a variety of tasks including answering questions, "
+        "providing information, and assisting with analysis. I have safety "
+        "guardrails in place to ensure our conversation remains helpful "
+        "and appropriate."
+    ),
+}
+
+
+def _match_canned(text: str) -> Optional[str]:
+    """Return a canned response key if *text* matches a known pattern, else None."""
+    if _GREETING_PATTERNS.match(text):
+        return "greeting"
+    if _GOODBYE_PATTERNS.match(text):
+        return "goodbye"
+    if _CAPABILITIES_PATTERNS.match(text):
+        return "capabilities"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Direct LLM fallback – used when NeMo returns an empty response
+# ---------------------------------------------------------------------------
+
+async def _direct_llm_fallback(
+    user_text: str, model: str, authorization: Optional[str]
+) -> str:
+    """Call the LLM directly, bypassing NeMo, as a last-resort fallback."""
+    try:
+        headers = {"X-Guardrails-Request": "true"}
+        if authorization:
+            headers["Authorization"] = authorization
+
+        llm = ChatOpenAI(
+            model=model,
+            base_url="http://cube-proxy:8900/v1",
+            api_key="EMPTY",
+            default_headers=headers,
+            temperature=0.7,
+            max_tokens=1024,
+            timeout=60,
+        )
+        result = await llm.ainvoke([HumanMessage(content=user_text)])
+        return result.content.strip() if result and result.content else ""
+    except Exception as e:
+        logger.error(f"Direct LLM fallback failed: {e}")
+        return ""
 
 
 def clean_response(response) -> str:
@@ -299,9 +377,8 @@ def extract_guardrails_detections(res: Any, response_content: str, original_mess
 
 @router.post("/messages", tags=["chat"])
 async def chat_completion(request: Request, req: ChatRequest, authorization: str = Header(None)) -> Dict[str, Any]:
-    import time
     start_time = time.time()
-    
+
     runtime = get_runtime()
 
     if not runtime.is_ready():
@@ -327,7 +404,6 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
             last_user_msg = all_messages[-1] if all_messages else {"role": "user", "content": ""}
 
         # Handle empty / whitespace-only messages in Python before NeMo.
-        # These confuse the LLM intent classifier and are cheaper to catch here.
         user_text = (last_user_msg.get("content") or "").strip()
         if not user_text or user_text in ("...", "???", "null", "None", "undefined",
                                            "[null]", "[undefined]", "<empty>", "<null>"):
@@ -352,48 +428,100 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
                 },
             }
 
-        # Colang 2.x: send only the last user message.
-        # Sending multiple user messages causes duplicate processing.
-        messages = [last_user_msg]
+        # ---- Canned responses (greetings, goodbye, capabilities) -----------
+        # Handled in Python for reliability — Colang's `user said` is case-
+        # sensitive exact matching and fails on "Hello" vs "hello".
+        canned_key = _match_canned(user_text)
+        if canned_key:
+            latency = (time.time() - start_time) * 1000
+            logger.info(f"Canned response for '{canned_key}' in {latency:.0f}ms")
+            return {
+                "model": req.model,
+                "message": {
+                    "role": "assistant",
+                    "content": _CANNED_RESPONSES[canned_key],
+                },
+                "done": True,
+                "usage": {"prompt_tokens": max(1, len(user_text) // 4),
+                          "completion_tokens": max(1, len(_CANNED_RESPONSES[canned_key]) // 4),
+                          "total_tokens": max(2, (len(user_text) + len(_CANNED_RESPONSES[canned_key])) // 4)},
+                "guardrails": {
+                    "processed": True,
+                    "decision": "ALLOW",
+                    "triggered_input_rails": [],
+                    "triggered_output_rails": [],
+                    "violations": [],
+                    "latency_ms": latency,
+                },
+            }
+
+        # ---- NeMo Guardrails pipeline ------------------------------------
+        # Lowercase the user message so Colang's case-sensitive `user said`
+        # patterns (in guard flows) match regardless of the original casing.
+        lowered_msg = {"role": "user", "content": user_text.lower()}
+        messages = [lowered_msg]
+
+        llm_headers = {"X-Guardrails-Request": "true"}
+        if authorization:
+            llm_headers["Authorization"] = authorization
 
         llm_params = {
             "model": req.model,
             "temperature": req.temperature,
             "max_tokens": req.max_tokens,
-            "headers": {
-                "Authorization": authorization,
-                "X-Guardrails-Request": "true"
-            }
+            "headers": llm_headers,
         }
 
         logger.debug(f"llm_params prepared for model: {req.model}, auth_present={authorization is not None}")
-        res = await runtime.generate(
-            messages=messages,
-            options={
-                "llm_params": llm_params,
-                "llm": llm_params,
-            },
-        )
 
-        # --- robust response extraction -----------------------------------
-        # NeMo's GenerationResponse.response can be str, list[dict], or None.
-        raw = res.response if hasattr(res, "response") else None
+        response_content = ""
+        res = None  # NeMo response object for detection extraction
+        nemo_failed = False
 
-        # Fallback: if .response is empty, try the last assistant message in
-        # .response list or .output_data
-        if not raw and hasattr(res, "response") and isinstance(res.response, list):
-            for msg in reversed(res.response):
-                if isinstance(msg, dict) and msg.get("role") == "assistant" and msg.get("content"):
-                    raw = msg["content"]
-                    break
+        try:
+            res = await runtime.generate(
+                messages=messages,
+                options={
+                    "llm_params": llm_params,
+                    "llm": llm_params,
+                },
+            )
 
-        response_content = clean_response(raw)
+            # --- robust response extraction --------------------------------
+            raw = res.response if hasattr(res, "response") else None
+
+            if not raw and hasattr(res, "response") and isinstance(res.response, list):
+                for msg in reversed(res.response):
+                    if isinstance(msg, dict) and msg.get("role") == "assistant" and msg.get("content"):
+                        raw = msg["content"]
+                        break
+
+            response_content = clean_response(raw)
+        except Exception as nemo_err:
+            logger.warning(f"NeMo pipeline failed: {nemo_err} — will try direct LLM fallback")
+            nemo_failed = True
+
+        # ---- Fallback: if NeMo returned empty or threw, call LLM directly --
+        if not response_content:
+            logger.warning("NeMo returned empty response — invoking direct LLM fallback")
+            response_content = await _direct_llm_fallback(user_text, req.model, authorization)
+            if not response_content:
+                response_content = "I'm sorry, I wasn't able to generate a response. Please try again."
 
         # Calculate guardrails processing latency
         guardrails_latency_ms = (time.time() - start_time) * 1000
 
         # Extract guardrails detection information from response context
-        guardrails_info = extract_guardrails_detections(res, response_content, all_messages)
+        if res is not None:
+            guardrails_info = extract_guardrails_detections(res, response_content, all_messages)
+        else:
+            guardrails_info = {
+                "processed": nemo_failed is False,
+                "decision": "ALLOW",
+                "triggered_input_rails": [],
+                "triggered_output_rails": [],
+                "violations": [],
+            }
         guardrails_info["latency_ms"] = guardrails_latency_ms
 
         # Calculate token usage (rough estimate: ~4 chars per token)

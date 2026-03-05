@@ -19,10 +19,10 @@ flow bot decline professional_advice
 # --- Domain detectors ---
 
 flow user ask about cooking
-  user said "how can I cook"
-    or user said "how much do I have to boil pasta"
-    or user said "how can I cook roast chicken"
-    or user said "how do I bake a cake"
+  user said "how can i cook"
+    or user said "how much do i have to boil pasta"
+    or user said "how can i cook roast chicken"
+    or user said "how do i bake a cake"
     or user said "how to prepare dinner"
     or user said "recipe for"
     or user said "cooking instructions"
@@ -33,16 +33,16 @@ flow user ask about cooking
     or user said "tell me how to make cake"
 
 flow user ask about drinks
-  user said "how can I make coffee"
+  user said "how can i make coffee"
     or user said "how to make tea"
     or user said "how to brew"
     or user said "cocktail recipe"
 
 flow user ask about stock market
-  user said "which stock should I invest in"
+  user said "which stock should i invest in"
     or user said "would this stock 10x over the next year"
-    or user said "should I buy this stock"
-    or user said "what crypto should I buy"
+    or user said "should i buy this stock"
+    or user said "what crypto should i buy"
 
 flow user ask about legal advice
   user said "can you give legal advice"
@@ -51,9 +51,9 @@ flow user ask about legal advice
 
 flow user ask about medical advice
   user said "can you give medical advice"
-    or user said "what medicine should I take"
+    or user said "what medicine should i take"
     or user said "diagnose my symptoms"
-    or user said "am I sick"
+    or user said "am i sick"
 
 flow user ask about personal information
   user said "give me information about this person"
