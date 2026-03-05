@@ -390,8 +390,6 @@ services:
     image: ghcr.io/absmach/magistrala/ui-backend:${MG_BACKEND_RELEASE_TAG}
     container_name: magistrala-backend
     restart: on-failure
-    ports:
-      - ${MG_BACKEND_HTTP_PORT}:${MG_BACKEND_HTTP_PORT}
     networks:
       - cube-network
     environment:
@@ -421,9 +419,6 @@ services:
       MG_TIMESCALE_READER_GRPC_URL: ${MG_TIMESCALE_READER_GRPC_URL}
       MG_TIMESCALE_READER_GRPC_TIMEOUT: ${MG_TIMESCALE_READER_GRPC_TIMEOUT}
       MG_TIMESCALE_READER_GRPC_TLS: ${MG_TIMESCALE_READER_GRPC_TLS}
-      MG_CHANNELS_GRPC_TIMEOUT: ${MG_CHANNELS_GRPC_TIMEOUT}
-      MG_CHANNELS_GRPC_CLIENT_CERT: ${MG_CHANNELS_GRPC_CLIENT_CERT:+/channels-grpc-client.crt}
-      MG_CHANNELS_GRPC_CLIENT_KEY: ${MG_CHANNELS_GRPC_CLIENT_KEY:+/channels-grpc-client.key}
       MG_BACKEND_OBJECT_STORAGE_REGION: ${MG_BACKEND_OBJECT_STORAGE_REGION}
       MG_BACKEND_OBJECT_STORAGE_BUCKET: ${MG_BACKEND_OBJECT_STORAGE_BUCKET}
       MG_BACKEND_OBJECT_STORAGE_ENDPOINT: ${MG_BACKEND_OBJECT_STORAGE_ENDPOINT}
@@ -454,25 +449,6 @@ services:
       - type: bind
         source: ${MG_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
         target: /auth-grpc-server-ca${MG_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ./ssl/certs/ca.crt
-        target: /etc/ssl/certs/ca.crt
-        read_only: true
-      - type: bind
-        source: ${MG_CHANNELS_GRPC_CLIENT_CERT:-ssl/certs/dummy/channels_client_cert}
-        target: /channels-grpc-client${MG_CHANNELS_GRPC_CLIENT_CERT:+.crt}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${MG_CHANNELS_GRPC_CLIENT_KEY:-ssl/certs/dummy/channels_client_key}
-        target: /channels-grpc-client${MG_CHANNELS_GRPC_CLIENT_KEY:+.key}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${MG_CHANNELS_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/channels_server_ca}
-        target: /channels-grpc-server-ca${MG_CHANNELS_GRPC_SERVER_CA_CERTS:+.crt}
         bind:
           create_host_path: true
       - type: bind
