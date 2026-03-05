@@ -43,6 +43,18 @@ _CAPABILITIES_PATTERNS = re.compile(
     r"who\s*are\s*you|what\s*are\s*you)[\s?!.]*$",
     re.IGNORECASE,
 )
+_PLATFORM_PATTERNS = re.compile(
+    r"^(what\s*is\s*cube(\s*ai)?|tell\s*me\s*about\s*cube(\s*ai)?|"
+    r"what\s*platform\s*is\s*this|what\s*is\s*this\s*platform|"
+    r"who\s*(built|made|created|develops?)\s*this|"
+    r"who\s*(built|made|created|develops?)\s*cube(\s*ai)?|"
+    r"what\s*is\s*ultraviolet|tell\s*me\s*about\s*ultraviolet|"
+    r"how\s*does\s*cube(\s*ai)?\s*work|"
+    r"what\s*does\s*cube(\s*ai)?\s*do|"
+    r"describe\s*cube(\s*ai)?|"
+    r"about\s*(this\s*)?platform|about\s*cube(\s*ai)?)[\s?!.]*$",
+    re.IGNORECASE,
+)
 
 _CANNED_RESPONSES = {
     "greeting": "Hello! How can I assist you today?",
@@ -52,6 +64,27 @@ _CANNED_RESPONSES = {
         "providing information, and assisting with analysis. I have safety "
         "guardrails in place to ensure our conversation remains helpful "
         "and appropriate."
+    ),
+    "platform": (
+        "Cube AI is a framework developed by Ultraviolet for building "
+        "GPT-based applications using confidential computing. It protects "
+        "user data and AI models by running inference inside a Trusted "
+        "Execution Environment (TEE) — a secure area of the processor that "
+        "keeps code and data confidential, even when the host environment "
+        "is not fully trusted.\n\n"
+        "Key features include:\n"
+        "• Trusted Execution Environment (TEE) — hardware-backed secure enclaves for private inference\n"
+        "• AI Safety Guardrails — input/output validation, jailbreak and prompt-injection detection, "
+        "off-topic filtering, toxicity checks, and sensitive-data masking\n"
+        "• Comprehensive Audit Logging — every request is logged with trace IDs, guardrail decisions, "
+        "token usage, latency, and attestation status for full compliance visibility\n"
+        "• Remote Attestation — SEV-SNP, TDX, and vTPM attestation to verify CVM integrity "
+        "before processing any data\n"
+        "• Multiple LLM Backend Support — Ollama and vLLM for flexible model deployment\n"
+        "• OpenAI-Compatible API — familiar endpoints for easy integration with existing applications\n"
+        "• Dynamic Route Management — create, update, and manage proxy routes at runtime\n"
+        "• Observability — built-in metrics, distributed tracing, and structured logging\n\n"
+        "You can learn more at https://github.com/ultravioletrs/cube"
     ),
 }
 
@@ -64,6 +97,8 @@ def _match_canned(text: str) -> Optional[str]:
         return "goodbye"
     if _CAPABILITIES_PATTERNS.match(text):
         return "capabilities"
+    if _PLATFORM_PATTERNS.match(text):
+        return "platform"
     return None
 
 

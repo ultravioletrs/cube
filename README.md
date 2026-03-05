@@ -29,11 +29,15 @@ Traditional GPT-based applications often rely on public cloud services where ope
 
 ## Key Features
 
-- **Secure Computing**: Cube AI uses secure enclaves to protect user data and AI models from unauthorized access.
-- **Trusted Execution Environment (TEE)**: Cube AI uses a trusted execution environment to ensure that AI models are executed securely and in a controlled environment.
-- **Scalability**: Cube AI can handle large amounts of data and AI models, making it suitable for applications that require high performance and scalability.
+- **Trusted Execution Environment (TEE)**: Hardware-backed secure enclaves ensure AI models are executed in a controlled, isolated environment — protecting prompts, responses, and model data even if the host OS is compromised.
+- **AI Safety Guardrails**: Input and output validation powered by NeMo Guardrails, including jailbreak and prompt-injection detection, off-topic filtering, toxicity checks, and sensitive-data masking via Presidio.
+- **Comprehensive Audit Logging**: Every request is logged with trace IDs, guardrail decisions and violations, token usage, latency breakdowns, and attestation status — giving full compliance and observability visibility.
+- **Remote Attestation**: SEV-SNP, TDX, and vTPM attestation verifies CVM integrity before any data is processed, with support for Azure Attestation Service.
 - **Multiple LLM Backend Support**: Supports both Ollama and vLLM for flexible model deployment and high-performance inference.
 - **OpenAI-Compatible API**: Provides familiar API endpoints for easy integration with existing applications.
+- **Dynamic Route Management**: Create, update, and manage proxy routes at runtime through a dedicated REST API.
+- **Observability**: Built-in Prometheus metrics, distributed tracing, and structured logging across all services.
+- **Scalability**: Handles large-scale workloads with concurrent request batching (vLLM) and efficient resource management.
 
 ## Supported LLM Backends
 

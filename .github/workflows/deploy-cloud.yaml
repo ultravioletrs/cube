@@ -18,6 +18,7 @@ on:
       - "docker/opensearch-index-template.json"
       - "docker/traefik/traefik.toml"
       - "docker/traefik/dynamic.toml"
+      - "guardrails/rails/**"
       - ".github/workflows/deploy-cloud.yaml"
 
   workflow_run:
@@ -56,6 +57,22 @@ jobs:
       packages: read
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect guardrails rails changes
+        id: guardrails-changes
+        run: |
+          if git diff --name-only HEAD~1 HEAD -- 'guardrails/rails/' | grep -q .; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Guardrails rails files changed — DB will be reseeded"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No guardrails rails changes detected"
+          fi
+
       - name: Deploy Cube Cloud Services
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -130,6 +147,34 @@ jobs:
 
             echo "Stopping existing services"
             docker compose -f docker/compose.yaml --profile cloud down 2>&1
+
+            # Reseed guardrails DB if rails config files changed
+            if [ "${{ steps.guardrails-changes.outputs.changed }}" = "true" ]; then
+              echo "=== Reseeding Guardrails Database ==="
+              echo "Guardrails rails files changed — truncating config tables so bootstrap re-seeds from filesystem"
+              
+              # Start only the guardrails DB temporarily
+              docker compose -f docker/compose.yaml up -d cube-guardrails-db 2>&1
+              echo "Waiting for guardrails DB to be ready..."
+              for i in $(seq 1 30); do
+                if docker exec cube-guardrails-db pg_isready -U "${UV_GUARDRAILS_DB_USER:-guardrails}" -d "${UV_GUARDRAILS_DB_NAME:-guardrails}" > /dev/null 2>&1; then
+                  echo "  ✓ Guardrails DB is ready"
+                  break
+                fi
+                sleep 1
+              done
+
+              docker exec cube-guardrails-db psql \
+                -U "${UV_GUARDRAILS_DB_USER:-guardrails}" \
+                -d "${UV_GUARDRAILS_DB_NAME:-guardrails}" \
+                -c "TRUNCATE guardrail_materialized, guardrail_versions, guardrail_configs CASCADE;" 2>&1 \
+                && echo "  ✓ Guardrails tables truncated — bootstrap will re-seed on startup" \
+                || echo "  ⚠ Truncate failed (tables may not exist yet — first deploy will seed automatically)"
+
+              docker compose -f docker/compose.yaml stop cube-guardrails-db 2>&1
+            else
+              echo "No guardrails rails changes — skipping DB reseed"
+            fi
 
             echo "Starting cloud services"
             docker compose -f docker/compose.yaml --profile cloud up -d 2>&1
