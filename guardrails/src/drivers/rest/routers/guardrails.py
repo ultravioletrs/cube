@@ -19,30 +19,45 @@ router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
 
 def clean_response(response) -> str:
+    """Extract a clean assistant message string from a NeMo GenerationResponse.
+
+    Handles the multiple shapes .response can take in Colang 2.x:
+      - str
+      - list[dict] with 'content' keys  (most common from single_call mode)
+      - list[str]
+      - None / empty
+    """
     if not response:
         return ""
 
+    # --- list of message dicts (Colang 2.x single-call mode) ---------------
     if isinstance(response, list):
-        parts = []
+        parts: list[str] = []
         for item in response:
             if isinstance(item, dict):
-                parts.append(item.get("content", str(item)))
-            else:
-                parts.append(str(item))
-        response = " ".join(parts)
+                content = item.get("content", "")
+                if content:
+                    parts.append(str(content))
+            elif isinstance(item, str) and item.strip():
+                parts.append(item)
+        response = " ".join(parts) if parts else ""
 
     if not isinstance(response, str):
         response = str(response)
 
     cleaned = response.strip()
 
-    cleaned = re.sub(r'^(bot|I)\s+\w+(\s+\w+)*\s*\n', '', cleaned, flags=re.IGNORECASE)
+    # Remove leading "bot say" / "bot inform" prefixes that Colang can leak
+    cleaned = re.sub(
+        r'^bot\s+(say|inform|respond|express|clarify|suggest)\s+',
+        '',
+        cleaned,
+        flags=re.IGNORECASE,
+    )
 
-    if cleaned.startswith('"') and cleaned.endswith('"'):
+    # Strip surrounding quotes
+    if len(cleaned) >= 2 and cleaned[0] == '"' and cleaned[-1] == '"':
         cleaned = cleaned[1:-1]
-
-    if cleaned.lower().startswith("bot "):
-        cleaned = "I" + cleaned[3:]
 
     return cleaned.strip()
 
@@ -299,7 +314,47 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
         logger.info(f"Processing chat request with {len(req.messages)} messages")
 
         # Convert Pydantic models to dicts
-        messages = [{"role": m.role, "content": m.content} for m in req.messages]
+        all_messages = [{"role": m.role, "content": m.content} for m in req.messages]
+
+        # Find the last user message — this is the current turn.
+        last_user_msg = None
+        for m in reversed(all_messages):
+            if m["role"] == "user":
+                last_user_msg = m
+                break
+
+        if not last_user_msg:
+            last_user_msg = all_messages[-1] if all_messages else {"role": "user", "content": ""}
+
+        # Handle empty / whitespace-only messages in Python before NeMo.
+        # These confuse the LLM intent classifier and are cheaper to catch here.
+        user_text = (last_user_msg.get("content") or "").strip()
+        if not user_text or user_text in ("...", "???", "null", "None", "undefined",
+                                           "[null]", "[undefined]", "<empty>", "<null>"):
+            logger.info("Empty or invalid user message — returning canned response")
+            return {
+                "model": req.model,
+                "message": {
+                    "role": "assistant",
+                    "content": "I didn't receive a valid message. Please try again with a clear question or request.",
+                },
+                "done": True,
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "guardrails": {
+                    "processed": True,
+                    "decision": "BLOCK",
+                    "triggered_input_rails": ["empty_message"],
+                    "triggered_output_rails": [],
+                    "violations": [{"type": "invalid_input", "category": "input_validation",
+                                    "severity": "low", "description": "Empty or invalid message",
+                                    "action": "rejected"}],
+                    "latency_ms": 0,
+                },
+            }
+
+        # Colang 2.x: send only the last user message.
+        # Sending multiple user messages causes duplicate processing.
+        messages = [last_user_msg]
 
         llm_params = {
             "model": req.model,
@@ -315,30 +370,30 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
         res = await runtime.generate(
             messages=messages,
             options={
-                "log": {
-                    "llm_calls": True,
-                    "internal_events": True,
-                    "colang_history": True,
-                    "activated_rails": True,
-                    "llm_prompts": True,
-                    "print_llm_calls_outputs": True,
-                },
                 "llm_params": llm_params,
                 "llm": llm_params,
-                "output_vars": ["relevant_chunks", "triggered_input_rail", "triggered_output_rail"],
-                "return_context": True,
-                "llm_output": True
             },
         )
 
-        response_content = res.response if res.response else ""
-        response_content = clean_response(response_content)
+        # --- robust response extraction -----------------------------------
+        # NeMo's GenerationResponse.response can be str, list[dict], or None.
+        raw = res.response if hasattr(res, "response") else None
+
+        # Fallback: if .response is empty, try the last assistant message in
+        # .response list or .output_data
+        if not raw and hasattr(res, "response") and isinstance(res.response, list):
+            for msg in reversed(res.response):
+                if isinstance(msg, dict) and msg.get("role") == "assistant" and msg.get("content"):
+                    raw = msg["content"]
+                    break
+
+        response_content = clean_response(raw)
 
         # Calculate guardrails processing latency
         guardrails_latency_ms = (time.time() - start_time) * 1000
 
         # Extract guardrails detection information from response context
-        guardrails_info = extract_guardrails_detections(res, response_content, messages)
+        guardrails_info = extract_guardrails_detections(res, response_content, all_messages)
         guardrails_info["latency_ms"] = guardrails_latency_ms
 
         # Calculate token usage (rough estimate: ~4 chars per token)

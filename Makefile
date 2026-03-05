@@ -231,12 +231,12 @@ restore-config:
 		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
 
 .PHONY: down
-down:
+down: config-local
 	@echo "Stopping all Cube services..."
 	docker compose -f docker/compose.yaml down
 
 .PHONY: down-volumes
-down-volumes:
+down-volumes: config-local
 	@echo "Stopping all Cube services and removing volumes..."
 	docker compose -f docker/compose.yaml down -v
 
