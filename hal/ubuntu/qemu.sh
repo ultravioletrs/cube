@@ -157,7 +157,7 @@ EOF
         echo "Included kernel .deb files from ${SCRIPT_DIR}/debs/"
     fi
 
-    genisoimage -output "$SEED_IMAGE" -volid cidata -joliet -rock "$cidata_dir"
+    genisoimage -output "$SEED_IMAGE" -volid cidata -rock "$cidata_dir"
 }
 
 function start_regular() {

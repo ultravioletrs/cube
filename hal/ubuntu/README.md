@@ -85,6 +85,7 @@ A custom kernel is only required when the SNP host runs Coconut SVSM. The standa
 The custom kernel must be built with the following options:
 - `CONFIG_AMD_MEM_ENCRYPT=y` — AMD memory encryption support
 - `CONFIG_SEV_GUEST=y` — SEV guest driver
+- `CONFIG_TCG_PLATFORM=y` — required for vTPM support
 - Coconut SVSM guest support patches applied
 
 The kernel must be packaged as `.deb` files.
@@ -103,20 +104,16 @@ hal/ubuntu/
     linux-modules-*.deb  (if needed)
 ```
 
-The `start_snp` command will automatically detect `debs/` and package the files into the seed ISO using `genisoimage`:
+The `prepare_snp` command will automatically detect `debs/` and package them along with `user-data` and `meta-data` into the seed ISO using `genisoimage`:
 
 ```bash
-genisoimage -output seed.img -volid cidata -joliet -rock cidata/
+genisoimage -output seed.img -volid cidata -rock hal/ubuntu/
 ```
 
-Where the `cidata/` directory contains:
-```
-cidata/
-  meta-data
-  user-data
-  debs/
-    *.deb
-```
+The `hal/ubuntu/` directory must contain:
+- `user-data` — the cloud-init configuration (copied from `user-data-snp.yaml`)
+- `meta-data` — the VM instance metadata
+- `debs/` — the custom kernel `.deb` packages
 
 On first boot, cloud-init mounts the seed ISO, installs the `.deb` packages, runs `update-grub`, and the VM boots the new SNP-compatible kernel on next start.
 

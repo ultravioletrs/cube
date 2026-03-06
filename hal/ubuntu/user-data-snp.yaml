@@ -132,23 +132,18 @@ runcmd:
     SSHEOF
   - systemctl restart sshd
   - sleep 2
-  # SEV-SNP Setup for Ubuntu 24.04+
-  # Ubuntu 24.04 (Noble) has SEV-SNP guest support built into the kernel
-  # The kernel CONFIG_SEV_GUEST is enabled by default
+  # SEV-SNP Setup (local only — not needed on cloud providers like GCP/Azure
+  # which handle SEV-SNP at the hypervisor level)
   - |
-    # Load SEV-SNP guest modules
+    # Load SEV-SNP guest modules (local deployment only)
     modprobe ccp 2>/dev/null || echo "CCP module not available"
     modprobe sev-guest 2>/dev/null || echo "sev-guest module not available"
     # Verify SEV-SNP guest support
     if [ -e /dev/sev-guest ]; then
       echo "SEV-SNP: Running inside an SEV-SNP protected VM"
       echo "SEV-SNP attestation available via /dev/sev-guest"
-    elif [ -e /sys/kernel/debug/sev ]; then
-      echo "SEV-SNP: SEV support detected"
-    elif grep -q "sev" /proc/cpuinfo 2>/dev/null; then
-      echo "SEV-SNP: CPU supports SEV"
     else
-      echo "SEV-SNP: Not detected (may be running in non-SEV mode)"
+      echo "SEV-SNP: /dev/sev-guest not detected (expected on cloud providers)"
     fi
   - mkdir -p /etc/cube
   - mkdir -p /etc/cube/certs
