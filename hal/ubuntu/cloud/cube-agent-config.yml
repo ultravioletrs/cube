@@ -3,19 +3,13 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 #
-# This cloud-init configuration sets up a Cube AI agent with Ollama backend
-# on Ubuntu-based confidential VMs (GCP, Azure, or QEMU with TDX/SEV-SNP).
+# Cloud-init for Cube AI agent with Ollama backend on GCP or Azure confidential VMs.
+# For local QEMU deployment, use user-data-*.yaml files in the parent directory instead.
 #
 # Usage:
-#   Clone https://github.com/ultravioletrs/cocos-infra.git, then:
-#   - GCP:   set cloud_init_config to this file path in terraform.tfvars
-#   - Azure: set cloud_init_config to this file path in terraform.tfvars
-#   See cloud/README.md for full deployment instructions
-#
-# Environment Variables (set before deployment):
-#   CUBE_AI_BACKEND    - AI backend: "ollama" (default) or "vllm"
-#   CUBE_MODELS        - Comma-separated list of models to pull (Ollama only)
-#   CUBE_VLLM_MODEL    - HuggingFace model ID for vLLM backend
+#   Clone https://github.com/ultravioletrs/cocos-infra.git and set
+#   cloud_init_config to this file path in terraform.tfvars.
+#   See cloud/README.md for full deployment instructions.
 #
 # For vLLM backend, see: hal/ubuntu/cloud/cube-agent-vllm-config.yml
 
