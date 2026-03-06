@@ -6,13 +6,24 @@ This directory contains cloud-init configurations and QEMU launch scripts for ru
 
 ```
 hal/ubuntu/
-  qemu.sh                   # QEMU launch script (local deployment)
-  user-data-tdx.yaml        # Cloud-init for local QEMU TDX VMs
-  user-data-snp.yaml        # Cloud-init for local QEMU SNP VMs
-  user-data-regular.yaml    # Cloud-init for local QEMU regular VMs
-  debs/                     # Custom kernel .deb packages (SNP with Coconut SVSM only) These need to be added manually by the user if using SNP with Coconut SVSM locally
-  cloud/                    # Cloud provider configs (GCP, Azure) — see cloud/README.md
+  qemu.sh                      # QEMU launch script (local deployment)
+  user-data-tdx.yaml           # Cloud-init for local QEMU TDX VMs (Ollama backend)
+  user-data-snp.yaml           # Cloud-init for local QEMU SNP VMs (Ollama backend)
+  user-data-regular.yaml       # Cloud-init for local QEMU regular VMs (Ollama backend)
+  user-data-vllm-tdx.yaml     # Cloud-init for local QEMU TDX VMs (vLLM backend)
+  user-data-vllm-snp.yaml     # Cloud-init for local QEMU SNP VMs (vLLM backend)
+  user-data-vllm-regular.yaml # Cloud-init for local QEMU regular VMs (vLLM backend)
+  debs/                        # Custom kernel .deb packages (SNP with Coconut SVSM only, added manually)
+  cloud/                       # Cloud provider configs (GCP, Azure) — see cloud/README.md
 ```
+
+### Backend Selection
+
+Each CVM mode has two cloud-init variants:
+- **Ollama** (default) — `user-data-{mode}.yaml` — lightweight, supports multiple models, good for development
+- **vLLM** — `user-data-vllm-{mode}.yaml` — high-performance inference, OpenAI-compatible API, uses GPU if available
+
+The cube agent is backend-agnostic — it proxies requests to whatever `UV_CUBE_AGENT_TARGET_URL` is set to (Ollama on port 11434, vLLM on port 8000).
 
 ## Local Deployment (QEMU)
 

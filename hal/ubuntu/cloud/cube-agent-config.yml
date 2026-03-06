@@ -7,9 +7,10 @@
 # on Ubuntu-based confidential VMs (GCP, Azure, or QEMU with TDX/SEV-SNP).
 #
 # Usage:
-#   - GCP: Reference this file in terraform.tfvars as cloud_init_config
-#   - Azure: Reference this file in terraform.tfvars as cloud_init_config
-#   - QEMU: Use with cloud-localds to create seed image
+#   Clone https://github.com/ultravioletrs/cocos-infra.git, then:
+#   - GCP:   set cloud_init_config to this file path in terraform.tfvars
+#   - Azure: set cloud_init_config to this file path in terraform.tfvars
+#   See cloud/README.md for full deployment instructions
 #
 # Environment Variables (set before deployment):
 #   CUBE_AI_BACKEND    - AI backend: "ollama" (default) or "vllm"
@@ -271,8 +272,11 @@ runcmd:
       chmod +x /usr/local/bin/cube-agent
     else
       echo "Could not find release, building from source..."
+      GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/go//')
+      curl -fsSL https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz -o /tmp/go.tar.gz
+      rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz
       git clone https://github.com/ultravioletrs/cube.git /tmp/cube
-      cd /tmp/cube && /usr/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
+      cd /tmp/cube && /usr/local/go/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
     fi
 
   # Enable and start services

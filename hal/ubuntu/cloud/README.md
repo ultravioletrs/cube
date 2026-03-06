@@ -58,6 +58,10 @@ tofu init && tofu apply -var-file="../terraform.tfvars"
 ### Microsoft Azure
 
 ```bash
+# Clone infrastructure templates
+git clone https://github.com/ultravioletrs/cocos-infra.git
+cd cocos-infra
+
 # Configure terraform.tfvars
 cat >> terraform.tfvars << 'EOF'
 vm_name = "cube-ai-vm"
@@ -72,6 +76,7 @@ EOF
 cd azure
 az login
 tofu init && tofu apply -var-file="../terraform.tfvars"
+```
 ```
 
 ## Configuration

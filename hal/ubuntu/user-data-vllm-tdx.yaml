@@ -2,8 +2,10 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 #
-# Cloud-init for local QEMU regular (non-CVM) VMs
-# Used by: qemu.sh start_regular
+# Cloud-init for local QEMU Intel TDX VMs with vLLM backend
+# Used by: qemu.sh start_tdx
+# vLLM will use GPU automatically if available, otherwise falls back to CPU
+# For cloud deployments (GCP/Azure), see cloud/ directory instead
 
 package_update: true
 package_upgrade: false
@@ -14,9 +16,9 @@ users:
     lock_passwd: false
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
-  - name: ollama
+  - name: vllm
     system: true
-    home: /var/lib/ollama
+    home: /var/lib/vllm
     shell: /usr/sbin/nologin
 
 ssh_pwauth: true
@@ -25,6 +27,9 @@ packages:
   - curl
   - git
   - build-essential
+  - python3
+  - python3-pip
+  - python3-venv
 
 write_files:
   - path: /etc/cube/agent.env
@@ -33,27 +38,41 @@ write_files:
       UV_CUBE_AGENT_HOST=0.0.0.0
       UV_CUBE_AGENT_PORT=7001
       UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
-      UV_CUBE_AGENT_TARGET_URL=http://localhost:11434
+      UV_CUBE_AGENT_TARGET_URL=http://localhost:8000
       UV_CUBE_AGENT_SERVER_CERT=/etc/cube/certs/server.crt
       UV_CUBE_AGENT_SERVER_KEY=/etc/cube/certs/server.key
       UV_CUBE_AGENT_SERVER_CA_CERTS=/etc/cube/certs/ca.crt
       UV_CUBE_AGENT_CA_URL=https://prism.ultraviolet.rs/am-certs
+      # TDX-specific settings
+      AGENT_OS_TYPE=tdx
     permissions: '0644'
-  - path: /etc/systemd/system/ollama.service
+  - path: /etc/cube/vllm.env
+    content: |
+      VLLM_MODEL=${CUBE_VLLM_MODEL:-meta-llama/Llama-2-7b-hf}
+      VLLM_HOST=0.0.0.0
+      VLLM_PORT=8000
+    permissions: '0644'
+  - path: /etc/systemd/system/vllm.service
     content: |
       [Unit]
-      Description=Ollama Service
+      Description=vLLM Inference Server
       After=network-online.target
       Wants=network-online.target
 
       [Service]
       Type=simple
-      User=ollama
-      Group=ollama
-      Environment="OLLAMA_HOST=0.0.0.0:11434"
-      ExecStart=/usr/local/bin/ollama serve
-      Restart=always
-      RestartSec=3
+      User=vllm
+      Group=vllm
+      EnvironmentFile=/etc/cube/vllm.env
+      WorkingDirectory=/var/lib/vllm
+      ExecStart=/var/lib/vllm/venv/bin/python -m vllm.entrypoints.openai.api_server \
+        --model ${VLLM_MODEL} \
+        --host ${VLLM_HOST} \
+        --port ${VLLM_PORT}
+      Restart=on-failure
+      RestartSec=10
+      StartLimitBurst=3
+      StartLimitIntervalSec=60
 
       [Install]
       WantedBy=multi-user.target
@@ -62,7 +81,7 @@ write_files:
     content: |
       [Unit]
       Description=Cube Agent Service
-      After=network-online.target ollama.service
+      After=network-online.target vllm.service
       Wants=network-online.target
 
       [Service]
@@ -77,21 +96,6 @@ write_files:
       [Install]
       WantedBy=multi-user.target
     permissions: '0644'
-  - path: /usr/local/bin/pull-ollama-models.sh
-    content: |
-      #!/bin/bash
-      # Wait for ollama to be ready
-      for i in $(seq 1 60); do
-        if curl -s http://localhost:11434/api/version > /dev/null 2>&1; then
-          break
-        fi
-        sleep 2
-      done
-      # Pull models
-      /usr/local/bin/ollama pull tinyllama:1.1b
-      /usr/local/bin/ollama pull starcoder2:3b
-      /usr/local/bin/ollama pull nomic-embed-text:v1.5
-    permissions: '0755'
 
 runcmd:
   - echo 'ultraviolet:password' | chpasswd
@@ -101,6 +105,22 @@ runcmd:
     SSHEOF
   - systemctl restart sshd
   - sleep 2
+  # TDX Setup for Ubuntu 24.04+
+  - |
+    KERNEL_VERSION=$(uname -r)
+    echo "Installing TDX modules for kernel ${KERNEL_VERSION}..."
+    apt-get update
+    apt-get install -y linux-modules-extra-${KERNEL_VERSION} || apt-get install -y linux-modules-extra-generic || echo "Module package install failed"
+    mkdir -p /etc/modules-load.d
+    echo "tdx_guest" > /etc/modules-load.d/tdx.conf
+    modprobe tdx_guest 2>/dev/null || echo "tdx_guest module not available (will load after reboot)"
+    if [ -e /dev/tdx_guest ]; then
+      echo "TDX: /dev/tdx_guest device available"
+    elif [ -e /sys/firmware/tdx ]; then
+      echo "TDX: Running inside a TDX Trust Domain"
+    else
+      echo "TDX: Module configured, will be available after reboot"
+    fi
   - mkdir -p /etc/cube
   - mkdir -p /etc/cube/certs
   - |
@@ -115,11 +135,13 @@ runcmd:
     # Set permissions
     chmod 600 /etc/cube/certs/*.key
     chmod 644 /etc/cube/certs/*.crt
-  - mkdir -p /var/lib/ollama
-  - mkdir -p /home/ollama/.ollama
-  - chown -R ollama:ollama /var/lib/ollama
-  - chown -R ollama:ollama /home/ollama
-  - curl -fsSL https://ollama.com/install.sh | sh
+  - mkdir -p /var/lib/vllm
+  - chown -R vllm:vllm /var/lib/vllm
+  - |
+    # Install vLLM in virtual environment
+    sudo -u vllm python3 -m venv /var/lib/vllm/venv
+    sudo -u vllm /var/lib/vllm/venv/bin/pip install --upgrade pip
+    sudo -u vllm /var/lib/vllm/venv/bin/pip install vllm
   - |
     # Install Go (required version from go.mod)
     GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/go//')
@@ -132,10 +154,9 @@ runcmd:
   - export HOME=/root
   - cd /tmp/cube && /usr/local/go/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
   - systemctl daemon-reload
-  - systemctl enable ollama.service
-  - systemctl start ollama.service
+  - systemctl enable vllm.service
+  - systemctl start vllm.service
   - systemctl enable cube-agent.service
   - systemctl start cube-agent.service
-  - nohup /usr/local/bin/pull-ollama-models.sh > /var/log/ollama-pull.log 2>&1 &
 
-final_message: "Cube Agent and Ollama services started."
+final_message: "Cube Agent (TDX + vLLM) and vLLM services started."

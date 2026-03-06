@@ -283,6 +283,10 @@ Environment Variables:
   CPU           Number of vCPUs (default: 8)
   DISK_SIZE     Disk size (default: 35G)
 
+Backend:
+  Default cloud-init configs use Ollama. For vLLM, use the
+  user-data-vllm-*.yaml variants (uses GPU if available).
+
 Examples:
   $0 start              # Auto-detect and start with best available CVM
   $0 start_tdx          # Force TDX mode
