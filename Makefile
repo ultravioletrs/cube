@@ -227,16 +227,16 @@ config-local:
 .PHONY: restore-config
 restore-config:
 	@echo "Restoring configuration placeholders..."
-	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null && \
+	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json $(GUARDRAILS_CONFIG_FILE) 2>/dev/null && \
 		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
 
 .PHONY: down
-down:
+down: config-local
 	@echo "Stopping all Cube services..."
 	docker compose -f docker/compose.yaml down
 
 .PHONY: down-volumes
-down-volumes:
+down-volumes: config-local
 	@echo "Stopping all Cube services and removing volumes..."
 	docker compose -f docker/compose.yaml down -v
 
@@ -296,6 +296,17 @@ disable-guardrails:
 	@sed -i '/"name": "guardrails-admin"/,/"enabled":/{s/"enabled": true/"enabled": false/}' $(CONFIG_FILE)
 	@echo "Guardrails disabled"
 
+.PHONY: reseed-guardrails
+reseed-guardrails:
+	@echo "Reseeding guardrails DB from filesystem..."
+	@docker exec cube-guardrails-db psql \
+		-U $${UV_GUARDRAILS_DB_USER:-guardrails} \
+		-d $${UV_GUARDRAILS_DB_NAME:-guardrails} \
+		-c "TRUNCATE guardrail_materialized, guardrail_versions, guardrail_configs CASCADE;" \
+		&& echo "✓ Tables truncated" || echo "⚠ Truncate failed"
+	@docker restart guardrails
+	@echo "✓ Guardrails container restarted — bootstrap will re-seed from ./rails"
+
 # Help
 .PHONY: help
 help:
@@ -316,6 +327,7 @@ help:
 	@echo "  config-guardrails-ollama Configure guardrails config.yml for Ollama"
 	@echo "  enable-guardrails       Enable guardrails routes in config.json"
 	@echo "  disable-guardrails      Disable guardrails routes in config.json"
+	@echo "  reseed-guardrails       Truncate guardrails DB and restart to re-seed from ./rails"
 	@echo "  show-config             Show current configuration"
 	@echo "  clean-env               Clean environment configuration"
 	@echo ""

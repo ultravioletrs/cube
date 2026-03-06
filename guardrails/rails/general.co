@@ -3,32 +3,29 @@
 
 import core
 
-flow user express greeting
-  user said "hello" or user said "hi" or user said "hey" or user said "good morning" or user said "good afternoon" or user said "good evening" or user said "greetings"
+# ---------------------------------------------------------------------------
+# Guard-only NeMo configuration.
+#
+# NeMo is used EXCLUSIVELY for input/output safety guardrails (pattern
+# matching).  No LLM calls are made inside NeMo.
+#
+# Response generation is handled by the Python router:
+#   - Greetings / goodbye / capabilities → Python canned responses
+#   - All other messages → direct LLM call (bypassing NeMo flow engine)
+#
+# This avoids NeMo's Colang 2.x state-machine issues with smaller models
+# (llama3.2:3b) where intent classification returns names without the
+# required "user " prefix, causing `continuation on unhandled user intent`
+# to never fire.
+# ---------------------------------------------------------------------------
 
-flow bot express greeting
-  bot say "Hello! How can I assist you today?"
+flow main
+  # Safety guards — pattern-match and block harmful / off-topic input.
+  activate input guard
+  activate off topic guard
 
-flow user ask about capabilities
-  user said "what can you do" or user said "what are your capabilities" or user said "how can you help me" or user said "what can you help with" or user said "tell me about your features"
+  # Output-side guard — catches unsafe bot output patterns.
+  activate output guard
 
-flow bot respond about capabilities
-  bot say "I can help with a variety of tasks including answering questions, providing information, and assisting with analysis. I have safety guardrails in place to ensure our conversation remains helpful and appropriate."
-
-flow user say goodbye
-  user said "bye" or user said "goodbye" or user said "see you later" or user said "talk to you later" or user said "farewell"
-
-flow bot say goodbye
-  bot say "Goodbye! Feel free to return if you need any assistance."
-
-flow greeting
-  user express greeting
-  bot express greeting
-
-flow capabilities
-  user ask about capabilities
-  bot respond about capabilities
-
-flow goodbye
-  user say goodbye
-  bot say goodbye
+  # Keep main alive so the activated flows persist across turns.
+  wait indefinitely

@@ -133,14 +133,28 @@ class NemoRuntime(GuardrailRuntime):
     ) -> Any:
         """
         Generate a response using the current guardrail configuration.
+        Enforces a timeout to prevent hanging requests.
         """
         if not self._rails:
             raise ConfigLoadError("No guardrail configuration loaded")
 
-        return await self._rails.generate_async(
-            messages=messages,
-            options=options or {},
-        )
+        timeout_seconds = 180  # 3-minute hard ceiling
+
+        try:
+            return await asyncio.wait_for(
+                self._rails.generate_async(
+                    messages=messages,
+                    options=options or {},
+                ),
+                timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Guardrail generation timed out after {timeout_seconds}s"
+            )
+            raise ConfigLoadError(
+                f"Response generation timed out after {timeout_seconds} seconds"
+            )
 
     def get_current_revision(self) -> int:
         """Get the current revision number of the loaded configuration."""

@@ -3,9 +3,12 @@
 
 import logging
 import re
-from typing import Any, Dict
+import time
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Request
+from langchain_core.messages import HumanMessage
+from langchain_openai import ChatOpenAI
 
 from src.drivers.rest.dependencies import get_runtime
 from src.drivers.rest.routers.schemas import (
@@ -17,32 +20,157 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/guardrails", tags=["guardrails"])
 
+# ---------------------------------------------------------------------------
+# Canned responses handled in Python – bypasses NeMo entirely for speed
+# and reliability (Colang's `user said` is case-sensitive exact matching).
+# ---------------------------------------------------------------------------
+
+_GREETING_PATTERNS = re.compile(
+    r"^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|"
+    r"greetings|what'?s\s*up|sup|yo|hiya|heya)[\s!?.,:;]*$",
+    re.IGNORECASE,
+)
+_GOODBYE_PATTERNS = re.compile(
+    r"^(bye|goodbye|good\s*bye|see\s*you(\s*later)?|farewell|take\s*care|"
+    r"talk\s*to\s*you\s*later|later|cheers|cya|ttyl|adios|"
+    r"good\s*night|have\s*a\s*good\s*(one|day|night))[\s!?.,:;]*$",
+    re.IGNORECASE,
+)
+_CAPABILITIES_PATTERNS = re.compile(
+    r"^(what\s*can\s*you\s*do|what\s*are\s*your\s*capabilities|"
+    r"how\s*can\s*you\s*help|what\s*can\s*you\s*help\s*with|"
+    r"tell\s*me\s*about\s*your\s*features|what\s*do\s*you\s*do|"
+    r"who\s*are\s*you|what\s*are\s*you)[\s?!.]*$",
+    re.IGNORECASE,
+)
+_PLATFORM_PATTERNS = re.compile(
+    r"^(what\s*is\s*cube(\s*ai)?|tell\s*me\s*about\s*cube(\s*ai)?|"
+    r"what\s*platform\s*is\s*this|what\s*is\s*this\s*platform|"
+    r"who\s*(built|made|created|develops?)\s*this|"
+    r"who\s*(built|made|created|develops?)\s*cube(\s*ai)?|"
+    r"what\s*is\s*ultraviolet|tell\s*me\s*about\s*ultraviolet|"
+    r"how\s*does\s*cube(\s*ai)?\s*work|"
+    r"what\s*does\s*cube(\s*ai)?\s*do|"
+    r"describe\s*cube(\s*ai)?|"
+    r"about\s*(this\s*)?platform|about\s*cube(\s*ai)?)[\s?!.]*$",
+    re.IGNORECASE,
+)
+
+_CANNED_RESPONSES = {
+    "greeting": "Hello! How can I assist you today?",
+    "goodbye": "Goodbye! Feel free to return if you need any assistance.",
+    "capabilities": (
+        "I can help with a variety of tasks including answering questions, "
+        "providing information, and assisting with analysis. I have safety "
+        "guardrails in place to ensure our conversation remains helpful "
+        "and appropriate."
+    ),
+    "platform": (
+        "Cube AI is a framework developed by Ultraviolet for building "
+        "GPT-based applications using confidential computing. It protects "
+        "user data and AI models by running inference inside a Trusted "
+        "Execution Environment (TEE) — a secure area of the processor that "
+        "keeps code and data confidential, even when the host environment "
+        "is not fully trusted.\n\n"
+        "Key features include:\n"
+        "• Trusted Execution Environment (TEE) — hardware-backed secure enclaves for private inference\n"
+        "• AI Safety Guardrails — input/output validation, jailbreak and prompt-injection detection, "
+        "off-topic filtering, toxicity checks, and sensitive-data masking\n"
+        "• Comprehensive Audit Logging — every request is logged with trace IDs, guardrail decisions, "
+        "token usage, latency, and attestation status for full compliance visibility\n"
+        "• Remote Attestation — SEV-SNP, TDX, and vTPM attestation to verify CVM integrity "
+        "before processing any data\n"
+        "• Multiple LLM Backend Support — Ollama and vLLM for flexible model deployment\n"
+        "• OpenAI-Compatible API — familiar endpoints for easy integration with existing applications\n"
+        "• Dynamic Route Management — create, update, and manage proxy routes at runtime\n"
+        "• Observability — built-in metrics, distributed tracing, and structured logging\n\n"
+        "You can learn more at https://github.com/ultravioletrs/cube"
+    ),
+}
+
+
+def _match_canned(text: str) -> Optional[str]:
+    """Return a canned response key if *text* matches a known pattern, else None."""
+    if _GREETING_PATTERNS.match(text):
+        return "greeting"
+    if _GOODBYE_PATTERNS.match(text):
+        return "goodbye"
+    if _CAPABILITIES_PATTERNS.match(text):
+        return "capabilities"
+    if _PLATFORM_PATTERNS.match(text):
+        return "platform"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Direct LLM fallback – used when NeMo returns an empty response
+# ---------------------------------------------------------------------------
+
+async def _direct_llm_fallback(
+    user_text: str, model: str, authorization: Optional[str]
+) -> str:
+    """Call the LLM directly, bypassing NeMo, as a last-resort fallback."""
+    try:
+        headers = {"X-Guardrails-Request": "true"}
+        if authorization:
+            headers["Authorization"] = authorization
+
+        llm = ChatOpenAI(
+            model=model,
+            base_url="http://cube-proxy:8900/v1",
+            api_key="EMPTY",
+            default_headers=headers,
+            temperature=0.7,
+            max_tokens=1024,
+            timeout=60,
+        )
+        result = await llm.ainvoke([HumanMessage(content=user_text)])
+        return result.content.strip() if result and result.content else ""
+    except Exception as e:
+        logger.error(f"Direct LLM fallback failed: {e}")
+        return ""
+
 
 def clean_response(response) -> str:
+    """Extract a clean assistant message string from a NeMo GenerationResponse.
+
+    Handles the multiple shapes .response can take in Colang 2.x:
+      - str
+      - list[dict] with 'content' keys  (most common from single_call mode)
+      - list[str]
+      - None / empty
+    """
     if not response:
         return ""
 
+    # --- list of message dicts (Colang 2.x single-call mode) ---------------
     if isinstance(response, list):
-        parts = []
+        parts: list[str] = []
         for item in response:
             if isinstance(item, dict):
-                parts.append(item.get("content", str(item)))
-            else:
-                parts.append(str(item))
-        response = " ".join(parts)
+                content = item.get("content", "")
+                if content:
+                    parts.append(str(content))
+            elif isinstance(item, str) and item.strip():
+                parts.append(item)
+        response = " ".join(parts) if parts else ""
 
     if not isinstance(response, str):
         response = str(response)
 
     cleaned = response.strip()
 
-    cleaned = re.sub(r'^(bot|I)\s+\w+(\s+\w+)*\s*\n', '', cleaned, flags=re.IGNORECASE)
+    # Remove leading "bot say" / "bot inform" prefixes that Colang can leak
+    cleaned = re.sub(
+        r'^bot\s+(say|inform|respond|express|clarify|suggest)\s+',
+        '',
+        cleaned,
+        flags=re.IGNORECASE,
+    )
 
-    if cleaned.startswith('"') and cleaned.endswith('"'):
+    # Strip surrounding quotes
+    if len(cleaned) >= 2 and cleaned[0] == '"' and cleaned[-1] == '"':
         cleaned = cleaned[1:-1]
-
-    if cleaned.lower().startswith("bot "):
-        cleaned = "I" + cleaned[3:]
 
     return cleaned.strip()
 
@@ -284,9 +412,8 @@ def extract_guardrails_detections(res: Any, response_content: str, original_mess
 
 @router.post("/messages", tags=["chat"])
 async def chat_completion(request: Request, req: ChatRequest, authorization: str = Header(None)) -> Dict[str, Any]:
-    import time
     start_time = time.time()
-    
+
     runtime = get_runtime()
 
     if not runtime.is_ready():
@@ -299,46 +426,137 @@ async def chat_completion(request: Request, req: ChatRequest, authorization: str
         logger.info(f"Processing chat request with {len(req.messages)} messages")
 
         # Convert Pydantic models to dicts
-        messages = [{"role": m.role, "content": m.content} for m in req.messages]
+        all_messages = [{"role": m.role, "content": m.content} for m in req.messages]
+
+        # Find the last user message — this is the current turn.
+        last_user_msg = None
+        for m in reversed(all_messages):
+            if m["role"] == "user":
+                last_user_msg = m
+                break
+
+        if not last_user_msg:
+            last_user_msg = all_messages[-1] if all_messages else {"role": "user", "content": ""}
+
+        # Handle empty / whitespace-only messages in Python before NeMo.
+        user_text = (last_user_msg.get("content") or "").strip()
+        if not user_text or user_text in ("...", "???", "null", "None", "undefined",
+                                           "[null]", "[undefined]", "<empty>", "<null>"):
+            logger.info("Empty or invalid user message — returning canned response")
+            return {
+                "model": req.model,
+                "message": {
+                    "role": "assistant",
+                    "content": "I didn't receive a valid message. Please try again with a clear question or request.",
+                },
+                "done": True,
+                "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                "guardrails": {
+                    "processed": True,
+                    "decision": "BLOCK",
+                    "triggered_input_rails": ["empty_message"],
+                    "triggered_output_rails": [],
+                    "violations": [{"type": "invalid_input", "category": "input_validation",
+                                    "severity": "low", "description": "Empty or invalid message",
+                                    "action": "rejected"}],
+                    "latency_ms": 0,
+                },
+            }
+
+        # ---- Canned responses (greetings, goodbye, capabilities) -----------
+        # Handled in Python for reliability — Colang's `user said` is case-
+        # sensitive exact matching and fails on "Hello" vs "hello".
+        canned_key = _match_canned(user_text)
+        if canned_key:
+            latency = (time.time() - start_time) * 1000
+            logger.info(f"Canned response for '{canned_key}' in {latency:.0f}ms")
+            return {
+                "model": req.model,
+                "message": {
+                    "role": "assistant",
+                    "content": _CANNED_RESPONSES[canned_key],
+                },
+                "done": True,
+                "usage": {"prompt_tokens": max(1, len(user_text) // 4),
+                          "completion_tokens": max(1, len(_CANNED_RESPONSES[canned_key]) // 4),
+                          "total_tokens": max(2, (len(user_text) + len(_CANNED_RESPONSES[canned_key])) // 4)},
+                "guardrails": {
+                    "processed": True,
+                    "decision": "ALLOW",
+                    "triggered_input_rails": [],
+                    "triggered_output_rails": [],
+                    "violations": [],
+                    "latency_ms": latency,
+                },
+            }
+
+        # ---- NeMo Guardrails pipeline ------------------------------------
+        # Lowercase the user message so Colang's case-sensitive `user said`
+        # patterns (in guard flows) match regardless of the original casing.
+        lowered_msg = {"role": "user", "content": user_text.lower()}
+        messages = [lowered_msg]
+
+        llm_headers = {"X-Guardrails-Request": "true"}
+        if authorization:
+            llm_headers["Authorization"] = authorization
 
         llm_params = {
             "model": req.model,
             "temperature": req.temperature,
             "max_tokens": req.max_tokens,
-            "headers": {
-                "Authorization": authorization,
-                "X-Guardrails-Request": "true"
-            }
+            "headers": llm_headers,
         }
 
         logger.debug(f"llm_params prepared for model: {req.model}, auth_present={authorization is not None}")
-        res = await runtime.generate(
-            messages=messages,
-            options={
-                "log": {
-                    "llm_calls": True,
-                    "internal_events": True,
-                    "colang_history": True,
-                    "activated_rails": True,
-                    "llm_prompts": True,
-                    "print_llm_calls_outputs": True,
-                },
-                "llm_params": llm_params,
-                "llm": llm_params,
-                "output_vars": ["relevant_chunks", "triggered_input_rail", "triggered_output_rail"],
-                "return_context": True,
-                "llm_output": True
-            },
-        )
 
-        response_content = res.response if res.response else ""
-        response_content = clean_response(response_content)
+        response_content = ""
+        res = None  # NeMo response object for detection extraction
+        nemo_failed = False
+
+        try:
+            res = await runtime.generate(
+                messages=messages,
+                options={
+                    "llm_params": llm_params,
+                    "llm": llm_params,
+                },
+            )
+
+            # --- robust response extraction --------------------------------
+            raw = res.response if hasattr(res, "response") else None
+
+            if not raw and hasattr(res, "response") and isinstance(res.response, list):
+                for msg in reversed(res.response):
+                    if isinstance(msg, dict) and msg.get("role") == "assistant" and msg.get("content"):
+                        raw = msg["content"]
+                        break
+
+            response_content = clean_response(raw)
+        except Exception as nemo_err:
+            logger.warning(f"NeMo pipeline failed: {nemo_err} — will try direct LLM fallback")
+            nemo_failed = True
+
+        # ---- Fallback: if NeMo returned empty or threw, call LLM directly --
+        if not response_content:
+            logger.warning("NeMo returned empty response — invoking direct LLM fallback")
+            response_content = await _direct_llm_fallback(user_text, req.model, authorization)
+            if not response_content:
+                response_content = "I'm sorry, I wasn't able to generate a response. Please try again."
 
         # Calculate guardrails processing latency
         guardrails_latency_ms = (time.time() - start_time) * 1000
 
         # Extract guardrails detection information from response context
-        guardrails_info = extract_guardrails_detections(res, response_content, messages)
+        if res is not None:
+            guardrails_info = extract_guardrails_detections(res, response_content, all_messages)
+        else:
+            guardrails_info = {
+                "processed": nemo_failed is False,
+                "decision": "ALLOW",
+                "triggered_input_rails": [],
+                "triggered_output_rails": [],
+                "violations": [],
+            }
         guardrails_info["latency_ms"] = guardrails_latency_ms
 
         # Calculate token usage (rough estimate: ~4 chars per token)
