@@ -387,7 +387,7 @@ services:
     command: /entrypoint.sh
 
   magistrala-backend:
-    image: ghcr.io/absmach/magistrala/ui-backend:${MG_BACKEND_RELEASE_TAG}
+    image: ghcr.io/ultravioletrs/cube/ui-backend:${MG_BACKEND_RELEASE_TAG}
     container_name: magistrala-backend
     restart: on-failure
     networks:
