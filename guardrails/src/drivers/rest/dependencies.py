@@ -233,11 +233,12 @@ async def _sync_default_config() -> None:
     )
     logger.info(f"Updated default config: {existing_config.id}")
 
-    # Create new version
+    # Create new version with semantic versioning
+    next_version = await _get_next_semantic_version(existing_config.id)
     create_version_uc = get_create_version()
     version = await create_version_uc.execute(
         config_id=existing_config.id,
-        name=f"v{_get_next_version_number(existing_config.id)}",
+        name=next_version,
         description="Auto-updated from file system changes",
     )
     logger.info(f"Created new version: {version.id} (revision {version.revision})")
@@ -247,9 +248,29 @@ async def _sync_default_config() -> None:
     logger.info(f"Activated new version: {version.id}")
 
 
-def _get_next_version_number(config_id) -> int:
-    import time
-    return int(time.time())
+async def _get_next_semantic_version(config_id) -> str:
+    """Get next semantic version based on existing versions."""
+    import re
+
+    list_versions_uc = get_list_versions()
+    result = await list_versions_uc.execute(config_id, offset=0, limit=1000)
+
+    if not result.versions:
+        return "v1.0.0"
+
+    # Parse existing versions and find the highest
+    max_major, max_minor, max_patch = 0, 0, 0
+    semver_pattern = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
+
+    for ver in result.versions:
+        match = semver_pattern.match(ver.name)
+        if match:
+            major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            if (major, minor, patch) > (max_major, max_minor, max_patch):
+                max_major, max_minor, max_patch = major, minor, patch
+
+    # Increment patch version for auto-updates
+    return f"v{max_major}.{max_minor}.{max_patch + 1}"
 
 
 async def _create_new_default_config(config_yaml: str, prompts_yaml: str, colang: str) -> None:
@@ -269,7 +290,7 @@ async def _create_new_default_config(config_yaml: str, prompts_yaml: str, colang
     create_version_uc = get_create_version()
     version = await create_version_uc.execute(
         config_id=config.id,
-        name="v1",
+        name="v1.0.0",
         description="Initial default version",
     )
     logger.info(f"Created default version: {version.id}")
