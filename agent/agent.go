@@ -107,11 +107,10 @@ func (a *agentService) Proxy() http.Handler {
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		proxy.Transport = a.transport
 
-		originalDirector := proxy.Director
-		proxy.Director = func(req *http.Request) {
-			originalDirector(req)
-			a.modifyHeaders(req)
-			log.Printf("Agent forwarding to Backend: %s %s", req.Method, req.URL.Path)
+		proxy.Rewrite = func(req *httputil.ProxyRequest) {
+			req.SetURL(target)
+			a.modifyHeaders(req.Out)
+			log.Printf("Agent forwarding to Backend: %s %s", req.Out.Method, req.Out.URL.Path)
 		}
 
 		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
