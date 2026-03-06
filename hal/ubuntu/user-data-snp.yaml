@@ -2,8 +2,9 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 #
-# Cloud-init configuration for AMD SEV-SNP (Secure Nested Paging) VMs
-# Ubuntu 24.04+ has SEV-SNP guest support built into the kernel
+# Cloud-init for local QEMU AMD SEV-SNP VMs (Coconut SVSM)
+# Used by: qemu.sh prepare_snp / start_snp
+# For cloud deployments (GCP/Azure), see cloud/ directory instead
 
 package_update: true
 package_upgrade: false

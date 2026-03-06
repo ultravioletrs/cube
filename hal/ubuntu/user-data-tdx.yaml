@@ -2,8 +2,9 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 #
-# Cloud-init configuration for Intel TDX (Trust Domain Extensions) VMs
-# Ubuntu 24.04+ has TDX guest support built into the kernel
+# Cloud-init for local QEMU Intel TDX VMs
+# Used by: qemu.sh start_tdx
+# For cloud deployments (GCP/Azure), see cloud/ directory instead
 
 package_update: true
 package_upgrade: false

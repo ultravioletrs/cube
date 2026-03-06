@@ -2,7 +2,8 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 #
-# Cloud-init configuration for regular (non-CVM) VMs
+# Cloud-init for local QEMU regular (non-CVM) VMs
+# Used by: qemu.sh start_regular
 
 package_update: true
 package_upgrade: false

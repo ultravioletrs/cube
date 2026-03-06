@@ -2,87 +2,91 @@
 
 This directory contains cloud-init configurations and QEMU launch scripts for running Cube AI in Ubuntu-based Confidential VMs (CVMs).
 
-## Overview
+## Directory Structure
 
-Ubuntu 24.04 (Noble) has built-in support for Intel TDX confidential computing. For AMD SEV-SNP, a custom kernel is required because the host uses SVSM/Coconut — the standard Ubuntu 24.04 kernel does not support it.
-
-## Files
-
-- `qemu.sh` - Main QEMU launch script with TDX/SNP support
-- `user-data-tdx.yaml` - Cloud-init configuration for Intel TDX VMs
-- `user-data-snp.yaml` - Cloud-init configuration for AMD SEV-SNP VMs
-- `user-data-regular.yaml` - Cloud-init configuration for regular (non-CVM) VMs
-- `debs/` - (Optional) Directory for custom kernel `.deb` packages, required only when the SNP host runs Coconut SVSM (see [SNP Kernel](#snp-custom-kernel))
-
-## Usage
-
-### Auto-detect CVM Support
-
-```bash
-sudo ./qemu.sh start
+```
+hal/ubuntu/
+  qemu.sh                   # QEMU launch script (local deployment)
+  user-data-tdx.yaml        # Cloud-init for local QEMU TDX VMs
+  user-data-snp.yaml        # Cloud-init for local QEMU SNP VMs
+  user-data-regular.yaml    # Cloud-init for local QEMU regular VMs
+  debs/                     # Custom kernel .deb packages (SNP with Coconut SVSM only) These need to be added manually by the user if using SNP with Coconut SVSM locally
+  cloud/                    # Cloud provider configs (GCP, Azure) — see cloud/README.md
 ```
 
-This will automatically detect available CVM support (TDX or SNP) and launch the VM with the appropriate configuration.
+## Local Deployment (QEMU)
 
-### Force Specific CVM Mode
+All files in the root of this directory are for **local QEMU-based deployment**. Use `qemu.sh` to launch VMs directly on a host machine with KVM.
+
+### Quick Start
 
 ```bash
-# Intel TDX
-sudo ./qemu.sh start_tdx
+# Auto-detect CVM support (TDX or SNP) and launch
+sudo ./qemu.sh start
 
-# AMD SEV-SNP (two steps required)
-sudo ./qemu.sh prepare_snp   # Run once: installs custom kernel via cloud-init (regular KVM)
-sudo ./qemu.sh start_snp     # Boot the prepared image with IGVM/SNP
+# Or force a specific mode
+sudo ./qemu.sh start_tdx       # Intel TDX
+sudo ./qemu.sh start_regular   # Regular KVM (no CVM)
+```
 
-# Regular KVM (no CVM)
-sudo ./qemu.sh start_regular
+For AMD SEV-SNP, a two-step process is required:
+
+```bash
+sudo ./qemu.sh prepare_snp   # Step 1: Install custom kernel via cloud-init (regular KVM)
+sudo ./qemu.sh start_snp     # Step 2: Boot the prepared image with IGVM/SNP
 ```
 
 ### Environment Variables
 
 ```bash
-# Force specific CVM mode
-ENABLE_CVM=tdx sudo ./qemu.sh start
-ENABLE_CVM=snp sudo ./qemu.sh start
-ENABLE_CVM=none sudo ./qemu.sh start
-
-# Customize VM resources
-RAM=32768M CPU=16 sudo ./qemu.sh start
-
-# Override IGVM file path (SNP only)
-IGVM=/path/to/coconut-qemu.igvm sudo ./qemu.sh start_snp
+ENABLE_CVM=tdx sudo ./qemu.sh start       # Force CVM mode: auto, tdx, snp, none
+RAM=32768M CPU=16 sudo ./qemu.sh start     # Customize VM resources
+IGVM=/path/to/coconut-qemu.igvm sudo ./qemu.sh start_snp  # Override IGVM path
 ```
 
-### Detect Available Support
+### Detect Available CVM Support
 
 ```bash
 sudo ./qemu.sh detect
 ```
 
-## CVM Support Details
+### After First Boot
 
-### Intel TDX (Trust Domain Extensions)
+Default SSH access:
+- **Port**: 6190 (forwarded from guest port 22)
+- **User**: ultraviolet
+- **Password**: password
 
-- Ubuntu 24.04 kernel has `CONFIG_INTEL_TDX_GUEST=y` enabled by default
-- Guest attestation available via `/sys/firmware/tdx` or configfs
-- Quote generation via vsock (CID=2, port=4050)
+For local development, update `docker/.env`:
 
-### AMD SEV-SNP (Secure Nested Paging)
+```bash
+UV_CUBE_NEXTAUTH_URL=http://<vm-ip-address>:${UI_PORT}
+```
 
-- Boots via IGVM using the Coconut SVSM QEMU (`/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64`)
-- Requires an IGVM file (default: `/etc/cocos/coconut-qemu.igvm`)
-- If the host runs Coconut SVSM, a custom kernel is required (see [SNP Kernel](#snp-custom-kernel))
-- Guest attestation available via `/dev/sev-guest`
-- Modules: `sev-guest`, `ccp` (loaded automatically)
-- Disk is automatically resized on first boot via `growpart`
+## Cloud Deployment (GCP / Azure)
 
-### SNP Custom Kernel
+For deploying on cloud providers, see [cloud/README.md](cloud/README.md). Cloud providers handle confidential computing at the hypervisor level, so no custom kernel, IGVM, or module loading is needed.
 
-A custom kernel is only required when the SNP host runs Coconut SVSM. The standard Ubuntu 24.04 kernel does not support Coconut SVSM, so a kernel built with SVSM support must be bundled into the seed image as `.deb` packages.
+## CVM Details
+
+### Intel TDX
+
+- Ubuntu 24.04 kernel has `CONFIG_INTEL_TDX_GUEST=y` enabled by default — no custom kernel needed
+- **Local QEMU**: Uses `user-data-tdx.yaml` with `qemu.sh start_tdx`; loads `tdx_guest` module via modprobe
+- **Cloud**: TDX module loading is handled by the cloud provider
+
+### AMD SEV-SNP
+
+- **Local QEMU with Coconut SVSM**: Requires a custom kernel and two-step boot process (see [SNP Custom Kernel](#snp-custom-kernel) below). Uses `user-data-snp.yaml` which loads `sev-guest` and `ccp` modules via modprobe
+- **Cloud (GCP/Azure)**: SEV-SNP is enabled at the hypervisor level — no custom kernel, IGVM, or module loading needed. Use configs in `cloud/`
+
+#### SNP Custom Kernel
+
+A custom kernel is only required when the **local** SNP host runs Coconut SVSM. The standard Ubuntu 24.04 kernel does not support Coconut SVSM.
 
 **Kernel requirements:**
 
-The custom kernel must be built with the following options:
+The custom kernel must be built with:
 - `CONFIG_AMD_MEM_ENCRYPT=y` — AMD memory encryption support
 - `CONFIG_SEV_GUEST=y` — SEV guest driver
 - `CONFIG_TCG_PLATFORM=y` — required for vTPM support
@@ -104,18 +108,13 @@ hal/ubuntu/
     linux-modules-*.deb  (if needed)
 ```
 
-The `prepare_snp` command will automatically detect `debs/` and package them along with `user-data` and `meta-data` into the seed ISO using `genisoimage`:
+The `prepare_snp` command automatically packages the debs along with `user-data` and `meta-data` into the seed ISO using `genisoimage`:
 
 ```bash
-genisoimage -output seed.img -volid cidata -rock hal/ubuntu/
+genisoimage -output seed.img -volid cidata -rock <cidata-dir>/
 ```
 
-The `hal/ubuntu/` directory must contain:
-- `user-data` — the cloud-init configuration (copied from `user-data-snp.yaml`)
-- `meta-data` — the VM instance metadata
-- `debs/` — the custom kernel `.deb` packages
-
-On first boot, cloud-init mounts the seed ISO, installs the `.deb` packages, runs `update-grub`, and the VM boots the new SNP-compatible kernel on next start.
+On first boot (`prepare_snp`), cloud-init mounts the seed ISO, installs the `.deb` packages, and runs `update-grub`. Then `start_snp` boots the prepared image with IGVM/SNP.
 
 **Dependency:**
 
@@ -123,20 +122,9 @@ On first boot, cloud-init mounts the seed ISO, installs the `.deb` packages, run
 sudo apt-get install genisoimage
 ```
 
-## After First Boot
+## Host Requirements (Local QEMU Only)
 
-For local development, update the following in `docker/.env`:
-
-```bash
-UV_CUBE_NEXTAUTH_URL=http://<vm-ip-address>:${UI_PORT}
-```
-
-Default SSH access:
-- **Port**: 6190 (forwarded from guest port 22)
-- **User**: ultraviolet
-- **Password**: password
-
-## Host Requirements
+These requirements apply only to local QEMU deployment. Cloud providers manage these at the infrastructure level.
 
 ### For TDX VMs
 - Intel CPU with TDX support (4th Gen Xeon Scalable or newer)
@@ -151,9 +139,9 @@ Default SSH access:
 - Coconut SVSM QEMU binary at `/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64`
 - IGVM file at `/etc/cocos/coconut-qemu.igvm` (or set `IGVM` env var)
 - `genisoimage` installed (`apt-get install genisoimage`)
-- Custom kernel `.deb` files in `debs/` (see [SNP Kernel](#snp-custom-kernel))
+- Custom kernel `.deb` files in `debs/` (see [SNP Custom Kernel](#snp-custom-kernel))
 
-### Common Requirements
+### Common
 - QEMU with confidential computing support
 - OVMF firmware (for UEFI boot)
 - KVM enabled
