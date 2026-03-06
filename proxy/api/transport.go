@@ -250,9 +250,9 @@ func serveReverseProxy(
 		return nil
 	}
 
-	prxy.Director = func(req *http.Request) {
-		domainID := chi.URLParam(req, "domainID")
-		prepareProxyRequest(req, target, rule, domainID, stripPrefix)
+	prxy.Rewrite = func(req *httputil.ProxyRequest) {
+		domainID := chi.URLParam(req.In, "domainID")
+		prepareProxyRequest(req.Out, target, rule, domainID, stripPrefix)
 	}
 
 	prxy.ServeHTTP(w, r)

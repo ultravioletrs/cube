@@ -160,7 +160,7 @@ func (am *authMiddleware) checkSuperAdmin(ctx context.Context, adminID string) e
 		Permission:  policies.AdminPermission,
 		ObjectType:  policies.PlatformType,
 		Object:      policies.SuperMQObject,
-	}); err != nil {
+	}, nil); err != nil {
 		return err
 	}
 
@@ -178,7 +178,7 @@ func (am *authMiddleware) authorize(ctx context.Context, session *authn.Session,
 		Object:      domainID,
 	}
 
-	return am.authz.Authorize(ctx, req)
+	return am.authz.Authorize(ctx, req, nil)
 }
 
 func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Session, path string) (bool, error) {

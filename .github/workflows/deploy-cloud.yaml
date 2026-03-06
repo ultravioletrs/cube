@@ -18,6 +18,8 @@ on:
       - "docker/opensearch-index-template.json"
       - "docker/traefik/traefik.toml"
       - "docker/traefik/dynamic.toml"
+      - "docker/permission.yaml"
+      - "docker/spicedb/**"
       - "guardrails/rails/**"
       - ".github/workflows/deploy-cloud.yaml"
 
@@ -88,6 +90,7 @@ jobs:
 
             echo "Creating required directories and setting up SSL"
             mkdir -p docker/traefik/ssl/certs
+            mkdir -p docker/ssl/keys
 
             # Initialize acme.json if it doesn't exist
             if test -f docker/traefik/ssl/certs/acme.json; then
@@ -147,7 +150,7 @@ jobs:
             docker compose -f docker/compose.yaml --profile cloud ps 2>&1
 
             echo "=== Verifying Critical Services ==="
-            SERVICES="traefik opensearch nats spicedb auth users domains ui cube-proxy guardrails fluent-bit"
+            SERVICES="traefik opensearch nats spicedb auth auth-redis users domains ui cube-proxy guardrails fluent-bit"
             ALL_RUNNING=true
 
             for SERVICE in $SERVICES; do

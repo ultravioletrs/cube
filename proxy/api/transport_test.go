@@ -4,6 +4,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -19,7 +20,11 @@ func TestInjectAuditFilterAddsQuotedQueryAndBodyFilter(t *testing.T) {
 
 	domainID := "878da198-6854-4194-8a3d-aab32e532b6c"
 	body := `{"query":{"match_all":{}}}`
-	req := httptest.NewRequest(http.MethodPost, "http://example.com/_search?q=status:ok", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(
+		context.Background(), http.MethodPost,
+		"http://example.com/_search?q=status:ok",
+		strings.NewReader(body),
+	)
 	req.Header.Set("Content-Type", "application/json")
 
 	api.InjectAuditFilter(req, domainID)
@@ -71,7 +76,11 @@ func TestInjectAuditFilterWithInvalidJSONKeepsBodyAndAddsQueryFilter(t *testing.
 
 	domainID := "878da198-6854-4194-8a3d-aab32e532b6c"
 	originalBody := "not-json"
-	req := httptest.NewRequest(http.MethodPost, "http://example.com/_search", strings.NewReader(originalBody))
+	req := httptest.NewRequestWithContext(
+		context.Background(), http.MethodPost,
+		"http://example.com/_search",
+		strings.NewReader(originalBody),
+	)
 
 	api.InjectAuditFilter(req, domainID)
 

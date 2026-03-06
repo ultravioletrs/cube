@@ -239,7 +239,7 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 				}
 
 				return true
-			})).Return(nil)
+			}), mock.Anything).Return(nil)
 
 			authMiddleware := middleware.AuthMiddleware(auth)(svc)
 
