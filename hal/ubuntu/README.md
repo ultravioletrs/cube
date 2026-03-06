@@ -95,15 +95,14 @@ For deploying on cloud providers, see [cloud/README.md](cloud/README.md). Cloud 
 
 A custom kernel is only required when the **local** SNP host runs Coconut SVSM. The standard Ubuntu 24.04 kernel does not support Coconut SVSM.
 
-**Kernel requirements:**
+A custom-built kernel is required with the following configuration options enabled:
 
-The custom kernel must be built with:
 - `CONFIG_AMD_MEM_ENCRYPT=y` — AMD memory encryption support
 - `CONFIG_SEV_GUEST=y` — SEV guest driver
-- `CONFIG_TCG_PLATFORM=y` — required for vTPM support
+- `CONFIG_TCG_PLATFORM=y` — vTPM support
 - Coconut SVSM guest support patches applied
 
-The kernel must be packaged as `.deb` files.
+The kernel must be packaged as `.deb` files (`linux-image-*.deb`, `linux-headers-*.deb`).
 
 **Installing the kernel into the seed image:**
 
