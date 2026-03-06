@@ -25,8 +25,7 @@ class GuardrailRuntime(ABC):
     @abstractmethod
     async def generate(
         self,
-        messages: Optional[List[Dict[str, str]]] = None,
-        events: Optional[List[Dict[str, Any]]] = None,
+        messages: List[Dict[str, str]],
         options: Optional[Dict[str, Any]] = None,
     ) -> Any:
         """
