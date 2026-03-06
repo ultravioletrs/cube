@@ -12,6 +12,13 @@ domains:
     - send_invitation: manage_role_permission
     - list_domain_invitation: manage_role_permission
     - delete_invitation: manage_role_permission
+    # Entity operations
+    - create_clients: client_create_permission
+    - list_clients: client_read_permission
+    - create_channels: channel_create_permission
+    - list_channels: channel_read_permission
+    - create_groups: group_create_permission
+    - list_groups: group_read_permission
     # LLM operations
     - llm_create: llm_create_permission
     - llm_update: llm_update_permission

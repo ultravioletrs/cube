@@ -8,6 +8,7 @@ volumes:
   supermq-auth-db-volume:
   supermq-auth-pat-db-volume:
   supermq-auth-keys-volume:
+  supermq-auth-redis-volume:
   supermq-domains-db-volume:
   supermq-domains-redis-volume:
 
@@ -100,6 +101,7 @@ services:
         tag: "supermq-auth|{{.Name}}"
     depends_on:
       - auth-db
+      - auth-redis
       - spicedb
       - fluent-bit
     expose:
@@ -126,7 +128,7 @@ services:
       SMQ_AUTH_ACCESS_TOKEN_DURATION: ${SMQ_AUTH_ACCESS_TOKEN_DURATION}
       SMQ_AUTH_REFRESH_TOKEN_DURATION: ${SMQ_AUTH_REFRESH_TOKEN_DURATION}
       SMQ_AUTH_KEYS_ALGORITHM: ${SMQ_AUTH_KEYS_ALGORITHM}
-      SMQ_AUTH_KEYS_PRIVATE_KEY_PATH: ${SMQ_AUTH_KEYS_PRIVATE_KEY_PATH:+/keys/private.key}
+      SMQ_AUTH_KEYS_ACTIVE_KEY_PATH: ${SMQ_AUTH_KEYS_PRIVATE_KEY_PATH:+/keys/active.key}
       ## Compose supports parameter expansion in environment,
       ## Eg: ${VAR:+replacement} or ${VAR+replacement} -> replacement if VAR is set and non-empty, otherwise empty
       ## Eg :${VAR:-default} or ${VAR-default}  -> value of VAR if set and non-empty, otherwise default
@@ -148,6 +150,7 @@ services:
       SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
       SMQ_AUTH_ADAPTER_INSTANCE_ID: ${SMQ_AUTH_ADAPTER_INSTANCE_ID}
       SMQ_ES_URL: ${SMQ_ES_URL}
+      SMQ_AUTH_CACHE_URL: ${SMQ_AUTH_CACHE_URL}
     ports:
       - ${SMQ_AUTH_HTTP_PORT}:${SMQ_AUTH_HTTP_PORT}
       - ${SMQ_AUTH_GRPC_PORT}:${SMQ_AUTH_GRPC_PORT}
@@ -160,7 +163,7 @@ services:
       # Auth private key file
       - type: bind
         source: ${SMQ_AUTH_KEYS_PRIVATE_KEY_PATH:-ssl/certs/dummy/private_key}
-        target: /keys/private.key
+        target: /keys/active.key
         bind:
           create_host_path: true
       # Auth gRPC mTLS server certificates
@@ -371,6 +374,15 @@ services:
       - cube-network
     volumes:
       - supermq-domains-db-volume:/var/lib/postgresql/data
+
+  auth-redis:
+    image: redis:7.2.4-alpine
+    container_name: supermq-auth-redis
+    restart: on-failure
+    networks:
+      - cube-network
+    volumes:
+      - supermq-auth-redis-volume:/data
 
   domains-redis:
     image: redis:7.2.4-alpine
