@@ -15,6 +15,9 @@ acme.json
 # Proxy Build
 build
 
+# Docker data
+docker/data/
+
 # Filesystem
 *.ext4
 *.backup

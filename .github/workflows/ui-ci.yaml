@@ -49,3 +49,10 @@ jobs:
           make dockers_cube_ai
           docker tag ${{ env.REGISTRY }}/absmach/magistrala/ui-cube-ai:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
           docker push ${{ env.REGISTRY }}/ultravioletrs/cube/ui:latest
+
+      - name: Build and Push Magistrala UI Backend Docker Image
+        run: |
+          cd ui
+          make dockers_backend
+          docker tag ${{ env.REGISTRY }}/absmach/magistrala/ui-backend:latest ${{ env.REGISTRY }}/ultravioletrs/cube/ui-backend:latest
+          docker push ${{ env.REGISTRY }}/ultravioletrs/cube/ui-backend:latest
