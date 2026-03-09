@@ -320,7 +320,7 @@ services:
       - cube-network
 
   ui:
-    image: ghcr.io/ultravioletrs/cube/ui:latest
+    image: ghcr.io/absmach/magistrala/ui-cube-ai:${MG_UI_RELEASE_TAG}
     container_name: cube-ui
     restart: on-failure
     depends_on:
