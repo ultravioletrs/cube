@@ -140,7 +140,7 @@ These requirements apply only to local QEMU deployment. Cloud providers manage t
 - SEV-SNP enabled in BIOS
 - Host kernel with SEV-SNP/SVSM support
 - `/dev/sev` device available
-- Coconut SVSM QEMU binary at `/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64`
+- Coconut SVSM QEMU binary at `<path-to-svsm-qemu-dir>/qemu-svsm/bin/qemu-system-x86_64`
 - IGVM file at `/etc/cocos/coconut-qemu.igvm` (or set `IGVM` env var)
 - `genisoimage` installed (`apt-get install genisoimage`)
 - Custom kernel `.deb` files in `debs/` (see [SNP Custom Kernel](#snp-custom-kernel))

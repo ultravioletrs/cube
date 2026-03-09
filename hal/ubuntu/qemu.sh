@@ -219,7 +219,7 @@ function prepare_snp() {
     echo "Preparing SNP image via cloud-init (regular KVM, no SNP)..."
     echo "This installs the custom kernel into the image. Run start_snp after this completes."
 
-    local SNP_QEMU="/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64"
+    local SNP_QEMU="<path-to-svsm-qemu-dir>/qemu-svsm/bin/qemu-system-x86_64"
 
     create_seed_image_snp "${SCRIPT_DIR}/user-data-snp.yaml"
 
@@ -239,7 +239,7 @@ function start_snp() {
     echo "Starting QEMU VM with AMD SEV-SNP (Confidential VM)..."
     echo "Ensure prepare_snp has been run first to install the custom kernel."
 
-    local SNP_QEMU="/home/cocosai/bin/qemu-svsm/bin/qemu-system-x86_64"
+    local SNP_QEMU="<path-to-svsm-qemu-dir>/qemu-svsm/bin/qemu-system-x86_64"
     local IGVM="${IGVM:-/etc/cocos/coconut-qemu.igvm}"
 
     $SNP_QEMU \
