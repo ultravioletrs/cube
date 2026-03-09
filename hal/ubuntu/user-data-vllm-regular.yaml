@@ -1,0 +1,143 @@
+#cloud-config
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+#
+# Cloud-init for local QEMU regular (non-CVM) VMs with vLLM backend
+# Used by: qemu.sh start_regular
+# vLLM will use GPU automatically if available, otherwise falls back to CPU
+
+package_update: true
+package_upgrade: false
+
+users:
+  - name: ultraviolet
+    plain_text_passwd: password
+    lock_passwd: false
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+  - name: vllm
+    system: true
+    home: /var/lib/vllm
+    shell: /usr/sbin/nologin
+
+ssh_pwauth: true
+
+packages:
+  - curl
+  - git
+  - build-essential
+  - python3
+  - python3-pip
+  - python3-venv
+
+write_files:
+  - path: /etc/cube/agent.env
+    content: |
+      UV_CUBE_AGENT_LOG_LEVEL=info
+      UV_CUBE_AGENT_HOST=0.0.0.0
+      UV_CUBE_AGENT_PORT=7001
+      UV_CUBE_AGENT_INSTANCE_ID=cube-agent-01
+      UV_CUBE_AGENT_TARGET_URL=http://localhost:8000
+      UV_CUBE_AGENT_SERVER_CERT=/etc/cube/certs/server.crt
+      UV_CUBE_AGENT_SERVER_KEY=/etc/cube/certs/server.key
+      UV_CUBE_AGENT_SERVER_CA_CERTS=/etc/cube/certs/ca.crt
+      UV_CUBE_AGENT_CA_URL=https://prism.ultraviolet.rs/am-certs
+    permissions: '0644'
+  - path: /etc/cube/vllm.env
+    content: |
+      VLLM_MODEL=${CUBE_VLLM_MODEL:-meta-llama/Llama-2-7b-hf}
+      VLLM_HOST=0.0.0.0
+      VLLM_PORT=8000
+    permissions: '0644'
+  - path: /etc/systemd/system/vllm.service
+    content: |
+      [Unit]
+      Description=vLLM Inference Server
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User=vllm
+      Group=vllm
+      EnvironmentFile=/etc/cube/vllm.env
+      WorkingDirectory=/var/lib/vllm
+      ExecStart=/var/lib/vllm/venv/bin/python -m vllm.entrypoints.openai.api_server \
+        --model ${VLLM_MODEL} \
+        --host ${VLLM_HOST} \
+        --port ${VLLM_PORT}
+      Restart=on-failure
+      RestartSec=10
+      StartLimitBurst=3
+      StartLimitIntervalSec=60
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+  - path: /etc/systemd/system/cube-agent.service
+    content: |
+      [Unit]
+      Description=Cube Agent Service
+      After=network-online.target vllm.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      EnvironmentFile=/etc/cube/agent.env
+      ExecStart=/usr/local/bin/cube-agent
+      Restart=on-failure
+      RestartSec=5
+      StartLimitBurst=5
+      StartLimitIntervalSec=60
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+
+runcmd:
+  - echo 'ultraviolet:password' | chpasswd
+  - |
+    cat > /etc/ssh/sshd_config.d/60-cloudimg-settings.conf << 'SSHEOF'
+    PasswordAuthentication yes
+    SSHEOF
+  - systemctl restart sshd
+  - sleep 2
+  - mkdir -p /etc/cube
+  - mkdir -p /etc/cube/certs
+  - |
+    # Generate CA certificate
+    openssl req -x509 -newkey rsa:4096 -keyout /etc/cube/certs/ca.key -out /etc/cube/certs/ca.crt -days 365 -nodes -subj "/CN=Cube-CA"
+    # Generate server certificate
+    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/server.key -out /etc/cube/certs/server.csr -nodes -subj "/CN=cube-agent"
+    openssl x509 -req -in /etc/cube/certs/server.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/server.crt -days 365
+    # Generate client certificate for mTLS
+    openssl req -newkey rsa:4096 -keyout /etc/cube/certs/client.key -out /etc/cube/certs/client.csr -nodes -subj "/CN=cube-client"
+    openssl x509 -req -in /etc/cube/certs/client.csr -CA /etc/cube/certs/ca.crt -CAkey /etc/cube/certs/ca.key -CAcreateserial -out /etc/cube/certs/client.crt -days 365
+    # Set permissions
+    chmod 600 /etc/cube/certs/*.key
+    chmod 644 /etc/cube/certs/*.crt
+  - mkdir -p /var/lib/vllm
+  - chown -R vllm:vllm /var/lib/vllm
+  - |
+    # Install vLLM in virtual environment
+    sudo -u vllm python3 -m venv /var/lib/vllm/venv
+    sudo -u vllm /var/lib/vllm/venv/bin/pip install --upgrade pip
+    sudo -u vllm /var/lib/vllm/venv/bin/pip install vllm
+  - |
+    # Install Go (required version from go.mod)
+    GO_VERSION=$(curl -fsSL https://go.dev/VERSION?m=text | head -1 | sed 's/go//')
+    curl -fsSL https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz -o /tmp/go.tar.gz
+    rm -rf /usr/local/go
+    tar -C /usr/local -xzf /tmp/go.tar.gz
+    rm /tmp/go.tar.gz
+  - git clone https://github.com/ultravioletrs/cube.git /tmp/cube
+  - cd /tmp/cube && git fetch origin pull/88/head:pr-88 && git checkout pr-88
+  - export HOME=/root
+  - cd /tmp/cube && /usr/local/go/bin/go build -ldflags="-s -w" -o /usr/local/bin/cube-agent ./cmd/agent
+  - systemctl daemon-reload
+  - systemctl enable vllm.service
+  - systemctl start vllm.service
+  - systemctl enable cube-agent.service
+  - systemctl start cube-agent.service
+
+final_message: "Cube Agent (vLLM) and vLLM services started."
