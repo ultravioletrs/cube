@@ -104,18 +104,17 @@ func (a *agentService) Proxy() http.Handler {
 			return
 		}
 
-		proxy := httputil.NewSingleHostReverseProxy(target)
-		proxy.Transport = a.transport
-
-		proxy.Rewrite = func(req *httputil.ProxyRequest) {
-			req.SetURL(target)
-			a.modifyHeaders(req.Out)
-			log.Printf("Agent forwarding to Backend: %s %s", req.Out.Method, req.Out.URL.Path)
-		}
-
-		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-			log.Printf("Proxy error: %v", err)
-			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		proxy := &httputil.ReverseProxy{
+			Transport: a.transport,
+			Rewrite: func(req *httputil.ProxyRequest) {
+				req.SetURL(target)
+				a.modifyHeaders(req.Out)
+				log.Printf("Agent forwarding to Backend: %s %s", req.Out.Method, req.Out.URL.Path)
+			},
+			ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+				log.Printf("Proxy error: %v", err)
+				http.Error(w, "Bad Gateway", http.StatusBadGateway)
+			},
 		}
 
 		proxy.ServeHTTP(w, r)
