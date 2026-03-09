@@ -235,26 +235,21 @@ func serveReverseProxy(
 		return
 	}
 
-	prxy := httputil.NewSingleHostReverseProxy(target)
-	prxy.Transport = transport
+	prxy := &httputil.ReverseProxy{
+		Transport: transport,
+		Rewrite: func(req *httputil.ProxyRequest) {
+			domainID := chi.URLParam(req.In, "domainID")
+			prepareProxyRequest(req.Out, target, rule, domainID, stripPrefix)
+		},
+		ModifyResponse: func(resp *http.Response) error {
+			copyAttestationHeaders(w, resp)
 
-	prxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, err error) {
-		log.Printf("Proxy error: %v", err)
-		http.Error(w, "Bad Gateway", http.StatusBadGateway)
-	}
-
-	// Add ModifyResponse hook to inject attestation headers for audit logging
-	prxy.ModifyResponse = func(resp *http.Response) error {
-		copyAttestationHeaders(w, resp)
-
-		return nil
-	}
-
-	// Director must be nil when using Rewrite (Go 1.20+ requirement)
-	prxy.Director = nil
-	prxy.Rewrite = func(req *httputil.ProxyRequest) {
-		domainID := chi.URLParam(req.In, "domainID")
-		prepareProxyRequest(req.Out, target, rule, domainID, stripPrefix)
+			return nil
+		},
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			log.Printf("Proxy error: %v", err)
+			http.Error(w, "Bad Gateway", http.StatusBadGateway)
+		},
 	}
 
 	prxy.ServeHTTP(w, r)
