@@ -250,6 +250,8 @@ func serveReverseProxy(
 		return nil
 	}
 
+	// Director must be nil when using Rewrite (Go 1.20+ requirement)
+	prxy.Director = nil
 	prxy.Rewrite = func(req *httputil.ProxyRequest) {
 		domainID := chi.URLParam(req.In, "domainID")
 		prepareProxyRequest(req.Out, target, rule, domainID, stripPrefix)

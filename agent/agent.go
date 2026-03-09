@@ -107,6 +107,8 @@ func (a *agentService) Proxy() http.Handler {
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		proxy.Transport = a.transport
 
+		// Director must be nil when using Rewrite (Go 1.20+ requirement)
+		proxy.Director = nil
 		proxy.Rewrite = func(req *httputil.ProxyRequest) {
 			req.SetURL(target)
 			a.modifyHeaders(req.Out)
