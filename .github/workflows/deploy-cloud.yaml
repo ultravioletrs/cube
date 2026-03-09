@@ -23,11 +23,6 @@ on:
       - "guardrails/rails/**"
       - ".github/workflows/deploy-cloud.yaml"
 
-  workflow_run:
-    workflows: ["Build and Publish Cube AI UI Docker Image"]
-    types:
-      - completed
-
   workflow_dispatch:
     inputs:
       environment:
@@ -50,7 +45,6 @@ env:
 
 jobs:
   deploy-cloud:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment || 'dev' }}
 
