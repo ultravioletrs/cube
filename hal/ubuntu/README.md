@@ -68,12 +68,6 @@ Default SSH access:
 - **User**: ultraviolet
 - **Password**: password
 
-For local development, update `docker/.env`:
-
-```bash
-UV_CUBE_NEXTAUTH_URL=http://<vm-ip-address>:${UI_PORT}
-```
-
 ## Cloud Deployment (GCP / Azure)
 
 For deploying on cloud providers, see [cloud/README.md](cloud/README.md). Cloud providers handle confidential computing at the hypervisor level, so no custom kernel, IGVM, or module loading is needed.
