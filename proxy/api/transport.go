@@ -264,6 +264,11 @@ func prepareProxyRequest(req *http.Request, target *url.URL, rule *router.RouteR
 			if req.URL.RawPath != "" {
 				req.URL.RawPath = strings.TrimPrefix(req.URL.RawPath, prefix)
 			}
+
+			// Pass domain ID to downstream services (e.g., guardrails)
+			// so they can route LLM calls back through the proxy
+			// with the correct domain path prefix.
+			req.Header.Set("X-Domain-ID", domainID)
 		}
 	}
 
