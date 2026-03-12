@@ -16,8 +16,8 @@ github.com/absmach/callhome v0.18.2 h1:dmopRHm2qTheHN1hdUKRRYpKwRrj7X9d8AWCFrb+K
 github.com/absmach/callhome v0.18.2/go.mod h1:LEXKhES9JJtj3tBgTZv7VPNjOi5ukJQB0mFic0QP60Q=
 github.com/absmach/certs v0.18.2 h1:s6KKL3/KfDZ6z0IxvNCksIOUwRnEgQyCpeAonuR15No=
 github.com/absmach/certs v0.18.2/go.mod h1:scqVZsmW2xPScnpMTtE70oN6cn0LLjFcJVPi4JKZ4+E=
-github.com/absmach/supermq v0.19.1-0.20260311095911-28ae84286e16 h1:C8ekYx3p/uFlXa6WA6Vg1IRZVloGOOi0OqT3QkBQIMI=
-github.com/absmach/supermq v0.19.1-0.20260311095911-28ae84286e16/go.mod h1:UCC6/UIRhO70inBIzlwC1Cm/wCyQj+yuP4dhMZSjXIc=
+github.com/absmach/supermq v0.19.1 h1:uLrf1fXpn0W6BkSSaa+d1Kw0KXygSfNn+b2EqFpCiMA=
+github.com/absmach/supermq v0.19.1/go.mod h1:UCC6/UIRhO70inBIzlwC1Cm/wCyQj+yuP4dhMZSjXIc=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/caarlos0/env/v11 v11.4.0 h1:Kcb6t5kIIr4XkoQC9AF2j+8E1Jsrl3Wz/hhm1LtoGAc=

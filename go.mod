@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/absmach/callhome v0.18.2
 	github.com/absmach/certs v0.18.2
-	github.com/absmach/supermq v0.19.1-0.20260311095911-28ae84286e16
+	github.com/absmach/supermq v0.19.1
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-kit/kit v0.13.0

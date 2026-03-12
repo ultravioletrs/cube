@@ -101,6 +101,27 @@ class CubeLLM(ChatOpenAI):
             logger.debug("CubeLLM: generation_options_var not set for model")
             return None
 
+    def _get_base_url_from_context(self) -> Optional[str]:
+        """Read per-request base_url from NeMo context.
+
+        The proxy forwards the caller's domain ID to guardrails via the
+        ``X-Domain-ID`` header.  Guardrails then includes it in
+        ``llm_params["base_url"]`` so that LLM calls are routed back
+        through the proxy with the correct ``/{domainID}/v1/…`` path
+        prefix, which is needed for domain-level authentication.
+        """
+        try:
+            gen_options = generation_options_var.get()
+            if gen_options and gen_options.llm_params:
+                base_url = gen_options.llm_params.get("base_url")
+                if base_url:
+                    logger.debug(f"CubeLLM: found base_url in context: {base_url}")
+                    return str(base_url)
+            return None
+        except LookupError:
+            logger.debug("CubeLLM: generation_options_var not set for base_url")
+            return None
+
     def _merge_headers(self) -> Dict[str, str]:
         base_headers = self._config_headers or {}
         request_headers = self._get_headers_from_context()
@@ -153,7 +174,14 @@ class CubeLLM(ChatOpenAI):
         model = context_model or self.model_name
         logger.debug(f"CubeLLM._agenerate: model='{model}', from_context={context_model is not None}")
 
-        base_url = self._normalized_base_url
+        # Support per-request base_url from context (needed for domain-prefixed proxy URLs)
+        context_base_url = self._get_base_url_from_context()
+        if context_base_url:
+            if not context_base_url.endswith("/v1"):
+                context_base_url = f"{context_base_url.rstrip('/')}/v1"
+            base_url = context_base_url
+        else:
+            base_url = self._normalized_base_url
 
         try:
             # Create a temporary client to inject per-request headers
@@ -200,7 +228,14 @@ class CubeLLM(ChatOpenAI):
         model = context_model or self.model_name
         logger.debug(f"CubeLLM._generate: model='{model}', from_context={context_model is not None}")
 
-        base_url = self._normalized_base_url
+        # Support per-request base_url from context (needed for domain-prefixed proxy URLs)
+        context_base_url = self._get_base_url_from_context()
+        if context_base_url:
+            if not context_base_url.endswith("/v1"):
+                context_base_url = f"{context_base_url.rstrip('/')}/v1"
+            base_url = context_base_url
+        else:
+            base_url = self._normalized_base_url
 
         try:
             temp_client = ChatOpenAI(

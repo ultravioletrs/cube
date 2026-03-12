@@ -4,19 +4,19 @@
 import core
 
 # ---------------------------------------------------------------------------
-# Guard-only NeMo configuration.
+# NeMo Guardrails Configuration
 #
-# NeMo is used EXCLUSIVELY for input/output safety guardrails (pattern
-# matching).  No LLM calls are made inside NeMo.
+# Guards run as high-priority background flows.  When a guard matches, its
+# refusal message is returned immediately.
 #
-# Response generation is handled by the Python router:
-#   - Greetings / goodbye / capabilities → Python canned responses
-#   - All other messages → direct LLM call (bypassing NeMo flow engine)
+# For messages that pass all guards, the low-priority `passthrough response`
+# flow fires and returns a "<<GUARDRAILS_PASS>>" marker so the Python
+# router knows NeMo approved the message.  This avoids the ~5 s delay
+# previously caused by `wait indefinitely` leaving NeMo's event loop
+# with no response to emit.
 #
-# This avoids NeMo's Colang 2.x state-machine issues with smaller models
-# (llama3.2:3b) where intent classification returns names without the
-# required "user " prefix, causing `continuation on unhandled user intent`
-# to never fire.
+# Response generation for approved messages is handled by the Python router
+# which calls the LLM directly after receiving the pass marker.
 # ---------------------------------------------------------------------------
 
 flow main
@@ -27,5 +27,21 @@ flow main
   # Output-side guard — catches unsafe bot output patterns.
   activate output guard
 
+  # Fast catch-all for approved messages (see docstring above).
+  activate passthrough response
+
   # Keep main alive so the activated flows persist across turns.
   wait indefinitely
+
+
+# ---------------------------------------------------------------------------
+# Low-priority catch-all: fires for any user message that passed all guards.
+# Produces a marker so NeMo returns in <1 s instead of ~5 s.
+# Priority 0.1 ensures guards (0.9 / 0.8) always take precedence.
+# ---------------------------------------------------------------------------
+
+@loop("passthrough_loop")
+flow passthrough response
+  priority 0.1
+  user said something
+  bot say "<<GUARDRAILS_PASS>>"

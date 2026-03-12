@@ -114,6 +114,14 @@ class NemoRuntime(GuardrailRuntime):
 
                 new_rails = LLMRails(rails_config)
 
+                # Reduce max_events from the default 500.
+                # Guards and the passthrough flow fire within ~30 events;
+                # the remaining hundreds are cascading UnhandledEvent noise
+                # that add seconds of latency with no functional benefit.
+                if hasattr(new_rails, "runtime") and hasattr(new_rails.runtime, "max_events"):
+                    new_rails.runtime.max_events = 100
+                    logger.info("Set NeMo runtime max_events to 100 (was 500)")
+
                 # Atomic swap
                 self._rails = new_rails
                 self._revision = materialized.revision
