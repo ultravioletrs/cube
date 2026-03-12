@@ -174,13 +174,17 @@ up-vllm-guardrails: enable-guardrails config-guardrails-vllm up-vllm
 
 .PHONY: disable-atls
 disable-atls:
-	@echo "Disabling attested TLS for local development..."
-	@sed -i 's|^UV_CUBE_AGENT_CLIENT_CERT=.*|UV_CUBE_AGENT_CLIENT_CERT=|' docker/.env
-	@sed -i 's|^UV_CUBE_AGENT_CLIENT_KEY=.*|UV_CUBE_AGENT_CLIENT_KEY=|' docker/.env
-	@sed -i 's|^UV_CUBE_AGENT_SERVER_CA_CERTS=.*|UV_CUBE_AGENT_SERVER_CA_CERTS=|' docker/.env
-	@sed -i 's|^UV_CUBE_AGENT_ATTESTED_TLS=.*|UV_CUBE_AGENT_ATTESTED_TLS=false|' docker/.env
-	@sed -i 's|^UV_CUBE_AGENT_ATTESTATION_POLICY=.*|UV_CUBE_AGENT_ATTESTATION_POLICY=|' docker/.env
-	@echo "✓ Attested TLS disabled"
+	@if grep -q '^UV_CUBE_AGENT_ATTESTED_TLS=true' docker/.env; then \
+		echo "Disabling attested TLS for local development..."; \
+		sed -i 's|^UV_CUBE_AGENT_CLIENT_CERT=.*|UV_CUBE_AGENT_CLIENT_CERT=|' docker/.env; \
+		sed -i 's|^UV_CUBE_AGENT_CLIENT_KEY=.*|UV_CUBE_AGENT_CLIENT_KEY=|' docker/.env; \
+		sed -i 's|^UV_CUBE_AGENT_SERVER_CA_CERTS=.*|UV_CUBE_AGENT_SERVER_CA_CERTS=|' docker/.env; \
+		sed -i 's|^UV_CUBE_AGENT_ATTESTED_TLS=.*|UV_CUBE_AGENT_ATTESTED_TLS=false|' docker/.env; \
+		sed -i 's|^UV_CUBE_AGENT_ATTESTATION_POLICY=.*|UV_CUBE_AGENT_ATTESTATION_POLICY=|' docker/.env; \
+		echo "✓ Attested TLS disabled"; \
+	else \
+		echo "✓ Attested TLS already configured, skipping"; \
+	fi
 
 .PHONY: up
 up: config-local enable-guardrails config-backend disable-atls
@@ -201,7 +205,6 @@ endif
 .PHONY: config-local
 config-local:
 	@echo "Configuring for local development..."
-	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json 2>/dev/null || true
 	@sed -i 's|__SMQ_EMAIL_HOST__|localhost|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_PORT__|1025|g' docker/.env
 	@sed -i 's|__SMQ_EMAIL_USERNAME__|test|g' docker/.env
@@ -217,9 +220,9 @@ config-local:
 	@sed -i 's|__MG_MAILCHIMP_SERVER_PREFIX__||g' docker/.env
 	@sed -i 's|__MG_MAILCHIMP_AUDIENCE_ID__||g' docker/.env
 	@sed -i 's|__CUBE_PUBLIC_URL__|localhost|g' docker/.env
-	@sed -i 's|^TRAEFIK_HTTP_PORT=.*|TRAEFIK_HTTP_PORT=80|g' docker/.env
-	@sed -i 's|^TRAEFIK_HTTPS_PORT=.*|TRAEFIK_HTTPS_PORT=443|g' docker/.env
-	@sed -i 's|^TRAEFIK_DASHBOARD_PORT=.*|TRAEFIK_DASHBOARD_PORT=8080|g' docker/.env
+	@sed -i 's|__TRAEFIK_HTTP_PORT__|80|g' docker/.env
+	@sed -i 's|__TRAEFIK_HTTPS_PORT__|443|g' docker/.env
+	@sed -i 's|__TRAEFIK_DASHBOARD_PORT__|8080|g' docker/.env
 	@sed -i 's|__TUNNEL_TOKEN__||g' docker/.env
 	@sed -i 's|__CUBE_AGENT_CERTS_TOKEN__|localdevtoken12we12we12we12we12we|g' docker/.env
 	@echo "✓ Configured with local defaults"
@@ -231,12 +234,12 @@ restore-config:
 		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
 
 .PHONY: down
-down: config-local
+down:
 	@echo "Stopping all Cube services..."
 	docker compose -f docker/compose.yaml down
 
 .PHONY: down-volumes
-down-volumes: config-local
+down-volumes:
 	@echo "Stopping all Cube services and removing volumes..."
 	docker compose -f docker/compose.yaml down -v
 
