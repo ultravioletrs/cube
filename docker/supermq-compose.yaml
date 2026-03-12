@@ -319,47 +319,6 @@ services:
     networks:
       - cube-network
 
-  ui:
-    image: ghcr.io/absmach/magistrala/ui-cube-ai:${MG_UI_RELEASE_TAG}
-    container_name: cube-ui
-    restart: on-failure
-    depends_on:
-      - auth
-      - users
-      - domains
-    networks:
-      - cube-network
-    environment:
-      PORT: ${UI_PORT}
-      RUNTIME_ENV: ${UV_RUNTIME_ENV}
-      MG_DOMAINS_URL: ${SMQ_DOMAINS_URL}
-      MG_USERS_URL: ${SMQ_USERS_URL}
-      MG_INVITATIONS_URL: ${SMQ_INVITATIONS_URL}
-      MG_AUTH_URL: ${SMQ_AUTH_URL}
-      MG_UI_NAME: ${UV_CUBE_UI_NAME}
-      MG_UI_BASE_PATH: ${UV_CUBE_UI_BASE_PATH}
-      MG_UI_DOCKER_ACCEPT_EULA: ${UV_CUBE_UI_DOCKER_ACCEPT_EULA}
-      NEXT_PUBLIC_SMQ_UI_BASE_PATH: ${UV_CUBE_PUBLIC_BASE_PATH}
-      MG_UI_TYPE: ${MG_UI_TYPE}
-      NEXTAUTH_SECRET: ${UV_CUBE_UI_NEXTAUTH_SECRET}
-      NEXTAUTH_URL: ${UV_CUBE_NEXTAUTH_URL}
-      NODE_ENV: ${UV_CUBE_NODE_ENV}
-      OLLAMA_BASE_URL: ${UV_CUBE_UI_LLM_BASE_URL}
-      OLLAMA_DEFAULT_MODEL: ${UV_CUBE_UI_LLM_DEFAULT_MODEL}
-      CUBE_AI_PROXY_URL: ${CUBE_AI_PROXY_URL}
-      MG_GOOGLE_CLIENT_ID: ${SMQ_GOOGLE_CLIENT_ID}
-      MG_GOOGLE_CLIENT_SECRET: ${SMQ_GOOGLE_CLIENT_SECRET}
-      MG_GOOGLE_REDIRECT_URL: ${SMQ_GOOGLE_REDIRECT_URL}
-      MG_GOOGLE_STATE: ${SMQ_GOOGLE_STATE}
-      MG_HOST_URL: ${UV_CUBE_NEXTAUTH_URL}
-      MG_MAILCHIMP_API_KEY: ${MG_MAILCHIMP_API_KEY}
-      MG_MAILCHIMP_SERVER_PREFIX: ${MG_MAILCHIMP_SERVER_PREFIX}
-      MG_MAILCHIMP_AUDIENCE_ID: ${MG_MAILCHIMP_AUDIENCE_ID}
-      MG_UI_ALLOW_UNVERIFIED_USER: ${SMQ_ALLOW_UNVERIFIED_USER}
-      MG_BACKEND_URL: ${MG_BACKEND_URL}
-      MG_UI_IMAGE_URL: ${MG_UI_IMAGE_URL}
-
-
   domains-db:
     image: postgres:16.2-alpine
     container_name: supermq-domains-db
