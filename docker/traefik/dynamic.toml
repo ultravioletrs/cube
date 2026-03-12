@@ -25,6 +25,10 @@
   prefixes = ["/domains"]
 
 # HTTP Services
+[http.services.seaweedfs.loadBalancer]
+  [[http.services.seaweedfs.loadBalancer.servers]]
+    url = "http://magistrala-seaweedfs-s3:8333"
+
 [http.services.users.loadBalancer]
   [[http.services.users.loadBalancer.servers]]
     url = "http://supermq-users:9002"
@@ -133,6 +137,13 @@
   service = "domains"
   middlewares = ["retry-middleware", "headers-middleware"]
   priority = 8
+
+[http.routers.seaweedfs]
+  rule = "PathPrefix(`/mg-ui-images`)"
+  entryPoints = ["websecure"]
+  service = "seaweedfs"
+  middlewares = ["retry-middleware"]
+  priority = 10
 
 [http.routers.ui]
   rule = "PathPrefix(`/`) || PathPrefix(`/api`)"
