@@ -386,8 +386,54 @@ services:
     entrypoint: /bin/sh
     command: /entrypoint.sh
 
+  ui:
+    image: ghcr.io/absmach/magistrala/ui-cube-ai:${MG_RELEASE_TAG}
+    container_name: cube-ui
+    restart: always
+    depends_on:
+      - auth
+      - users
+      - domains
+    networks:
+      - cube-network
+    environment:
+      PORT: ${UI_PORT}
+      MG_DOMAINS_URL: ${SMQ_DOMAINS_URL}
+      MG_USERS_URL: ${SMQ_USERS_URL}
+      MG_BACKEND_URL: ${MG_BACKEND_URL}
+      MG_AUTH_URL: ${SMQ_AUTH_URL}
+      MG_UI_IMAGE_URL: ${MG_UI_IMAGE_URL}
+      MG_UI_BASE_PATH: ${UV_CUBE_UI_BASE_PATH}
+      MG_NEXTAUTH_BASE_PATH: ${MG_NEXTAUTH_BASE_PATH}
+      MG_UI_TYPE: cube-ai
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      MG_HOST_URL: ${MG_HOST_URL}
+      MG_UI_BASEURL: ${MG_UI_BASEURL}
+      MG_ACCESS_TOKEN_EXPIRY: ${SMQ_AUTH_ACCESS_TOKEN_DURATION}
+      MG_REFRESH_TOKEN_EXPIRY: ${SMQ_AUTH_REFRESH_TOKEN_DURATION}
+      MG_UI_SMTP_HOST: ${SMQ_EMAIL_HOST}
+      MG_UI_SMTP_PORT: ${SMQ_EMAIL_PORT}
+      MG_UI_SMTP_SECURE: ${MG_UI_SMTP_SECURE}
+      MG_UI_SUPPORT_FROM: ${SMQ_EMAIL_FROM_ADDRESS}
+      MG_SUPPORT_EMAIL: ${SMQ_EMAIL_USERNAME}
+      MG_SUPPORT_EMAIL_PASS: ${SMQ_EMAIL_PASSWORD}
+      MG_GOOGLE_CLIENT_ID: ${SMQ_GOOGLE_CLIENT_ID}
+      MG_GOOGLE_CLIENT_SECRET: ${SMQ_GOOGLE_CLIENT_SECRET}
+      MG_GOOGLE_REDIRECT_URL: ${SMQ_GOOGLE_REDIRECT_URL}
+      MG_GOOGLE_STATE: ${SMQ_GOOGLE_STATE}
+      MG_MAILCHIMP_API_KEY: ${MG_MAILCHIMP_API_KEY}
+      MG_MAILCHIMP_SERVER_PREFIX: ${MG_MAILCHIMP_SERVER_PREFIX}
+      MG_MAILCHIMP_AUDIENCE_ID: ${MG_MAILCHIMP_AUDIENCE_ID}
+      MG_UI_ALLOW_UNVERIFIED_USER: ${SMQ_ALLOW_UNVERIFIED_USER}
+      MG_UI_DOCKER_ACCEPT_EULA: ${UV_CUBE_UI_DOCKER_ACCEPT_EULA}
+      CUBE_AI_PROXY_URL: ${CUBE_AI_PROXY_URL}
+      OLLAMA_BASE_URL: ${UV_CUBE_UI_LLM_BASE_URL}
+      OLLAMA_DEFAULT_MODEL: ${UV_CUBE_UI_LLM_DEFAULT_MODEL}
+      GUARDRAILS_BASE_URL: ${GUARDRAILS_BASE_URL}
+
   magistrala-backend:
-    image: ghcr.io/absmach/magistrala/ui-backend:${MG_BACKEND_RELEASE_TAG}
+    image: ghcr.io/absmach/magistrala/ui-backend:${MG_RELEASE_TAG}
     container_name: magistrala-backend
     restart: on-failure
     networks:
@@ -415,7 +461,7 @@ services:
       MG_AUTH_GRPC_SERVER_CA_CERTS: ${MG_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
       MG_UI_VERIFICATION_TLS: ${MG_UI_VERIFICATION_TLS}
       MG_UI_CONTENT_TYPE: ${MG_UI_CONTENT_TYPE}
-      MG_UI_DOCKER_ACCEPT_EULA: ${MG_UI_DOCKER_ACCEPT_EULA}
+      MG_UI_DOCKER_ACCEPT_EULA: ${UV_CUBE_UI_DOCKER_ACCEPT_EULA}
       MG_BACKEND_OBJECT_STORAGE_REGION: ${MG_BACKEND_OBJECT_STORAGE_REGION}
       MG_BACKEND_OBJECT_STORAGE_BUCKET: ${MG_BACKEND_OBJECT_STORAGE_BUCKET}
       MG_BACKEND_OBJECT_STORAGE_ENDPOINT: ${MG_BACKEND_OBJECT_STORAGE_ENDPOINT}
@@ -453,7 +499,6 @@ services:
         target: /etc/ssl/certs/ca.crt
         read_only: true
 
-
   magistrala-ui-backend-db:
     image: postgres:16.2-alpine
     container_name: magistrala-ui-backend-db
@@ -470,39 +515,39 @@ services:
     command: postgres -c "max_connections=${MG_POSTGRES_MAX_CONNECTIONS}"
 
   magistrala-seaweedfs-s3:
-    image: chrislusf/seaweedfs:${SEAWEEDFS_VERSION:-3.68}
+    image: chrislusf/seaweedfs:4.16
     container_name: magistrala-seaweedfs-s3
-    command: server -s3 -dir=/data
+    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+    restart: on-failure:5
     ports:
       - "8333:8333" # S3 endpoint
     volumes:
       - ./data/seaweedfs:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
     networks:
       - cube-network
 
   magistrala-seaweedfs-init:
-    image: curlimages/curl
+    image: amazon/aws-cli
     container_name: magistrala-seaweedfs-init
+    entrypoint: /bin/sh
     depends_on:
       - magistrala-seaweedfs-s3
-    command: >
-      /bin/sh -c "
-      echo \"Creating bucket $${BUCKET}, wait for 25s...\";
-      sleep 25;
-      HTTP_CODE=$(curl -s -o /dev/null -w '%{http_code}' -f -X PUT http://magistrala-seaweedfs-s3:8333/$${BUCKET});
-      if [ $${HTTP_CODE} = '200' ] || [ $${HTTP_CODE} = '201' ] || [ $${HTTP_CODE} = '409' ]; then
-        if [ $${HTTP_CODE} = '409' ]; then
-          echo \"[INIT] Bucket $${BUCKET} already exists.\";
+    command:
+      - -c
+      - |
+        echo "[INIT] Waiting 20s for SeaweedFS S3 to be ready...";
+        sleep 20;
+        OUT=$(aws --endpoint-url http://magistrala-seaweedfs-s3:8333 s3api create-bucket --bucket $${BUCKET} 2>&1);
+        EXIT=$$?;
+        if [ $$EXIT -eq 0 ]; then
+          echo "[INIT] Bucket $${BUCKET} created successfully.";
+        elif echo "$$OUT" | grep -q 'BucketAlreadyOwnedByYou\|BucketAlreadyExists'; then
+          echo "[INIT] Bucket $${BUCKET} already exists, skipping.";
         else
-          echo \"[INIT] Bucket $${BUCKET} created successfully!\";
+          echo "[INIT] Failed to create bucket $${BUCKET}: $$OUT" >&2;
+          exit 1;
         fi
-        curl -s http://magistrala-seaweedfs-s3:8333/ | grep -o '<Name>[^<]*</Name>';
-        exit 0;
-      else
-        echo \"[INIT] Failed to create bucket $${BUCKET}! HTTP code $${HTTP_CODE}.\" >&2;
-        exit 1;
-      fi
-      "
     networks:
       - cube-network
     environment:

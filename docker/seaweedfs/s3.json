@@ -1,7 +1,7 @@
 {
   "identities": [
     {
-      "name": "localuser",
+      "name": "magistrala",
       "credentials": [
         {
           "accessKey": "localKey",
@@ -10,8 +10,5 @@
       ],
       "actions": ["Admin", "Read", "Write"]
     }
-  ],
-  "s3": {
-    "region": "fra1"
-  }
+  ]
 }
