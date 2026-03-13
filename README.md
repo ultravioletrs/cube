@@ -7,7 +7,6 @@ Confidential computing framework for GPT-based applications.
 OpenAI-compatible API, multiple LLM backends, and TEE-backed isolation for data and model privacy.
 
 [![CI](https://github.com/ultravioletrs/cube/actions/workflows/main.yaml/badge.svg)](https://github.com/ultravioletrs/cube/actions/workflows/main.yaml)
-[![UI CI](https://github.com/ultravioletrs/cube/actions/workflows/ui-ci.yaml/badge.svg)](https://github.com/ultravioletrs/cube/actions/workflows/ui-ci.yaml)
 [![Check License](https://github.com/ultravioletrs/cube/actions/workflows/check-license.yaml/badge.svg)](https://github.com/ultravioletrs/cube/actions/workflows/check-license.yaml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ultravioletrs/cube)](https://goreportcard.com/report/github.com/ultravioletrs/cube)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
