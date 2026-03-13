@@ -436,8 +436,6 @@ services:
     image: ghcr.io/absmach/magistrala/ui-backend:${MG_RELEASE_TAG}
     container_name: magistrala-backend
     restart: on-failure
-    ports:
-      - ${MG_BACKEND_HTTP_PORT}:${MG_BACKEND_HTTP_PORT}
     networks:
       - cube-network
     environment:
