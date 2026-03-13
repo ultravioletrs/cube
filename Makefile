@@ -225,6 +225,7 @@ config-local:
 	@sed -i 's|__TRAEFIK_DASHBOARD_PORT__|8080|g' docker/.env
 	@sed -i 's|__TUNNEL_TOKEN__||g' docker/.env
 	@sed -i 's|__CUBE_AGENT_CERTS_TOKEN__|localdevtoken12we12we12we12we12we|g' docker/.env
+	@sed -i "s|__NEXTAUTH_SECRET__|$(shell python3 -c 'import secrets; print(secrets.token_urlsafe(37))')|g" docker/.env
 	@echo "✓ Configured with local defaults"
 
 .PHONY: restore-config
