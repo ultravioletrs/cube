@@ -520,6 +520,7 @@ services:
     image: chrislusf/seaweedfs:4.16
     container_name: magistrala-seaweedfs-s3
     command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
+    restart: on-failure:5
     ports:
       - "8333:8333" # S3 endpoint
     volumes:
