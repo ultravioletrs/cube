@@ -128,6 +128,9 @@ jobs:
             # Replace placeholder with actual domain from secrets
             sed -i "s|__CUBE_DOMAIN__|${{ secrets.CUBE_DOMAIN }}|g" docker/traefik/dynamic.toml
 
+            # Accept EULA for Cube UI Docker image
+            sed -i "s|UV_CUBE_UI_DOCKER_ACCEPT_EULA=no|UV_CUBE_UI_DOCKER_ACCEPT_EULA=yes|g" docker/.env
+
             echo "Pulling latest Docker images"
             docker compose -f docker/compose.yaml --profile cloud pull 2>&1
 
