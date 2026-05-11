@@ -63,6 +63,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     record_id   UUID        REFERENCES records(id) ON DELETE CASCADE,
     content     TEXT        NOT NULL,
     chunk_index INT         NOT NULL DEFAULT 0,
+    page_number INT,
     embedding   vector,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );

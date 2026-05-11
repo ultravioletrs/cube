@@ -150,15 +150,20 @@ func (d *DriveReader) ListFiles(ctx context.Context, folderID string) ([]DriveFi
 			params.Set("pageToken", pageToken)
 		}
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), http.NoBody)
+		if err != nil {
+			return nil, fmt.Errorf("drive list files request: %w", err)
+		}
 		resp, err := d.httpClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("drive list files: %w", err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
+
+			_ = resp.Body.Close()
+
 			return nil, fmt.Errorf("drive list files status %d: %s", resp.StatusCode, body)
 		}
 
@@ -167,7 +172,12 @@ func (d *DriveReader) ListFiles(ctx context.Context, folderID string) ([]DriveFi
 			NextPageToken string      `json:"nextPageToken"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+			_ = resp.Body.Close()
+
 			return nil, fmt.Errorf("drive list files decode: %w", err)
+		}
+		if err := resp.Body.Close(); err != nil {
+			return nil, fmt.Errorf("drive list files close body: %w", err)
 		}
 		for _, file := range page.Files {
 			if supportsDriveFile(file) {
@@ -246,15 +256,20 @@ func (d *DriveReader) ListFolderContent(ctx context.Context, folderID string) ([
 			params.Set("pageToken", pageToken)
 		}
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), http.NoBody)
+		if err != nil {
+			return nil, nil, fmt.Errorf("drive list folder content request: %w", err)
+		}
 		resp, err := d.httpClient.Do(req)
 		if err != nil {
 			return nil, nil, fmt.Errorf("drive list folder content: %w", err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
+
+			_ = resp.Body.Close()
+
 			return nil, nil, fmt.Errorf("drive list folder content status %d: %s", resp.StatusCode, body)
 		}
 
@@ -263,7 +278,12 @@ func (d *DriveReader) ListFolderContent(ctx context.Context, folderID string) ([
 			NextPageToken string      `json:"nextPageToken"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+			_ = resp.Body.Close()
+
 			return nil, nil, fmt.Errorf("drive list folder content decode: %w", err)
+		}
+		if err := resp.Body.Close(); err != nil {
+			return nil, nil, fmt.Errorf("drive list folder content close body: %w", err)
 		}
 		for _, file := range page.Files {
 			if strings.EqualFold(strings.TrimSpace(file.MimeType), "application/vnd.google-apps.folder") {
@@ -316,15 +336,20 @@ func (d *DriveReader) SearchFolders(ctx context.Context, scopeFolderID, nameQuer
 			params.Set("pageToken", pageToken)
 		}
 
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), nil)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), http.NoBody)
+		if err != nil {
+			return nil, fmt.Errorf("drive search folders request: %w", err)
+		}
 		resp, err := d.httpClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("drive search folders: %w", err)
 		}
-		defer resp.Body.Close()
 
 		if resp.StatusCode != http.StatusOK {
 			body, _ := io.ReadAll(resp.Body)
+
+			_ = resp.Body.Close()
+
 			return nil, fmt.Errorf("drive search folders status %d: %s", resp.StatusCode, body)
 		}
 
@@ -333,7 +358,12 @@ func (d *DriveReader) SearchFolders(ctx context.Context, scopeFolderID, nameQuer
 			NextPageToken string      `json:"nextPageToken"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+			_ = resp.Body.Close()
+
 			return nil, fmt.Errorf("drive search folders decode: %w", err)
+		}
+		if err := resp.Body.Close(); err != nil {
+			return nil, fmt.Errorf("drive search folders close body: %w", err)
 		}
 		for _, folder := range page.Files {
 			if strings.EqualFold(strings.TrimSpace(folder.MimeType), "application/vnd.google-apps.folder") {
@@ -362,7 +392,10 @@ func (d *DriveReader) DownloadFile(ctx context.Context, f DriveFile) ([]byte, er
 		reqURL = fmt.Sprintf(driveDownload, f.ID)
 	}
 
-	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("drive download %s request: %w", f.ID, err)
+	}
 	resp, err := d.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("drive download %s: %w", f.ID, err)

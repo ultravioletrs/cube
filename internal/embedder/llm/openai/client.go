@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/ultravioletrs/cube/internal/embedder/llm"
 )
@@ -63,13 +62,21 @@ func (c *Client) StreamChat(ctx context.Context, messages []llm.Message, out cha
 		msgs[i] = openAIMessage{Role: m.Role, Content: m.Content}
 	}
 
-	body, _ := json.Marshal(streamRequest{
+	body, err := json.Marshal(streamRequest{
 		Model:    c.model,
 		Messages: msgs,
 		Stream:   true,
 	})
+	if err != nil {
+		return fmt.Errorf("openai chat marshal request: %w", err)
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/chat/completions", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		c.baseURL+"/v1/chat/completions",
+		bytes.NewReader(body),
+	)
 	if err != nil {
 		return err
 	}
@@ -77,10 +84,7 @@ func (c *Client) StreamChat(ctx context.Context, messages []llm.Message, out cha
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("Accept", "text/event-stream")
 
-	// Use a client without a global timeout for streaming.
-	httpClient := &http.Client{Timeout: 0}
-	_ = time.Second // keep import
-	resp, err := httpClient.Do(req)
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("openai chat: %w", err)
 	}
@@ -91,6 +95,7 @@ func (c *Client) StreamChat(ctx context.Context, messages []llm.Message, out cha
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {

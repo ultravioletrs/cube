@@ -25,7 +25,7 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_CHUNK_SIZE` | Chunk size | `512` |
 | `EMBEDDER_CHUNK_OVERLAP` | Chunk overlap | `64` |
 | `EMBEDDER_INGEST_*` | Queue polling and concurrency tuning | optional |
-| `EMBEDDER_OBJECT_STORAGE_PROVIDER` | Storage backend (`s3` or `local`) | `s3` |
+| `EMBEDDER_OBJECT_STORAGE_PROVIDER` | Storage backend (`s3` or `local`) | `local` |
 | `EMBEDDER_S3_*` | S3/SeaweedFS credentials and endpoint | required for `s3` |
 | `EMBEDDER_UPLOAD_DIR` | Local upload path when provider is `local` | `/tmp/embedder/uploads` |
 | `EMBEDDER_RCLONE_CONFIG_DIR` | rclone config base directory | `/etc/cube/rclone` |

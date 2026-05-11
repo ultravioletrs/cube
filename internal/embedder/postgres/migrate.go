@@ -39,9 +39,23 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
 		}
-		if _, err := pool.Exec(ctx, string(b)); err != nil {
+
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin migration %s tx: %w", name, err)
+		}
+
+		if _, err := tx.Exec(ctx, string(b)); err != nil {
+			_ = tx.Rollback(ctx)
+
 			return fmt.Errorf("apply migration %s: %w", name, err)
 		}
+		if err := tx.Commit(ctx); err != nil {
+			_ = tx.Rollback(ctx)
+
+			return fmt.Errorf("commit migration %s: %w", name, err)
+		}
 	}
+
 	return nil
 }
