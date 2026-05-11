@@ -3,6 +3,7 @@
 
 CUBE_PROXY_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/proxy
 CUBE_AGENT_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/agent
+CUBE_EMBEDDER_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/embedder
 CUBE_GUARDRAILS_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/guardrails
 CGO_ENABLED ?= 0
 GOOS ?= linux
@@ -69,7 +70,7 @@ define update_env_var
 endef
 
 .PHONY: build
-build: build-proxy build-agent
+build: build-proxy build-agent build-embedder
 
 .PHONY: build-proxy
 build-proxy:
@@ -79,8 +80,12 @@ build-proxy:
 build-agent:
 	$(call compile_service,agent)
 
+.PHONY: build-embedder
+build-embedder:
+	$(call compile_service,embedder)
+
 .PHONY: docker
-docker: docker-proxy docker-agent docker-guardrails
+docker: docker-proxy docker-agent docker-embedder docker-guardrails
 
 .PHONY: docker-proxy
 docker-proxy:
@@ -89,6 +94,10 @@ docker-proxy:
 .PHONY: docker-agent
 docker-agent:
 	$(call make_docker,agent,$(CUBE_AGENT_DOCKER_IMAGE_NAME))
+
+.PHONY: docker-embedder
+docker-embedder:
+	$(call make_docker,embedder,$(CUBE_EMBEDDER_DOCKER_IMAGE_NAME))
 
 .PHONY: docker-guardrails
 docker-guardrails:
@@ -114,7 +123,7 @@ guardrails-venv:
 	@echo "Guardrails venv created successfully at .venv"
 
 .PHONY: docker-dev
-docker-dev: docker-proxy-dev docker-agent-dev docker-guardrails-dev
+docker-dev: docker-proxy-dev docker-agent-dev docker-embedder-dev docker-guardrails-dev
 
 .PHONY: docker-proxy-dev
 docker-proxy-dev:
@@ -123,6 +132,10 @@ docker-proxy-dev:
 .PHONY: docker-agent-dev
 docker-agent-dev:
 	$(call make_docker_dev,agent,$(CUBE_AGENT_DOCKER_IMAGE_NAME))
+
+.PHONY: docker-embedder-dev
+docker-embedder-dev:
+	$(call make_docker_dev,embedder,$(CUBE_EMBEDDER_DOCKER_IMAGE_NAME))
 
 .PHONY: config-ollama
 config-ollama:
