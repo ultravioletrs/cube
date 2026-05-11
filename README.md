@@ -325,6 +325,12 @@ For Ollama integration:
 make up-ollama
 ```
 
+## Service Runbooks
+
+- Embedder service overview and configuration: [internal/embedder/README.md](internal/embedder/README.md)
+- Embedder ingest/retrieve workflow: [internal/embedder/workflows/ingest-retrieve.md](internal/embedder/workflows/ingest-retrieve.md)
+- Agent attestation policy workflow: [agent/workflows/attestation-policy.md](agent/workflows/attestation-policy.md)
+
 ## Documentation
 
 Project documentation is hosted at [Cube AI docs repository](https://github.com/ultravioletrs/cube-docs).

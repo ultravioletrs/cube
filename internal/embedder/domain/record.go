@@ -1,0 +1,137 @@
+package domain
+
+import (
+	"context"
+	"time"
+)
+
+// RecordFormat identifies the content type of a record.
+type RecordFormat string
+
+const (
+	RecordFormatText  RecordFormat = "text"
+	RecordFormatPDF   RecordFormat = "pdf"
+	RecordFormatMD    RecordFormat = "md"
+	RecordFormatDOCX  RecordFormat = "docx"
+	RecordFormatCode  RecordFormat = "code"
+	RecordFormatImage RecordFormat = "image"
+	RecordFormatLink  RecordFormat = "link"
+)
+
+// RecordStatus represents the processing state of a record.
+type RecordStatus string
+
+const (
+	RecordStatusQueued     RecordStatus = "queued"
+	RecordStatusProcessing RecordStatus = "processing"
+	RecordStatusIndexed    RecordStatus = "indexed"
+	RecordStatusFailed     RecordStatus = "failed"
+)
+
+// Record represents a single indexed item (document, image, link, etc.) in the
+// vector store.  It always preserves a reference to the original external document
+// so that vectorized content can be traced back to its origin at any time.
+type Record struct {
+	ID string
+	// UserID scopes this record to a single authenticated user.
+	UserID string
+	// SourceID links back to the Source this record was ingested from.
+	SourceID string
+	Name     string
+	Format   RecordFormat
+	Status   RecordStatus
+
+	// ExternalID is the source-system identifier for the original item.
+	// For Google Drive: the file ID. For a link: the URL. For a filesystem: the path.
+	ExternalID string
+	// ExternalURL is the browser-accessible URL of the original document.
+	ExternalURL string
+	// ExternalRef carries additional location context from the source system
+	// (e.g. Google Drive parent folder ID, SharePoint site URL, git commit SHA).
+	ExternalRef string
+	MimeType    string
+
+	// Content metadata populated after successful ingestion.
+	Description string
+	ChunkCount  *int
+	SizeBytes   *int64
+	PageCount   *int
+
+	// SourceVersion and SourceModifiedAt enable idempotent re-sync:
+	// a record is only re-ingested when the source version changes.
+	SourceVersion    string
+	SourceModifiedAt *time.Time
+
+	Error     *string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Source    *RecordSourceLink
+}
+
+// RecordSourceLink carries the original source linkage for a record list/detail response.
+type RecordSourceLink struct {
+	ID     string
+	Name   string
+	Type   SourceType
+	Status SourceStatus
+}
+
+// RecordPage is a paginated result set of records.
+type RecordPage struct {
+	Records []Record
+	Total   uint64
+}
+
+// RecordFilter constrains a list query.  All fields are optional.
+type RecordFilter struct {
+	SourceID *string
+	Status   *RecordStatus
+	Format   *RecordFormat
+}
+
+// IngestResult holds post-ingestion metadata written back to the record.
+type IngestResult struct {
+	ChunkCount int
+	SizeBytes  int64
+	PageCount  *int
+}
+
+// RecordUpsertState describes what a sync operation changed.
+type RecordUpsertState string
+
+const (
+	RecordUpsertCreated   RecordUpsertState = "created"
+	RecordUpsertUpdated   RecordUpsertState = "updated"
+	RecordUpsertUnchanged RecordUpsertState = "unchanged"
+)
+
+// RecordUpsertResult is returned when syncing source items into records.
+type RecordUpsertResult struct {
+	Record Record
+	State  RecordUpsertState
+}
+
+// RecordRepository defines the persistence contract for records.
+type RecordRepository interface {
+	Create(ctx context.Context, r Record) (Record, error)
+	GetByID(ctx context.Context, id, userID string) (Record, error)
+	List(ctx context.Context, userID string, f RecordFilter, p Page) (RecordPage, error)
+	Delete(ctx context.Context, id, userID string) error
+	DeleteBySourceExternalIDs(ctx context.Context, userID, sourceID string, externalIDs []string) (int, error)
+	UpsertFromSource(ctx context.Context, r Record) (RecordUpsertResult, error)
+	// ListQueued returns up to limit records in "queued" status, across all users.
+	ListQueued(ctx context.Context, limit int) ([]Record, error)
+	// UpdateStatus transitions a record to the given status (and clears/sets error).
+	UpdateStatus(ctx context.Context, id string, s RecordStatus, errMsg string) error
+	// UpdateAfterIngest writes chunk_count and size_bytes and marks the record indexed.
+	UpdateAfterIngest(ctx context.Context, id string, res IngestResult) error
+}
+
+// RecordService defines the business-logic contract for records.
+type RecordService interface {
+	Create(ctx context.Context, r Record) (Record, error)
+	GetByID(ctx context.Context, id, userID string) (Record, error)
+	List(ctx context.Context, userID string, f RecordFilter, p Page) (RecordPage, error)
+	Delete(ctx context.Context, id, userID string) error
+	RetryIngest(ctx context.Context, id, userID string) error
+}
