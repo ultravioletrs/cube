@@ -1,3 +1,6 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
+
 // Package ingest implements the background embedding pipeline.
 // It polls for queued records, downloads their content from the source,
 // chunks and embeds the text, then stores chunks in the vector store.

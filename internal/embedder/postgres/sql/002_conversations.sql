@@ -1,3 +1,6 @@
+-- Copyright (c) Ultraviolet
+-- SPDX-License-Identifier: Apache-2.0
+
 CREATE TABLE IF NOT EXISTS conversations (
     id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id    TEXT        NOT NULL,

@@ -1,3 +1,6 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
+
 // Package auth provides request authentication by delegating token validation
 // to the SuperMQ auth gRPC service (Authenticate RPC at auth:8181).
 package auth

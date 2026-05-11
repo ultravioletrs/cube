@@ -1,3 +1,6 @@
+-- Copyright (c) Ultraviolet
+-- SPDX-License-Identifier: Apache-2.0
+
 -- Sources represent external integration origins (Google Drive, SharePoint, etc.)
 -- from which documents are ingested into the vector store.
 CREATE TABLE IF NOT EXISTS sources (
