@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import type { AppRecord } from '@/types'
 
 export interface ChatMessage {

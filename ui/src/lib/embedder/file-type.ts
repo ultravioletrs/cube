@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import type { DriveFileOption } from '@/lib/embedder/service'
 
 export interface DriveFileTypeVisual {

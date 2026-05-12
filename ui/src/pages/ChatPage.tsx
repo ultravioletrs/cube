@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useOutletContext, useLocation } from 'react-router-dom'
 import type { AppContext, AppRecord, ChatMessage, Conversation, MsgSource } from '@/types'

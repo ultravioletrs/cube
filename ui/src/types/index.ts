@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import type { Domain as SDKDomain } from '@/lib/platform/service'
 
 export type { SDKDomain as PlatformDomain }

@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import { useEffect, useMemo, useState } from 'react'
 import { browseGoogleDrive, type DriveFileOption, type DriveFolderOption } from '@/lib/embedder/service'
 import { resolveDriveFileTypeVisual } from '@/lib/embedder/file-type'

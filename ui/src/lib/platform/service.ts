@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import SDK from '@absmach/magistrala-sdk'
 import type {
   Domain,

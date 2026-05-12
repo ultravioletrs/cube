@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import type { AuthService } from './service'
 import type { AuthTokens, AuthUser } from './types'
 import type { LoginCredentials, RegisterCredentials } from './types'

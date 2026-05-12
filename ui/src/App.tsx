@@ -1,3 +1,5 @@
+// Copyright (c) Ultraviolet
+// SPDX-License-Identifier: Apache-2.0
 import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import AppLayout from '@/layouts/AppLayout'
