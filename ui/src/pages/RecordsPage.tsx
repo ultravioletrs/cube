@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { deleteRecord, listRecords, uploadRecordFile } from '@/lib/embedder/service'
+import { deleteRecord, listRecords, retryRecordIngest, uploadRecordFile } from '@/lib/embedder/service'
 import type { AppContext, AppRecord } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import AddRecordModal from '@/components/AddRecordModal'
@@ -97,19 +97,22 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
 function friendlyError(msg: string): string {
   const lower = msg.toLowerCase()
   if (lower.includes('context deadline exceeded') || lower.includes('timeout'))
-    return 'Indexing timed out — the document may be too large or the embedding service is overloaded. Delete and re-upload to retry.'
+    return 'Indexing timed out — the document may be too large or the embedding service is overloaded.'
   if (lower.includes('connection refused') || lower.includes('no such host') || lower.includes('dial tcp'))
-    return 'Could not reach the embedding service. Make sure all services are running and try again.'
+    return 'Could not reach the embedding service. Make sure all services are running.'
   if (lower.includes('zero chunks') || lower.includes('produced zero chunks'))
     return 'No text could be extracted from this file. Make sure it is not empty or image-only.'
   if (lower.includes('unsupported') || lower.includes('unknown format'))
     return 'This file format is not supported. Try converting it to PDF, Markdown, or plain text.'
   if (lower.includes('missing source_id') || lower.includes('missing external_id'))
     return 'The record is missing required metadata. Delete and re-upload the file.'
-  return 'Indexing failed. Delete and re-upload the file to retry.'
+  if (lower.includes('pdftotext') || lower.includes('exec'))
+    return 'PDF extraction failed — the embedder was updated to fix this. Click Retry Ingest.'
+  return 'Indexing failed.'
 }
 
-function DetailPanel({ record, onClose, onStartChat }: { record: AppRecord; onClose: () => void; onStartChat: (r: AppRecord) => void }) {
+function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRecord; onClose: () => void; onStartChat: (r: AppRecord) => void; onRetry: (id: string) => Promise<void> }) {
+  const [retrying, setRetrying] = useState(false)
   const meta: { label: string; value: string }[] = []
   if (record.format !== 'link' && record.size) meta.push({ label: 'SIZE', value: record.size })
   meta.push({ label: 'ADDED', value: record.createdAt })
@@ -164,14 +167,24 @@ function DetailPanel({ record, onClose, onStartChat }: { record: AppRecord; onCl
       )}
 
       {record.status === 'error' && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 12px', background: 'rgba(255,80,80,0.06)', borderRadius: '8px', border: '1px solid rgba(255,80,80,0.2)' }}>
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: '2px' }}>
-            <circle cx="7" cy="7" r="6" stroke="#ff5050" strokeWidth="1.2"/>
-            <path d="M7 4v3M7 9.5v.5" stroke="#ff5050" strokeWidth="1.4" strokeLinecap="round"/>
-          </svg>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#ff6b6b', lineHeight: 1.5 }}>
-            {friendlyError(record.error ?? '')}
-          </span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 12px', background: 'rgba(255,80,80,0.06)', borderRadius: '8px', border: '1px solid rgba(255,80,80,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: '2px' }}>
+              <circle cx="7" cy="7" r="6" stroke="#ff5050" strokeWidth="1.2"/>
+              <path d="M7 4v3M7 9.5v.5" stroke="#ff5050" strokeWidth="1.4" strokeLinecap="round"/>
+            </svg>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#ff6b6b', lineHeight: 1.5 }}>
+              {friendlyError(record.error ?? '')}
+            </span>
+          </div>
+          <button
+            disabled={retrying}
+            onClick={async () => { setRetrying(true); await onRetry(record.id); setRetrying(false) }}
+            style={{ alignSelf: 'flex-start', background: 'rgba(255,80,80,0.12)', border: '1px solid rgba(255,80,80,0.3)', borderRadius: '6px', padding: '5px 12px', cursor: retrying ? 'default' : 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: '600', color: '#ff6b6b', opacity: retrying ? 0.5 : 1, display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M2 7a5 5 0 015-5 5 5 0 014.33 2.5M12 7a5 5 0 01-5 5 5 5 0 01-4.33-2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M11 2.5V5.5H8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            {retrying ? 'Retrying…' : 'Retry Ingest'}
+          </button>
         </div>
       )}
 
@@ -219,6 +232,16 @@ export default function RecordsPage() {
     if (!accessToken) throw new Error('Authentication token is missing')
     await uploadRecordFile(accessToken, file)
     refreshRecords()
+  }
+
+  async function handleRetryRecord(id: string) {
+    if (!accessToken) return
+    try {
+      await retryRecordIngest(accessToken, id)
+      refreshRecords()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to retry ingest')
+    }
   }
 
   async function handleDeleteRecord(e: React.MouseEvent, id: string) {
@@ -330,6 +353,7 @@ export default function RecordsPage() {
           record={selected}
           onClose={() => setSelectedId(null)}
           onStartChat={r => navigate('/chat', { state: { source: r } })}
+          onRetry={handleRetryRecord}
         />
       )}
 

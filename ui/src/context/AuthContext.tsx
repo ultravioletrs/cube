@@ -11,9 +11,9 @@ import { magistralaAuthService } from '@/lib/auth/magistrala-service'
 import type { AuthService } from '@/lib/auth/service'
 import type { AuthTokens, AuthUser } from '@/lib/auth/types'
 
-const REFRESH_TOKEN_KEY = 'veda_refresh_token'
-const ACCESS_TOKEN_KEY = 'veda_access_token'
-const CHAT_KEY = 'veda_chat'
+const REFRESH_TOKEN_KEY = 'cube_refresh_token'
+const ACCESS_TOKEN_KEY = 'cube_access_token'
+const CHAT_KEY = 'cube_chat'
 const AUTO_REFRESH_FALLBACK_MS = 45 * 60 * 1000
 const AUTO_REFRESH_SKEW_MS = 60 * 1000
 const AUTO_REFRESH_MIN_DELAY_MS = 5 * 1000

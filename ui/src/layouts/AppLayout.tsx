@@ -3,10 +3,11 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from '@/components/Sidebar'
 import { useAuth } from '@/hooks/useAuth'
 import { listConversations, listRecords, listSources } from '@/lib/embedder/service'
-import type { AppContext, AppRecord, ChatMessage, Conversation, DriveSource } from '@/types'
+import type { ActiveDomain, AppContext, AppRecord, ChatMessage, Conversation, DriveSource } from '@/types'
 
-const CHAT_KEY = 'veda_chat'
-const CONV_KEY = 'veda_conv_id'
+const CHAT_KEY = 'cube_chat'
+const CONV_KEY = 'cube_conv_id'
+const DOMAIN_KEY = 'cube_active_domain'
 
 function loadChatMessages(): ChatMessage[] {
   try {
@@ -25,6 +26,15 @@ export default function AppLayout() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(loadChatMessages)
   const [conversationId, setConversationId] = useState<string | null>(() => localStorage.getItem(CONV_KEY))
+  const [activeDomain, setActiveDomain] = useState<ActiveDomain | null>(() => {
+    try {
+      const raw = localStorage.getItem(DOMAIN_KEY)
+      return raw ? (JSON.parse(raw) as ActiveDomain) : null
+
+    } catch {
+      return null
+    }
+  })
   const persistTimer = useRef<number | null>(null)
 
   const clearChatMessages = useCallback(() => {
@@ -63,11 +73,19 @@ export default function AppLayout() {
     }
   }, [conversationId])
 
-  const context: AppContext = { records, setRecords, driveSources, setDriveSources, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations }
+  useEffect(() => {
+    if (activeDomain) {
+      localStorage.setItem(DOMAIN_KEY, JSON.stringify(activeDomain))
+    } else {
+      localStorage.removeItem(DOMAIN_KEY)
+    }
+  }, [activeDomain])
+
+  const context: AppContext = { records, setRecords, driveSources, setDriveSources, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations, activeDomain, setActiveDomain }
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
-      <Sidebar />
+      <Sidebar activeDomain={activeDomain} />
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Outlet context={context} />
       </main>

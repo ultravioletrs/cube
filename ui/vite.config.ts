@@ -15,15 +15,36 @@ export default defineConfig({
   server: {
     proxy: {
       '/users': {
-        target: process.env['MG_USERS_PROXY_TARGET'] ?? 'http://localhost:9002',
+        target: process.env['MG_USERS_PROXY_TARGET'] ?? 'https://localhost',
         changeOrigin: true,
+        secure: false,
+      },
+      '/domains': {
+        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/invitations': {
+        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/journal': {
+        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/proxy': {
+        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
+        changeOrigin: true,
+        secure: false,
       },
       '/api/v1/chat': {
-        target: process.env['CHAT_PROXY_TARGET'] ?? 'http://localhost:8081',
+        target: process.env['EMBEDDER_PROXY_TARGET'] ?? 'http://localhost:8082',
         changeOrigin: true,
       },
       '/api': {
-        target: process.env['EMBEDDER_PROXY_TARGET'] ?? 'http://localhost:8080',
+        target: process.env['EMBEDDER_PROXY_TARGET'] ?? 'http://localhost:8082',
         changeOrigin: true,
       },
     },

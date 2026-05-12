@@ -1,84 +1,337 @@
+import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
+import type { ActiveDomain } from '@/types'
 
-const navItems = [
+const CubeAILogo = () => (
+  <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+    <rect x="1" y="1" width="9" height="9" rx="1.5" fill="var(--accent)" opacity="0.9" />
+    <rect x="12" y="1" width="9" height="9" rx="1.5" fill="var(--accent)" opacity="0.9" />
+    <rect x="1" y="12" width="9" height="9" rx="1.5" fill="var(--accent)" opacity="0.9" />
+    <rect x="12" y="12" width="9" height="9" rx="1.5" fill="var(--accent)" opacity="0.3" />
+  </svg>
+)
+
+interface NavItem {
+  id: string
+  label: string
+  path: string
+  icon: React.ReactNode
+}
+
+const overviewItems: NavItem[] = [
+  {
+    id: 'dashboard',
+    label: 'Dashboard',
+    path: '/dashboard',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <rect x="2" y="2" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="11" y="2" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="2" y="11" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <rect x="11" y="11" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.5" opacity="0.4" />
+      </svg>
+    ),
+  },
+]
+
+const knowledgeItems: NavItem[] = [
   {
     id: 'records',
     label: 'Records',
+    path: '/records',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <rect x="3" y="2" width="10" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
-        <path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-        <rect x="7" y="5" width="10" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="var(--bg)"/>
-        <path d="M10 9h4M10 12h4M10 15h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <rect x="3" y="2" width="10" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M6 6h4M6 9h4M6 12h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <rect x="7" y="5" width="10" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="var(--sidebar-bg)" />
+        <path d="M10 9h4M10 12h4M10 15h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     ),
   },
   {
     id: 'sources',
     label: 'Sources',
+    path: '/sources',
     icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <ellipse cx="10" cy="5.5" rx="7" ry="2.5" stroke="currentColor" strokeWidth="1.5"/>
-        <path d="M3 5.5v9c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5v-9" stroke="currentColor" strokeWidth="1.5"/>
-        <path d="M3 10c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5" stroke="currentColor" strokeWidth="1.5"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'chat',
-    label: 'Prompt',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <path d="M3 4.5A1.5 1.5 0 014.5 3h11A1.5 1.5 0 0117 4.5v8A1.5 1.5 0 0115.5 14H11l-3 3v-3H4.5A1.5 1.5 0 013 12.5v-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-        <path d="M7 8h6M7 11h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-      </svg>
-    ),
-  },
-  {
-    id: 'config',
-    label: 'Config',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5"/>
-        <path d="M10 3v2M10 15v2M3 10h2M15 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <ellipse cx="10" cy="5.5" rx="7" ry="2.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M3 5.5v9c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5v-9" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M3 10c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5" stroke="currentColor" strokeWidth="1.5" />
       </svg>
     ),
   },
 ]
 
-export default function Sidebar() {
+const aiItems: NavItem[] = [
+  {
+    id: 'chat',
+    label: 'Prompt',
+    path: '/chat',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <path d="M3 4.5A1.5 1.5 0 014.5 3h11A1.5 1.5 0 0117 4.5v8A1.5 1.5 0 0115.5 14H11l-3 3v-3H4.5A1.5 1.5 0 013 12.5v-8z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M7 8h6M7 11h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+]
+
+const platformItems: NavItem[] = [
+  {
+    id: 'domains',
+    label: 'Domains',
+    path: '/domains',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M10 2.5C10 2.5 7 6 7 10s3 7.5 3 7.5M10 2.5c0 0 3 3.5 3 7.5s-3 7.5-3 7.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M2.5 10h15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'members',
+    label: 'Members',
+    path: '/members',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <circle cx="8" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M2 17c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M14 8c1.657 0 3 1.343 3 3M17 17c0-2.21-1.343-4-3-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'invitations',
+    label: 'Invitations',
+    path: '/invitations',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <rect x="2" y="5" width="16" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M2 7l8 5 8-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'audit-logs',
+    label: 'Audit Logs',
+    path: '/audit-logs',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <path d="M3 5h14M3 10h14M3 15h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="15.5" cy="15.5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M17.5 17.5l1.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+]
+
+const bottomItems: NavItem[] = [
+  {
+    id: 'config',
+    label: 'Settings',
+    path: '/config',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M10 3v2M10 15v2M3 10h2M15 10h2M4.93 4.93l1.41 1.41M13.66 13.66l1.41 1.41M4.93 15.07l1.41-1.41M13.66 6.34l1.41-1.41" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+]
+
+function NavGroup({ label, items, currentPath }: { label: string; items: NavItem[]; currentPath: string }) {
+  return (
+    <div style={{ marginBottom: '4px' }}>
+      <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', fontWeight: '600', color: 'var(--text-dim)', letterSpacing: '0.1em', textTransform: 'uppercase', padding: '6px 12px 2px', margin: 0 }}>
+        {label}
+      </p>
+      {items.map(item => {
+        const active = currentPath === item.path || currentPath.startsWith(item.path + '/')
+        return (
+          <NavButton key={item.id} item={item} active={active} />
+        )
+      })}
+    </div>
+  )
+}
+
+function NavButton({ item, active }: { item: NavItem; active: boolean }) {
   const navigate = useNavigate()
-  const location = useLocation()
+  const [hovered, setHovered] = useState(false)
 
   return (
-    <aside style={{ width: '220px', minWidth: '220px', height: '100%', background: 'var(--sidebar-bg)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10 }}>
-      <button onClick={() => navigate('/records')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '24px 20px', borderBottom: '1px solid var(--border)', marginBottom: '8px', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <path d="M4 4h6v6H4zM12 4h6v6h-6zM4 12h6v6H4z" fill="var(--accent)" opacity="0.9"/>
-            <path d="M12 12h6v6h-6z" fill="var(--accent)" opacity="0.3"/>
-          </svg>
+    <button
+      onClick={() => navigate(item.path)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '9px',
+        padding: '7px 12px',
+        borderRadius: '7px',
+        border: 'none',
+        cursor: 'pointer',
+        fontFamily: 'Space Grotesk, sans-serif',
+        fontWeight: '500',
+        fontSize: '13px',
+        transition: 'all 0.12s ease',
+        textAlign: 'left',
+        width: '100%',
+        background: active ? 'rgba(0,212,180,0.1)' : hovered ? 'rgba(255,255,255,0.04)' : 'transparent',
+        color: active ? 'var(--accent)' : hovered ? 'var(--text)' : 'var(--text-muted)',
+        borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent',
+      }}
+    >
+      <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
+      <span style={{ flex: 1 }}>{item.label}</span>
+    </button>
+  )
+}
+
+function DomainBadge({ activeDomain, onClick }: { activeDomain: { name: string } | null; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      title="Switch domain"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        padding: '6px 12px',
+        margin: '0 8px 8px',
+        borderRadius: '8px',
+        border: '1px solid var(--border)',
+        cursor: 'pointer',
+        background: hovered ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+        width: 'calc(100% - 16px)',
+        textAlign: 'left',
+        transition: 'all 0.12s ease',
+      }}
+    >
+      <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'var(--accent)', opacity: 0.85, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '10px', color: '#070c16' }}>
+          {activeDomain ? activeDomain.name[0].toUpperCase() : '?'}
+        </span>
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden' }}>
+        <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {activeDomain ? activeDomain.name : 'No domain'}
+        </p>
+        <p style={{ margin: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)' }}>
+          {activeDomain ? 'workspace' : 'select domain →'}
+        </p>
+      </div>
+    </button>
+  )
+}
+
+function UserMenuInline() {
+  const { user, logout } = useAuth()
+  const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
+
+  const initials = (() => {
+    if (!user) return '?'
+    if (user.firstName && user.lastName) return (user.firstName[0] + user.lastName[0]).toUpperCase()
+    return (user.email?.[0] ?? '?').toUpperCase()
+  })()
+
+  return (
+    <div style={{ position: 'relative', padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,212,180,0.15)', border: '1px solid rgba(0,212,180,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '11px', color: 'var(--accent)' }}>{initials}</span>
         </div>
-        <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '18px', lineHeight: 1, color: 'var(--text)', letterSpacing: '-0.02em' }}>Veda</span>
+        <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
+          <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user?.firstName ? `${user.firstName} ${user.lastName ?? ''}`.trim() : user?.email ?? 'User'}
+          </p>
+          <p style={{ margin: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {user?.email ?? ''}
+          </p>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ color: 'var(--text-dim)', flexShrink: 0 }}>
+          <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
 
-      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px', padding: '8px 12px' }}>
-        {navItems.map(item => {
-          const active = location.pathname === '/' + item.id
-          return (
-            <button
-              key={item.id}
-              onClick={() => navigate('/' + item.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontWeight: '500', fontSize: '14px', transition: 'all 0.15s ease', textAlign: 'left', width: '100%', background: active ? 'rgba(0,212,180,0.08)' : 'transparent', color: active ? 'var(--accent)' : 'var(--text-muted)', borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent' }}
-              onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)' } }}
-              onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)' } }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>{item.icon}</span>
-              <span style={{ flex: 1 }}>{item.label}</span>
-            </button>
-          )
-        })}
+      {open && (
+        <div style={{ position: 'absolute', bottom: '100%', left: '8px', right: '8px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '10px', padding: '4px', boxShadow: '0 -8px 32px rgba(0,0,0,0.4)', zIndex: 50 }}>
+          <button
+            onClick={() => { setOpen(false); navigate('/config') }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '7px 10px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: '7px', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'left' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.05)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M10 3v2M10 15v2M3 10h2M15 10h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            Settings
+          </button>
+          <div style={{ height: '1px', background: 'var(--border)', margin: '4px 0' }} />
+          <button
+            onClick={() => { setOpen(false); logout() }}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '7px 10px', background: 'none', border: 'none', cursor: 'pointer', borderRadius: '7px', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: '#ff6b6b', textAlign: 'left' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,107,107,0.08)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'none' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <path d="M13 3h4a1 1 0 011 1v12a1 1 0 01-1 1h-4M9 14l4-4-4-4M3 10h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function Sidebar({ activeDomain }: { activeDomain: ActiveDomain | null }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  return (
+    <aside style={{ width: '210px', minWidth: '210px', height: '100%', background: 'var(--sidebar-bg)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10 }}>
+      {/* Logo */}
+      <button
+        onClick={() => navigate('/records')}
+        style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '18px 16px 14px', borderBottom: '1px solid var(--border)', marginBottom: '8px', background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left' }}
+      >
+        <CubeAILogo />
+        <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '16px', lineHeight: 1, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+          Cube AI
+        </span>
+      </button>
+
+      {/* Domain switcher */}
+      <DomainBadge
+        activeDomain={activeDomain}
+        onClick={() => navigate('/domains')}
+      />
+
+      {/* Navigation */}
+      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0', padding: '0 8px', overflowY: 'auto' }}>
+        <NavGroup label="Overview" items={overviewItems} currentPath={location.pathname} />
+        <NavGroup label="Knowledge Base" items={knowledgeItems} currentPath={location.pathname} />
+        <NavGroup label="AI" items={aiItems} currentPath={location.pathname} />
+        <NavGroup label="Platform" items={platformItems} currentPath={location.pathname} />
+        <div style={{ flex: 1 }} />
+        <NavGroup label="Account" items={bottomItems} currentPath={location.pathname} />
       </nav>
+
+      {/* User */}
+      <UserMenuInline />
     </aside>
   )
 }

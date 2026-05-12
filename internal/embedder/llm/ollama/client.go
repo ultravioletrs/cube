@@ -35,10 +35,15 @@ type ollamaMessage struct {
 	Content string `json:"content"`
 }
 
+type chatOptions struct {
+	Temperature float64 `json:"temperature"`
+}
+
 type chatRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
 	Stream   bool            `json:"stream"`
+	Options  chatOptions     `json:"options"`
 }
 
 type chatResponse struct {
@@ -61,6 +66,7 @@ func (c *Client) StreamChat(ctx context.Context, messages []llm.Message, out cha
 		Model:    c.model,
 		Messages: msgs,
 		Stream:   true,
+		Options:  chatOptions{Temperature: 0},
 	})
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/chat", bytes.NewReader(body))

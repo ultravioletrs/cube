@@ -318,6 +318,7 @@ export default function ChatPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [loadingConv, setLoadingConv] = useState(false)
+  const [retrievalWarning, setRetrievalWarning] = useState<string | null>(null)
   const [manualActiveSources, setManualActiveSources] = useState<string[] | null>(null)
   const [showPanel, setShowPanel] = useState(true)
   const [panelCitations, setPanelCitations] = useState<MsgSource[]>([])
@@ -483,6 +484,7 @@ export default function ChatPage() {
     const targetRecordIDs = activeSources
     setInput('')
     setLoading(true)
+    setRetrievalWarning(null)
 
     const history: ChatMessage[] = [...chatMessages, { id: Date.now(), role: 'user', content: userContent }]
     setChatMessages(history)
@@ -500,7 +502,9 @@ export default function ChatPage() {
       apiMessages,
       targetRecordIDs,
       (event) => {
-        if (event.type === 'conversation' && event.conversation_id) {
+        if (event.type === 'warning' && event.error) {
+          setRetrievalWarning(event.error)
+        } else if (event.type === 'conversation' && event.conversation_id) {
           const newId = event.conversation_id
           setConversationId(newId)
           setConversations(prev => {
@@ -627,6 +631,18 @@ export default function ChatPage() {
         {sourceScopeError && (
           <div style={{ margin: '12px 24px 0', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ff8080', whiteSpace: 'nowrap', overflowX: 'auto', overflowY: 'hidden', background: 'rgba(255,80,80,0.08)', border: '1px solid rgba(255,80,80,0.22)', borderRadius: '8px', padding: '7px 10px' }}>
             {formatInlineError(sourceScopeError)}
+          </div>
+        )}
+
+        {/* Retrieval warning */}
+        {retrievalWarning && (
+          <div style={{ margin: '10px 24px 0', padding: '8px 12px', background: 'rgba(255,180,0,0.07)', border: '1px solid rgba(255,180,0,0.25)', borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: '1px' }}>
+              <path d="M7 1L13 12H1L7 1Z" stroke="#ffb400" strokeWidth="1.3" strokeLinejoin="round"/>
+              <path d="M7 5.5v3M7 10h.01" stroke="#ffb400" strokeWidth="1.3" strokeLinecap="round"/>
+            </svg>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ffb400', lineHeight: 1.5 }}>{retrievalWarning}</span>
+            <button onClick={() => setRetrievalWarning(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ffb400', opacity: 0.6, padding: '0 0 0 4px', marginLeft: 'auto', flexShrink: 0, fontSize: '14px', lineHeight: 1 }}>×</button>
           </div>
         )}
 

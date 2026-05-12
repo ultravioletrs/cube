@@ -13,7 +13,7 @@ export interface Citation {
   excerpt: string
 }
 
-export type ChatEventType = 'token' | 'citations' | 'error' | 'done' | 'conversation'
+export type ChatEventType = 'token' | 'citations' | 'error' | 'done' | 'conversation' | 'warning'
 
 export interface ChatEvent {
   type: ChatEventType

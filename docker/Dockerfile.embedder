@@ -1,0 +1,21 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+# Build the embedder binary from local source.
+FROM golang:1.26.0-alpine AS builder
+WORKDIR /src
+COPY .. .
+RUN apk add --no-cache git && \
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags "-s -w" -o /exe ./cmd/embedder/main.go
+
+# Runtime image with poppler-utils (pdftotext) support.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /exe /exe
+
+ENTRYPOINT ["/exe"]

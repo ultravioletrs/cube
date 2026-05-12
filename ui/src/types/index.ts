@@ -1,3 +1,14 @@
+import type { Domain as SDKDomain } from '@/lib/platform/service'
+
+export type { SDKDomain as PlatformDomain }
+
+export interface ActiveDomain {
+  id: string
+  name: string
+  route?: string
+  status?: string
+}
+
 export type RecordFormat = 'text' | 'pdf' | 'md' | 'docx' | 'code' | 'image' | 'link'
 
 export interface MsgSource {
@@ -94,4 +105,6 @@ export interface AppContext {
   setConversationId: React.Dispatch<React.SetStateAction<string | null>>
   conversations: Conversation[]
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>
+  activeDomain: ActiveDomain | null
+  setActiveDomain: React.Dispatch<React.SetStateAction<ActiveDomain | null>>
 }

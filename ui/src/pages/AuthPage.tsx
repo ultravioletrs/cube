@@ -75,7 +75,7 @@ export default function AuthPage() {
             {mode === 'login' ? 'Welcome back' : 'Create an account'}
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
-            {mode === 'login' ? 'Sign in to your Veda account' : 'Start using Veda for free'}
+            {mode === 'login' ? 'Sign in to your Cube AI account' : 'Start using Cube AI for free'}
           </p>
         </div>
 

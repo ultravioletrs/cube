@@ -21,6 +21,9 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
+	"github.com/ultravioletrs/cube/internal/embedder/llm"
+	"github.com/ultravioletrs/cube/internal/embedder/llm/ollama"
+	llmopenai "github.com/ultravioletrs/cube/internal/embedder/llm/openai"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
 	"github.com/ultravioletrs/cube/internal/embedder/service"
 	objstore "github.com/ultravioletrs/cube/internal/embedder/storage"
@@ -39,6 +42,10 @@ type config struct {
 	rcloneConfigDir         string
 	rcloneTimeout           time.Duration
 	embeddingConfig         embedding.Config
+	llmConfig               llm.Config
+	chatTopK                int
+	rerankerModel           string
+	rerankerBaseURL         string
 	storageConfig           objstore.Config
 	chunkSize               int
 	chunkOverlap            int
@@ -103,6 +110,15 @@ func loadConfig() config {
 			S3PathStyle:       envBool("EMBEDDER_S3_PATH_STYLE", true),
 			S3EnsureBucket:    envBool("EMBEDDER_S3_ENSURE_BUCKET", true),
 		},
+		llmConfig: llm.Config{
+			Provider: env("EMBEDDER_LLM_PROVIDER", "ollama"),
+			BaseURL:  env("EMBEDDER_LLM_BASE_URL", "http://ollama:11434"),
+			Model:    env("EMBEDDER_LLM_MODEL", "llama3.2:3b"),
+			APIKey:   env("EMBEDDER_LLM_API_KEY", ""),
+		},
+		chatTopK:             envInt("EMBEDDER_CHAT_TOP_K", 15),
+		rerankerModel:        env("EMBEDDER_RERANKER_MODEL", ""),
+		rerankerBaseURL:      env("EMBEDDER_RERANKER_BASE_URL", ""),
 		chunkSize:            envInt("EMBEDDER_CHUNK_SIZE", 512),
 		chunkOverlap:         envInt("EMBEDDER_CHUNK_OVERLAP", 64),
 		ingestBatchSize:      envInt("EMBEDDER_INGEST_BATCH_SIZE", 20),
@@ -201,6 +217,28 @@ func main() {
 
 	retrieveSvc := service.NewVectorRetrieveService(chunksRepo, embeddingRegistry)
 
+	// ── LLM client & chat service ─────────────────────────────────────────────
+
+	var llmClient llm.Client
+	switch cfg.llmConfig.Provider {
+	case "openai":
+		llmClient = llmopenai.New(cfg.llmConfig.BaseURL, cfg.llmConfig.Model, cfg.llmConfig.APIKey)
+	default:
+		llmClient = ollama.New(cfg.llmConfig.BaseURL, cfg.llmConfig.Model)
+	}
+
+	var reranker llm.Reranker
+	if cfg.rerankerModel != "" {
+		rerankerBase := cfg.rerankerBaseURL
+		if rerankerBase == "" {
+			rerankerBase = cfg.llmConfig.BaseURL
+		}
+		reranker = ollama.NewReranker(rerankerBase, cfg.rerankerModel)
+		slog.Info("reranker enabled", "model", cfg.rerankerModel, "base_url", rerankerBase)
+	}
+
+	chatSvc := service.NewChatService(retrieveSvc, llmClient, reranker, cfg.chatTopK)
+
 	// ── HTTP server ───────────────────────────────────────────────────────────
 
 	router := embedapi.NewRouter(
@@ -209,6 +247,7 @@ func main() {
 		sourceSyncSvc,
 		recordsSvc,
 		retrieveSvc,
+		chatSvc,
 		conversationsRepo,
 		uploadStore,
 		cfg.objectKeyPrefix,
