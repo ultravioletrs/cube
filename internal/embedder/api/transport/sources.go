@@ -13,15 +13,16 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
-	"github.com/go-chi/chi/v5"
 )
 
 // MountSources registers Source routes on the given router.
@@ -42,6 +43,10 @@ func MountSources(
 	r.Post("/api/v1/sources/google/oauth/url", googleOAuthURL(oauth))
 	r.Post("/api/v1/sources/google/oauth/exchange", googleOAuthExchange(oauth))
 	r.Post("/api/v1/sources/google/files", listDriveFiles(oauth))
+	r.Post("/api/v1/sources/s3/browse", browseS3Path())
+	r.Post("/api/v1/sources/s3/files", listS3Files())
+	r.Post("/api/v1/sources/microsoft/browse", browseMicrosoftPath())
+	r.Post("/api/v1/sources/microsoft/files", listMicrosoftFiles())
 	r.Post("/api/v1/sources/rclone/browse", browseRclonePath(rclone))
 	r.Post("/api/v1/sources/rclone/files", listRcloneFiles(rclone))
 	r.Post("/api/v1/sources/{id}/sync", syncSource(syncSvc, trigger))
@@ -345,6 +350,344 @@ func listRcloneFiles(rclone ingest.RcloneClient) http.HandlerFunc {
 	}
 }
 
+func listS3Files() http.HandlerFunc {
+	type request struct {
+		Endpoint        string   `json:"endpoint,omitempty"`
+		Region          string   `json:"region,omitempty"`
+		Bucket          string   `json:"bucket"`
+		AccessKeyID     string   `json:"access_key_id,omitempty"`
+		SecretAccessKey string   `json:"secret_access_key,omitempty"`
+		SessionToken    string   `json:"session_token,omitempty"`
+		UseSSL          *bool    `json:"use_ssl,omitempty"`
+		PathStyle       *bool    `json:"path_style,omitempty"`
+		RootPath        string   `json:"root_path,omitempty"`
+		ScopePaths      []string `json:"scope_paths,omitempty"`
+		SelectedPaths   []string `json:"selected_paths,omitempty"`
+	}
+	type fileResponse struct {
+		ExternalID   string `json:"external_id"`
+		Name         string `json:"name"`
+		Path         string `json:"path"`
+		MimeType     string `json:"mime_type"`
+		ModifiedTime string `json:"modified_time,omitempty"`
+	}
+	type response struct {
+		Files []fileResponse `json:"files"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
+			return
+		}
+
+		cfg, err := sanitizeS3PreviewConfig(
+			req.Endpoint,
+			req.Region,
+			req.Bucket,
+			req.AccessKeyID,
+			req.SecretAccessKey,
+			req.SessionToken,
+			req.UseSSL,
+			req.PathStyle,
+			req.RootPath,
+			req.ScopePaths,
+			req.SelectedPaths,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
+			return
+		}
+
+		files, err := ingest.ListS3FilesPreview(r.Context(), cfg)
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
+			return
+		}
+
+		resp := response{Files: make([]fileResponse, 0, len(files))}
+		for _, file := range files {
+			item := fileResponse{
+				ExternalID: file.ExternalID,
+				Name:       file.Name,
+				Path:       file.ExternalRef,
+				MimeType:   file.MimeType,
+			}
+			if file.SourceModifiedAt != nil {
+				item.ModifiedTime = file.SourceModifiedAt.UTC().Format(time.RFC3339)
+			}
+			resp.Files = append(resp.Files, item)
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func browseS3Path() http.HandlerFunc {
+	type request struct {
+		Endpoint        string `json:"endpoint,omitempty"`
+		Region          string `json:"region,omitempty"`
+		Bucket          string `json:"bucket"`
+		AccessKeyID     string `json:"access_key_id,omitempty"`
+		SecretAccessKey string `json:"secret_access_key,omitempty"`
+		SessionToken    string `json:"session_token,omitempty"`
+		UseSSL          *bool  `json:"use_ssl,omitempty"`
+		PathStyle       *bool  `json:"path_style,omitempty"`
+		RootPath        string `json:"root_path,omitempty"`
+		Path            string `json:"path,omitempty"`
+	}
+	type folderResponse struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	type fileResponse struct {
+		Name         string `json:"name"`
+		Path         string `json:"path"`
+		MimeType     string `json:"mime_type"`
+		Size         int64  `json:"size"`
+		ModifiedTime string `json:"modified_time,omitempty"`
+	}
+	type response struct {
+		CurrentPath string           `json:"current_path"`
+		ParentPath  string           `json:"parent_path,omitempty"`
+		Folders     []folderResponse `json:"folders"`
+		Files       []fileResponse   `json:"files"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
+			return
+		}
+
+		cfg, err := sanitizeS3PreviewConfig(
+			req.Endpoint,
+			req.Region,
+			req.Bucket,
+			req.AccessKeyID,
+			req.SecretAccessKey,
+			req.SessionToken,
+			req.UseSSL,
+			req.PathStyle,
+			req.RootPath,
+			nil,
+			nil,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
+			return
+		}
+
+		entries, err := ingest.BrowseS3Path(r.Context(), cfg, req.Path)
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
+			return
+		}
+
+		currentPath := normalizeBrowsePath(req.Path)
+		resp := response{
+			CurrentPath: currentPath,
+			Folders:     make([]folderResponse, 0, len(entries)),
+			Files:       make([]fileResponse, 0, len(entries)),
+		}
+		if currentPath != "" {
+			parent := path.Dir("/" + currentPath)
+			if parent != "/" {
+				resp.ParentPath = strings.TrimPrefix(parent, "/")
+			}
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir {
+				resp.Folders = append(resp.Folders, folderResponse{
+					Name: entry.Name,
+					Path: entry.Path,
+				})
+				continue
+			}
+			item := fileResponse{
+				Name:     entry.Name,
+				Path:     entry.Path,
+				MimeType: entry.MimeType,
+				Size:     entry.Size,
+			}
+			if entry.ModifiedAt != nil {
+				item.ModifiedTime = entry.ModifiedAt.UTC().Format(time.RFC3339)
+			}
+			resp.Files = append(resp.Files, item)
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func listMicrosoftFiles() http.HandlerFunc {
+	type request struct {
+		TenantID      string   `json:"tenant_id,omitempty"`
+		ClientID      string   `json:"client_id,omitempty"`
+		ClientSecret  string   `json:"client_secret,omitempty"`
+		AccessToken   string   `json:"access_token,omitempty"`
+		RefreshToken  string   `json:"refresh_token,omitempty"`
+		DriveID       string   `json:"drive_id,omitempty"`
+		SiteID        string   `json:"site_id,omitempty"`
+		RootPath      string   `json:"root_path,omitempty"`
+		ScopePaths    []string `json:"scope_paths,omitempty"`
+		SelectedPaths []string `json:"selected_paths,omitempty"`
+	}
+	type fileResponse struct {
+		ExternalID   string `json:"external_id"`
+		Name         string `json:"name"`
+		Path         string `json:"path"`
+		MimeType     string `json:"mime_type"`
+		ModifiedTime string `json:"modified_time,omitempty"`
+	}
+	type response struct {
+		Files []fileResponse `json:"files"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
+			return
+		}
+
+		cfg, err := sanitizeMicrosoftPreviewConfig(
+			req.TenantID,
+			req.ClientID,
+			req.ClientSecret,
+			req.AccessToken,
+			req.RefreshToken,
+			req.DriveID,
+			req.SiteID,
+			req.RootPath,
+			req.ScopePaths,
+			req.SelectedPaths,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
+			return
+		}
+
+		files, err := ingest.ListMicrosoftFilesPreview(r.Context(), cfg)
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
+			return
+		}
+
+		resp := response{Files: make([]fileResponse, 0, len(files))}
+		for _, file := range files {
+			item := fileResponse{
+				ExternalID: file.ExternalID,
+				Name:       file.Name,
+				Path:       file.ExternalRef,
+				MimeType:   file.MimeType,
+			}
+			if file.SourceModifiedAt != nil {
+				item.ModifiedTime = file.SourceModifiedAt.UTC().Format(time.RFC3339)
+			}
+			resp.Files = append(resp.Files, item)
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
+func browseMicrosoftPath() http.HandlerFunc {
+	type request struct {
+		TenantID     string `json:"tenant_id,omitempty"`
+		ClientID     string `json:"client_id,omitempty"`
+		ClientSecret string `json:"client_secret,omitempty"`
+		AccessToken  string `json:"access_token,omitempty"`
+		RefreshToken string `json:"refresh_token,omitempty"`
+		DriveID      string `json:"drive_id,omitempty"`
+		SiteID       string `json:"site_id,omitempty"`
+		RootPath     string `json:"root_path,omitempty"`
+		Path         string `json:"path,omitempty"`
+	}
+	type folderResponse struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	type fileResponse struct {
+		Name         string `json:"name"`
+		Path         string `json:"path"`
+		MimeType     string `json:"mime_type"`
+		Size         int64  `json:"size"`
+		ModifiedTime string `json:"modified_time,omitempty"`
+	}
+	type response struct {
+		CurrentPath string           `json:"current_path"`
+		ParentPath  string           `json:"parent_path,omitempty"`
+		Folders     []folderResponse `json:"folders"`
+		Files       []fileResponse   `json:"files"`
+	}
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
+			return
+		}
+
+		cfg, err := sanitizeMicrosoftPreviewConfig(
+			req.TenantID,
+			req.ClientID,
+			req.ClientSecret,
+			req.AccessToken,
+			req.RefreshToken,
+			req.DriveID,
+			req.SiteID,
+			req.RootPath,
+			nil,
+			nil,
+		)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, errBody(err.Error()))
+			return
+		}
+
+		entries, err := ingest.BrowseMicrosoftPath(r.Context(), cfg, req.Path)
+		if err != nil {
+			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
+			return
+		}
+
+		currentPath := normalizeBrowsePath(req.Path)
+		resp := response{
+			CurrentPath: currentPath,
+			Folders:     make([]folderResponse, 0, len(entries)),
+			Files:       make([]fileResponse, 0, len(entries)),
+		}
+		if currentPath != "" {
+			parent := path.Dir("/" + currentPath)
+			if parent != "/" {
+				resp.ParentPath = strings.TrimPrefix(parent, "/")
+			}
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir {
+				resp.Folders = append(resp.Folders, folderResponse{
+					Name: entry.Name,
+					Path: entry.Path,
+				})
+				continue
+			}
+			item := fileResponse{
+				Name:     entry.Name,
+				Path:     entry.Path,
+				MimeType: entry.MimeType,
+				Size:     entry.Size,
+			}
+			if entry.ModifiedAt != nil {
+				item.ModifiedTime = entry.ModifiedAt.UTC().Format(time.RFC3339)
+			}
+			resp.Files = append(resp.Files, item)
+		}
+		writeJSON(w, http.StatusOK, resp)
+	}
+}
+
 func browseRclonePath(rclone ingest.RcloneClient) http.HandlerFunc {
 	type request struct {
 		Remote string `json:"remote"`
@@ -445,6 +788,115 @@ func normalizeBrowsePath(value string) string {
 		return ""
 	}
 	return strings.TrimPrefix(clean, "/")
+}
+
+func sanitizeS3PreviewConfig(
+	endpoint, region, bucket, accessKeyID, secretAccessKey, sessionToken string,
+	useSSL, pathStyle *bool,
+	rootPath string,
+	scopePaths, selectedPaths []string,
+) (domain.S3Config, error) {
+	cfg := domain.S3Config{
+		Endpoint:        strings.TrimSpace(endpoint),
+		Region:          strings.TrimSpace(region),
+		Bucket:          strings.TrimSpace(bucket),
+		AccessKeyID:     strings.TrimSpace(accessKeyID),
+		SecretAccessKey: strings.TrimSpace(secretAccessKey),
+		SessionToken:    strings.TrimSpace(sessionToken),
+		UseSSL:          useSSL,
+		PathStyle:       pathStyle,
+		RootPath:        normalizeBrowsePath(rootPath),
+		ScopePaths:      normalizeBrowsePathList(scopePaths),
+		SelectedPaths:   normalizeBrowsePathList(selectedPaths),
+	}
+	if cfg.Bucket == "" {
+		return domain.S3Config{}, fmt.Errorf("s3 bucket is required")
+	}
+	if cfg.AccessKeyID == "" && cfg.SecretAccessKey != "" {
+		return domain.S3Config{}, fmt.Errorf("s3 access_key_id is required when secret_access_key is set")
+	}
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey == "" {
+		return domain.S3Config{}, fmt.Errorf("s3 secret_access_key is required when access_key_id is set")
+	}
+	if cfg.Region == "" {
+		cfg.Region = "us-east-1"
+	}
+	if cfg.UseSSL == nil {
+		v := true
+		cfg.UseSSL = &v
+	}
+	if cfg.PathStyle == nil {
+		v := true
+		cfg.PathStyle = &v
+	}
+	return cfg, nil
+}
+
+func sanitizeMicrosoftPreviewConfig(
+	tenantID, clientID, clientSecret, accessToken, refreshToken, driveID, siteID, rootPath string,
+	scopePaths, selectedPaths []string,
+) (domain.MicrosoftConfig, error) {
+	cfg := domain.MicrosoftConfig{
+		TenantID:      strings.TrimSpace(tenantID),
+		ClientID:      strings.TrimSpace(clientID),
+		ClientSecret:  strings.TrimSpace(clientSecret),
+		AccessToken:   strings.TrimSpace(accessToken),
+		RefreshToken:  strings.TrimSpace(refreshToken),
+		DriveID:       strings.TrimSpace(driveID),
+		SiteID:        strings.TrimSpace(siteID),
+		RootPath:      normalizeBrowsePath(rootPath),
+		ScopePaths:    normalizeBrowsePathList(scopePaths),
+		SelectedPaths: normalizeBrowsePathList(selectedPaths),
+	}
+
+	if cfg.RootPath == "" && len(cfg.ScopePaths) == 0 && len(cfg.SelectedPaths) == 0 {
+		return domain.MicrosoftConfig{}, fmt.Errorf("microsoft root_path, scope_paths or selected_paths is required")
+	}
+
+	clientCredParts := 0
+	if cfg.TenantID != "" {
+		clientCredParts++
+	}
+	if cfg.ClientID != "" {
+		clientCredParts++
+	}
+	if cfg.ClientSecret != "" {
+		clientCredParts++
+	}
+	if clientCredParts > 0 && clientCredParts < 3 {
+		return domain.MicrosoftConfig{}, fmt.Errorf("microsoft tenant_id, client_id and client_secret must all be set together")
+	}
+	if cfg.AccessToken == "" && clientCredParts != 3 {
+		return domain.MicrosoftConfig{}, fmt.Errorf("microsoft access_token or tenant_id/client_id/client_secret is required")
+	}
+	if cfg.RefreshToken != "" && clientCredParts != 3 {
+		return domain.MicrosoftConfig{}, fmt.Errorf("microsoft refresh_token requires tenant_id, client_id and client_secret")
+	}
+
+	return cfg, nil
+}
+
+func normalizeBrowsePathList(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	set := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = normalizeBrowsePath(value)
+		if value == "" {
+			continue
+		}
+		set[value] = struct{}{}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(set))
+	for value := range set {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func googleOAuthURL(oauth *googleOAuth) http.HandlerFunc {
@@ -659,9 +1111,12 @@ func createSource(svc domain.SourceService, oauth *googleOAuth) http.HandlerFunc
 			writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
 			return
 		}
-		if domain.SourceType(req.SourceType) != domain.SourceTypeRclone &&
-			domain.SourceType(req.SourceType) != domain.SourceTypeGoogleDrive {
-			writeJSON(w, http.StatusBadRequest, errBody("source_type must be google_drive or rclone"))
+		if !domain.IsUserCreatableSourceType(domain.SourceType(req.SourceType)) {
+			writeJSON(
+				w,
+				http.StatusBadRequest,
+				errBody("source_type must be "+domain.HumanSourceTypeList(domain.UserCreatableSourceTypes())),
+			)
 			return
 		}
 

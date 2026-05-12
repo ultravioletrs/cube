@@ -2,7 +2,7 @@
 
 Cube Embedder is the RAG ingestion and retrieval service in Cube AI. It manages:
 
-- source registration (`google_drive`, `rclone`)
+- source registration (`google_drive`, `microsoft`, `s3`, plus `rclone` fallback types)
 - record ingestion (including direct uploads)
 - chunking and embedding
 - user-scoped vector retrieval
@@ -28,7 +28,10 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_OBJECT_STORAGE_PROVIDER` | Storage backend (`s3` or `local`) | `local` |
 | `EMBEDDER_S3_*` | S3/SeaweedFS credentials and endpoint | required for `s3` |
 | `EMBEDDER_UPLOAD_DIR` | Local upload path when provider is `local` | `/tmp/embedder/uploads` |
+| `EMBEDDER_RCLONE_BINARY` | rclone binary path for fallback sources | `/usr/bin/rclone` |
 | `EMBEDDER_RCLONE_CONFIG_DIR` | rclone config base directory | `/etc/cube/rclone` |
+| `EMBEDDER_RCLONE_TIMEOUT` | Timeout for rclone list/read operations | `2m` |
+| `EMBEDDER_RCLONE_PREFLIGHT` | Run startup check (`rclone version` + config dir) and fail fast on errors | `true` |
 | `EMBEDDER_GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID | optional |
 | `EMBEDDER_GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret | optional |
 
@@ -39,8 +42,9 @@ All `/api/v1/*` routes require `Authorization: Bearer <token>`.
 | Method | Path | Description |
 | --- | --- | --- |
 | `GET` | `/health` | Health check |
+| `GET` | `/metrics` | Prometheus metrics |
 | `GET` | `/api/v1/sources` | List sources |
-| `POST` | `/api/v1/sources` | Create source (`google_drive` or `rclone`) |
+| `POST` | `/api/v1/sources` | Create source (`google_drive`, `s3`, `microsoft`, `onedrive`, `sharepoint`, `dropbox` or `rclone`) |
 | `POST` | `/api/v1/sources/{id}/sync` | Sync source and enqueue records |
 | `DELETE` | `/api/v1/sources/{id}` | Delete source |
 | `POST` | `/api/v1/records/upload` | Direct file upload and queue ingest |
@@ -69,3 +73,5 @@ The compose definition is in `docker/cube-compose.yaml`.
 For an end-to-end upload and retrieval flow, see:
 
 - [workflows/ingest-retrieve.md](workflows/ingest-retrieve.md)
+- [workflows/provider-rollout.md](workflows/provider-rollout.md)
+- [monitoring/alerts/provider-alerts.yaml](monitoring/alerts/provider-alerts.yaml)

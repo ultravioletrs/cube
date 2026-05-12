@@ -19,24 +19,26 @@ import (
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
+	embedmetrics "github.com/ultravioletrs/cube/internal/embedder/metrics"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
 	objstore "github.com/ultravioletrs/cube/internal/embedder/storage"
 )
 
 // Worker polls for queued records and runs the embedding pipeline.
 type Worker struct {
-	records        domain.RecordRepository
-	sources        domain.SourceRepository
-	chunks         *postgres.ChunksRepository
-	embeddings     *embedding.Registry
-	store          objstore.Store
-	chunkSize      int
-	overlap        int
-	batchSize      int
-	maxConcurrent  int
-	embedBatchSize int
-	pollInterval   time.Duration
-	trigger        chan struct{}
+	records         domain.RecordRepository
+	sources         domain.SourceRepository
+	chunks          *postgres.ChunksRepository
+	embeddings      *embedding.Registry
+	store           objstore.Store
+	sourceProviders *SourceProviderRegistry
+	chunkSize       int
+	overlap         int
+	batchSize       int
+	maxConcurrent   int
+	embedBatchSize  int
+	pollInterval    time.Duration
+	trigger         chan struct{}
 }
 
 // NewWorker creates an ingestion worker. chunkSize and overlap are in words.
@@ -46,21 +48,23 @@ func NewWorker(
 	chunks *postgres.ChunksRepository,
 	embeddings *embedding.Registry,
 	store objstore.Store,
+	sourceProviders *SourceProviderRegistry,
 	chunkSize, overlap int,
 ) *Worker {
 	return &Worker{
-		records:        records,
-		sources:        sources,
-		chunks:         chunks,
-		embeddings:     embeddings,
-		store:          store,
-		chunkSize:      chunkSize,
-		overlap:        overlap,
-		batchSize:      10,
-		maxConcurrent:  2,
-		embedBatchSize: 16,
-		pollInterval:   10 * time.Second,
-		trigger:        make(chan struct{}, 1),
+		records:         records,
+		sources:         sources,
+		chunks:          chunks,
+		embeddings:      embeddings,
+		store:           store,
+		sourceProviders: sourceProviders,
+		chunkSize:       chunkSize,
+		overlap:         overlap,
+		batchSize:       10,
+		maxConcurrent:   2,
+		embedBatchSize:  16,
+		pollInterval:    10 * time.Second,
+		trigger:         make(chan struct{}, 1),
 	}
 }
 
@@ -235,50 +239,31 @@ func (w *Worker) downloadContent(ctx context.Context, rec domain.Record) (string
 	}
 
 	switch src.Type {
-	case domain.SourceTypeGoogleDrive:
-		return w.downloadFromDriveSource(ctx, rec, src)
-	case domain.SourceTypeRclone:
-		return w.downloadFromRcloneSource(ctx, rec, src)
 	case domain.SourceTypeLocalFS:
-		return w.downloadFromLocalSource(ctx, rec, src)
+		started := time.Now().UTC()
+		text, pageCount, err := w.downloadFromLocalSource(ctx, rec, src)
+		embedmetrics.ObserveSourceDownload(
+			string(src.Type),
+			string(domain.SourceTypeLocalFS),
+			time.Since(started),
+			err,
+		)
+		return text, pageCount, err
 	default:
-		return "", nil, fmt.Errorf("unsupported source type %q for ingestion", src.Type)
+		provider, ok := w.sourceProviders.Provider(src.Type)
+		if !ok {
+			return "", nil, fmt.Errorf("unsupported source type %q for ingestion", src.Type)
+		}
+		started := time.Now().UTC()
+		text, pageCount, err := provider.DownloadRecord(ctx, rec, src)
+		embedmetrics.ObserveSourceDownload(
+			string(src.Type),
+			string(provider.Type()),
+			time.Since(started),
+			err,
+		)
+		return text, pageCount, err
 	}
-}
-
-func (w *Worker) downloadFromDriveSource(
-	ctx context.Context,
-	rec domain.Record,
-	src domain.Source,
-) (string, *int, error) {
-	if rec.ExternalID == "" {
-		return "", nil, fmt.Errorf("record %s is missing external_id", rec.ID)
-	}
-
-	var cfg domain.GoogleDriveConfig
-	if err := json.Unmarshal(src.Config, &cfg); err != nil {
-		return "", nil, err
-	}
-
-	reader, err := NewDriveReaderFromConfig(ctx, cfg)
-	if err != nil {
-		return "", nil, err
-	}
-
-	driveFile := DriveFile{
-		ID:       rec.ExternalID,
-		MimeType: rec.MimeType,
-	}
-	body, err := reader.DownloadFile(ctx, driveFile)
-	if err != nil {
-		return "", nil, err
-	}
-
-	doc, err := ExtractText(driveFile, body)
-	if err != nil {
-		return "", nil, err
-	}
-	return doc.Text, doc.PageCount, nil
 }
 
 type localUploadConfig struct {
