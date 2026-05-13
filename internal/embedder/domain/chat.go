@@ -29,6 +29,9 @@ const (
 	ChatEventError        ChatEventType = "error"
 	ChatEventDone         ChatEventType = "done"
 	ChatEventConversation ChatEventType = "conversation"
+	// ChatEventWarning is emitted when retrieval degrades (e.g. embedding
+	// service unreachable, no chunks found) so the client can surface it.
+	ChatEventWarning ChatEventType = "warning"
 )
 
 // ChatEvent is a single item in the streaming response sent to the client.

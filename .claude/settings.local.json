@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker run *)",
+      "Bash(docker compose *)",
+      "Bash(docker restart *)",
+      "Bash(curl -sk https://localhost/journal/user/test)",
+      "Bash(curl -sk http://localhost:9011/health)",
+      "Bash(docker exec *)"
+    ]
+  }
+}

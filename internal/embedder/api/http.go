@@ -22,6 +22,7 @@ func NewRouter(
 	sourceSyncSvc domain.SourceSyncService,
 	recordsSvc domain.RecordService,
 	retrieveSvc domain.VectorRetrieveService,
+	chatSvc domain.ChatService,
 	conversationsRepo domain.ConversationRepository,
 	store objstore.Store,
 	objectKeyPrefix string,
@@ -43,6 +44,7 @@ func NewRouter(
 		transport.MountSources(r, sourcesSvc, sourceSyncSvc, trigger, googleOAuthClientID, googleOAuthClientSecret)
 		transport.MountRecords(r, recordsSvc, sourcesSvc, store, objectKeyPrefix, trigger)
 		transport.MountRetrieve(r, retrieveSvc)
+		transport.MountChat(r, chatSvc, conversationsRepo)
 		transport.MountConversations(r, conversationsRepo)
 	})
 
