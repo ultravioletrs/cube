@@ -4,7 +4,7 @@
 # Build the embedder binary from local source.
 FROM golang:1.26.0-alpine AS builder
 WORKDIR /src
-COPY .. .
+COPY . .
 RUN apk add --no-cache git && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags "-s -w" -o /exe ./cmd/embedder/main.go
