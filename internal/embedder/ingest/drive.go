@@ -37,6 +37,24 @@ var (
 	driveDownloadURL  = "https://www.googleapis.com/drive/v3/files/%s?alt=media"
 )
 
+// SetDriveAPIEndpoints overrides Drive API endpoints and returns a restore function.
+// Intended for tests that need deterministic HTTP fixtures.
+func SetDriveAPIEndpoints(filesURL, exportURLFmt, downloadURLFmt string) func() {
+	prevFilesURL := driveFilesURL
+	prevExportURLFmt := driveExportURLFmt
+	prevDownloadURLFmt := driveDownloadURL
+
+	driveFilesURL = filesURL
+	driveExportURLFmt = exportURLFmt
+	driveDownloadURL = downloadURLFmt
+
+	return func() {
+		driveFilesURL = prevFilesURL
+		driveExportURLFmt = prevExportURLFmt
+		driveDownloadURL = prevDownloadURLFmt
+	}
+}
+
 // DriveFile is a single file entry from the Drive files.list API.
 type DriveFile struct {
 	ID           string   `json:"id"`

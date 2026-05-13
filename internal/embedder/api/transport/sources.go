@@ -23,6 +23,8 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
+	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
 )
 
 // MountSources registers Source routes on the given router.
@@ -400,7 +402,7 @@ func listS3Files() http.HandlerFunc {
 			return
 		}
 
-		files, err := ingest.ListS3FilesPreview(r.Context(), cfg)
+		files, err := s3source.ListS3FilesPreview(r.Context(), cfg)
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
 			return
@@ -479,7 +481,7 @@ func browseS3Path() http.HandlerFunc {
 			return
 		}
 
-		entries, err := ingest.BrowseS3Path(r.Context(), cfg, req.Path)
+		entries, err := s3source.BrowseS3Path(r.Context(), cfg, req.Path)
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
 			return
@@ -569,7 +571,7 @@ func listMicrosoftFiles() http.HandlerFunc {
 			return
 		}
 
-		files, err := ingest.ListMicrosoftFilesPreview(r.Context(), cfg)
+		files, err := microsoft.ListMicrosoftFilesPreview(r.Context(), cfg)
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
 			return
@@ -646,7 +648,7 @@ func browseMicrosoftPath() http.HandlerFunc {
 			return
 		}
 
-		entries, err := ingest.BrowseMicrosoftPath(r.Context(), cfg, req.Path)
+		entries, err := microsoft.BrowseMicrosoftPath(r.Context(), cfg, req.Path)
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
 			return

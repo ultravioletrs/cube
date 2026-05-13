@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-package ingest
+package ingest_test
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
 )
 
 func TestMicrosoftSourceProvider_ListAndDownload_Smoke(t *testing.T) {
@@ -96,9 +97,7 @@ func TestMicrosoftSourceProvider_ListAndDownload_Smoke(t *testing.T) {
 		t.Fatalf("marshal microsoft config: %v", err)
 	}
 
-	provider := &microsoftSourceProvider{
-		httpClient: newGraphRedirectHTTPClient(t, srv.URL),
-	}
+	provider := microsoft.NewSourceProviderWithHTTPClient(newGraphRedirectHTTPClient(t, srv.URL))
 	src := domain.Source{
 		ID:     "src-1",
 		Type:   domain.SourceTypeMicrosoft,

@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-package ingest
+package s3
 
 import (
 	"context"
@@ -16,36 +16,37 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest"
 )
 
-type s3SourceProvider struct{}
+type sourceProvider struct{}
 
-// NewS3SourceProvider creates native S3 provider implementation.
-func NewS3SourceProvider() SourceProvider {
-	return &s3SourceProvider{}
+// NewSourceProvider creates native S3 provider implementation.
+func NewSourceProvider() ingest.SourceProvider {
+	return &sourceProvider{}
 }
 
-func (p *s3SourceProvider) Type() domain.SourceType {
+func (p *sourceProvider) Type() domain.SourceType {
 	return domain.SourceTypeS3
 }
 
-func (p *s3SourceProvider) Capabilities() SourceProviderCapabilities {
-	return SourceProviderCapabilities{
+func (p *sourceProvider) Capabilities() ingest.SourceProviderCapabilities {
+	return ingest.SourceProviderCapabilities{
 		SupportsList:     true,
 		SupportsDownload: true,
 		SupportsBrowse:   true,
 	}
 }
 
-func (p *s3SourceProvider) PrunesStaleRecords() bool {
+func (p *sourceProvider) PrunesStaleRecords() bool {
 	return true
 }
 
-func (p *s3SourceProvider) ListFiles(
+func (p *sourceProvider) ListFiles(
 	ctx context.Context,
 	_ string,
 	src domain.Source,
-) ([]SourceFile, error) {
+) ([]ingest.SourceFile, error) {
 	var cfg domain.S3Config
 	if err := json.Unmarshal(src.Config, &cfg); err != nil {
 		return nil, fmt.Errorf("decode s3 config: %w", err)
@@ -53,7 +54,7 @@ func (p *s3SourceProvider) ListFiles(
 	return listS3Files(ctx, cfg)
 }
 
-func (p *s3SourceProvider) DownloadRecord(
+func (p *sourceProvider) DownloadRecord(
 	ctx context.Context,
 	rec domain.Record,
 	src domain.Source,
@@ -83,7 +84,7 @@ func (p *s3SourceProvider) DownloadRecord(
 		return "", nil, err
 	}
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ingest.ExtractText(ingest.DriveFile{
 		ID:       rec.ExternalID,
 		Name:     rec.Name,
 		MimeType: rec.MimeType,
@@ -175,7 +176,7 @@ func BrowseS3Path(ctx context.Context, cfg domain.S3Config, currentPath string) 
 	return out, nil
 }
 
-func listS3Files(ctx context.Context, cfg domain.S3Config) ([]SourceFile, error) {
+func listS3Files(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile, error) {
 	client, err := newS3Client(cfg)
 	if err != nil {
 		return nil, err
@@ -194,7 +195,7 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]SourceFile, error)
 		scopes = []string{rootPath}
 	}
 
-	aggregated := make(map[string]SourceFile)
+	aggregated := make(map[string]ingest.SourceFile)
 	for _, scope := range scopes {
 		prefix := scope
 		if prefix != "" && !strings.HasSuffix(prefix, "/") {
@@ -214,7 +215,7 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]SourceFile, error)
 			}
 
 			modified := obj.LastModified.UTC()
-			file := SourceFile{
+			file := ingest.SourceFile{
 				ExternalID:       key,
 				Name:             path.Base(key),
 				ExternalRef:      key,
@@ -229,7 +230,7 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]SourceFile, error)
 		}
 	}
 
-	files := make([]SourceFile, 0, len(aggregated))
+	files := make([]ingest.SourceFile, 0, len(aggregated))
 	for _, file := range aggregated {
 		files = append(files, file)
 	}
@@ -241,7 +242,7 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]SourceFile, error)
 }
 
 // ListS3FilesPreview lists S3 files for source configuration preview API.
-func ListS3FilesPreview(ctx context.Context, cfg domain.S3Config) ([]SourceFile, error) {
+func ListS3FilesPreview(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile, error) {
 	return listS3Files(ctx, cfg)
 }
 
@@ -295,7 +296,7 @@ func s3BucketLookup(forcePathStyle bool) minio.BucketLookupType {
 	return minio.BucketLookupAuto
 }
 
-func sourceFileNewer(a, b SourceFile) bool {
+func sourceFileNewer(a, b ingest.SourceFile) bool {
 	if a.SourceModifiedAt != nil && b.SourceModifiedAt != nil {
 		if a.SourceModifiedAt.After(*b.SourceModifiedAt) {
 			return true
@@ -310,7 +311,7 @@ func sourceFileNewer(a, b SourceFile) bool {
 	return a.ExternalRef > b.ExternalRef
 }
 
-func filterSourceFilesBySelectedPaths(files []SourceFile, selectedPaths []string) []SourceFile {
+func filterSourceFilesBySelectedPaths(files []ingest.SourceFile, selectedPaths []string) []ingest.SourceFile {
 	if len(selectedPaths) == 0 {
 		return files
 	}
@@ -326,7 +327,7 @@ func filterSourceFilesBySelectedPaths(files []SourceFile, selectedPaths []string
 		return files
 	}
 
-	filtered := make([]SourceFile, 0, len(files))
+	filtered := make([]ingest.SourceFile, 0, len(files))
 	for _, file := range files {
 		if _, ok := selected[normalizeRclonePath(file.ExternalRef)]; ok {
 			filtered = append(filtered, file)
@@ -344,4 +345,55 @@ func isPathWithinRoot(rootPath, scopedPath string) bool {
 	rootAbs := "/" + rootPath
 	scopeAbs := "/" + scopedPath
 	return scopeAbs == rootAbs || strings.HasPrefix(scopeAbs, rootAbs+"/")
+}
+
+func normalizeRclonePath(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "." || value == "/" {
+		return ""
+	}
+	clean := path.Clean("/" + strings.TrimPrefix(value, "/"))
+	if clean == "/" {
+		return ""
+	}
+	return strings.TrimPrefix(clean, "/")
+}
+
+func normalizeRcloneScopes(rootPath string, scopePaths []string) ([]string, error) {
+	rootPath = normalizeRclonePath(rootPath)
+	rootAbs := "/" + rootPath
+	if rootPath == "" {
+		rootAbs = "/"
+	}
+	if len(scopePaths) == 0 {
+		if rootPath == "" {
+			return []string{""}, nil
+		}
+		return []string{rootPath}, nil
+	}
+
+	seen := make(map[string]struct{}, len(scopePaths))
+	out := make([]string, 0, len(scopePaths))
+	for _, raw := range scopePaths {
+		scope := normalizeRclonePath(raw)
+		scopeAbs := "/" + scope
+		if scope == "" {
+			scopeAbs = "/"
+		}
+
+		if rootAbs != "/" {
+			if scopeAbs != rootAbs && !strings.HasPrefix(scopeAbs, rootAbs+"/") {
+				return nil, fmt.Errorf("scope path %q is outside approved root %q", raw, rootPath)
+			}
+		}
+
+		if _, ok := seen[scope]; ok {
+			continue
+		}
+		seen[scope] = struct{}{}
+		out = append(out, scope)
+	}
+
+	sort.Strings(out)
+	return out, nil
 }

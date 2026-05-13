@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-package ingest
+package microsoft
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -23,40 +24,49 @@ import (
 const (
 	microsoftGraphBaseURL      = "https://graph.microsoft.com/v1.0"
 	microsoftGraphDefaultScope = "https://graph.microsoft.com/.default"
+	driveFileMaxBytes          = 200 << 20
 )
 
-type microsoftSourceProvider struct {
+type sourceProvider struct {
 	httpClient *http.Client
 }
 
-// NewMicrosoftSourceProvider creates native Microsoft Graph provider implementation.
-func NewMicrosoftSourceProvider() SourceProvider {
-	return &microsoftSourceProvider{
+// NewSourceProvider creates native Microsoft Graph provider implementation.
+func NewSourceProvider() ingest.SourceProvider {
+	return &sourceProvider{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
-func (p *microsoftSourceProvider) Type() domain.SourceType {
+// NewSourceProviderWithHTTPClient creates provider with custom HTTP client.
+func NewSourceProviderWithHTTPClient(httpClient *http.Client) ingest.SourceProvider {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 30 * time.Second}
+	}
+	return &sourceProvider{httpClient: httpClient}
+}
+
+func (p *sourceProvider) Type() domain.SourceType {
 	return domain.SourceTypeMicrosoft
 }
 
-func (p *microsoftSourceProvider) Capabilities() SourceProviderCapabilities {
-	return SourceProviderCapabilities{
+func (p *sourceProvider) Capabilities() ingest.SourceProviderCapabilities {
+	return ingest.SourceProviderCapabilities{
 		SupportsList:     true,
 		SupportsDownload: true,
 		SupportsBrowse:   true,
 	}
 }
 
-func (p *microsoftSourceProvider) PrunesStaleRecords() bool {
+func (p *sourceProvider) PrunesStaleRecords() bool {
 	return true
 }
 
-func (p *microsoftSourceProvider) ListFiles(
+func (p *sourceProvider) ListFiles(
 	ctx context.Context,
 	_ string,
 	src domain.Source,
-) ([]SourceFile, error) {
+) ([]ingest.SourceFile, error) {
 	var cfg domain.MicrosoftConfig
 	if err := json.Unmarshal(src.Config, &cfg); err != nil {
 		return nil, fmt.Errorf("decode microsoft config: %w", err)
@@ -64,7 +74,7 @@ func (p *microsoftSourceProvider) ListFiles(
 	return listMicrosoftFiles(ctx, p.httpClient, cfg)
 }
 
-func (p *microsoftSourceProvider) DownloadRecord(
+func (p *sourceProvider) DownloadRecord(
 	ctx context.Context,
 	rec domain.Record,
 	src domain.Source,
@@ -88,7 +98,7 @@ func (p *microsoftSourceProvider) DownloadRecord(
 		return "", nil, err
 	}
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ingest.ExtractText(ingest.DriveFile{
 		ID:       rec.ExternalID,
 		Name:     rec.Name,
 		MimeType: rec.MimeType,
@@ -110,7 +120,7 @@ type MicrosoftBrowseEntry struct {
 }
 
 // ListMicrosoftFilesPreview lists Microsoft OneDrive/SharePoint files for source configuration preview APIs.
-func ListMicrosoftFilesPreview(ctx context.Context, cfg domain.MicrosoftConfig) ([]SourceFile, error) {
+func ListMicrosoftFilesPreview(ctx context.Context, cfg domain.MicrosoftConfig) ([]ingest.SourceFile, error) {
 	return listMicrosoftFiles(ctx, &http.Client{Timeout: 30 * time.Second}, cfg)
 }
 
@@ -170,7 +180,7 @@ func BrowseMicrosoftPath(ctx context.Context, cfg domain.MicrosoftConfig, curren
 	return entries, nil
 }
 
-func listMicrosoftFiles(ctx context.Context, baseClient *http.Client, cfg domain.MicrosoftConfig) ([]SourceFile, error) {
+func listMicrosoftFiles(ctx context.Context, baseClient *http.Client, cfg domain.MicrosoftConfig) ([]ingest.SourceFile, error) {
 	graph, err := newMicrosoftGraphClient(ctx, baseClient, cfg)
 	if err != nil {
 		return nil, err
@@ -185,14 +195,14 @@ func listMicrosoftFiles(ctx context.Context, baseClient *http.Client, cfg domain
 		scopes = []string{rootPath}
 	}
 
-	aggregated := make(map[string]SourceFile)
+	aggregated := make(map[string]ingest.SourceFile)
 	for _, scope := range scopes {
 		if err := graph.ListScope(ctx, scope, aggregated); err != nil {
 			return nil, err
 		}
 	}
 
-	files := make([]SourceFile, 0, len(aggregated))
+	files := make([]ingest.SourceFile, 0, len(aggregated))
 	for _, file := range aggregated {
 		files = append(files, file)
 	}
@@ -302,7 +312,7 @@ func (g *microsoftGraphClient) resolveDriveID(ctx context.Context, cfg domain.Mi
 	return drive.ID, nil
 }
 
-func (g *microsoftGraphClient) ListScope(ctx context.Context, scopePath string, out map[string]SourceFile) error {
+func (g *microsoftGraphClient) ListScope(ctx context.Context, scopePath string, out map[string]ingest.SourceFile) error {
 	item, err := g.ResolveItemByPath(ctx, scopePath)
 	if err != nil {
 		return err
@@ -323,7 +333,7 @@ func (g *microsoftGraphClient) collectFilesRecursive(
 	ctx context.Context,
 	parentID string,
 	parentPath string,
-	out map[string]SourceFile,
+	out map[string]ingest.SourceFile,
 ) error {
 	children, err := g.ListChildren(ctx, parentID)
 	if err != nil {
@@ -533,9 +543,9 @@ func microsoftMimeType(item microsoftDriveItem) string {
 	return strings.TrimSpace(item.File.MimeType)
 }
 
-func microsoftItemToSourceFile(item microsoftDriveItem, itemPath string) SourceFile {
+func microsoftItemToSourceFile(item microsoftDriveItem, itemPath string) ingest.SourceFile {
 	itemPath = normalizeRclonePath(itemPath)
-	return SourceFile{
+	return ingest.SourceFile{
 		ExternalID:       strings.TrimSpace(item.ID),
 		Name:             strings.TrimSpace(item.Name),
 		ExternalURL:      strings.TrimSpace(item.WebURL),
@@ -544,6 +554,116 @@ func microsoftItemToSourceFile(item microsoftDriveItem, itemPath string) SourceF
 		SourceVersion:    strings.TrimSpace(item.ETag),
 		SourceModifiedAt: parseRFC3339Ptr(item.LastModifiedDateTime),
 	}
+}
+
+func parseRFC3339Ptr(value string) *time.Time {
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return nil
+	}
+	return &t
+}
+
+func normalizeRclonePath(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "." || value == "/" {
+		return ""
+	}
+	clean := path.Clean("/" + strings.TrimPrefix(value, "/"))
+	if clean == "/" {
+		return ""
+	}
+	return strings.TrimPrefix(clean, "/")
+}
+
+func normalizeRcloneScopes(rootPath string, scopePaths []string) ([]string, error) {
+	rootPath = normalizeRclonePath(rootPath)
+	rootAbs := "/" + rootPath
+	if rootPath == "" {
+		rootAbs = "/"
+	}
+	if len(scopePaths) == 0 {
+		if rootPath == "" {
+			return []string{""}, nil
+		}
+		return []string{rootPath}, nil
+	}
+
+	seen := make(map[string]struct{}, len(scopePaths))
+	out := make([]string, 0, len(scopePaths))
+	for _, raw := range scopePaths {
+		scope := normalizeRclonePath(raw)
+		scopeAbs := "/" + scope
+		if scope == "" {
+			scopeAbs = "/"
+		}
+
+		if rootAbs != "/" {
+			if scopeAbs != rootAbs && !strings.HasPrefix(scopeAbs, rootAbs+"/") {
+				return nil, fmt.Errorf("scope path %q is outside approved root %q", raw, rootPath)
+			}
+		}
+
+		if _, ok := seen[scope]; ok {
+			continue
+		}
+		seen[scope] = struct{}{}
+		out = append(out, scope)
+	}
+
+	sort.Strings(out)
+	return out, nil
+}
+
+func filterSourceFilesBySelectedPaths(files []ingest.SourceFile, selectedPaths []string) []ingest.SourceFile {
+	if len(selectedPaths) == 0 {
+		return files
+	}
+	selected := make(map[string]struct{}, len(selectedPaths))
+	for _, p := range selectedPaths {
+		p = normalizeRclonePath(p)
+		if p == "" {
+			continue
+		}
+		selected[p] = struct{}{}
+	}
+	if len(selected) == 0 {
+		return files
+	}
+
+	filtered := make([]ingest.SourceFile, 0, len(files))
+	for _, file := range files {
+		if _, ok := selected[normalizeRclonePath(file.ExternalRef)]; ok {
+			filtered = append(filtered, file)
+		}
+	}
+	return filtered
+}
+
+func sourceFileNewer(a, b ingest.SourceFile) bool {
+	if a.SourceModifiedAt != nil && b.SourceModifiedAt != nil {
+		if a.SourceModifiedAt.After(*b.SourceModifiedAt) {
+			return true
+		}
+		if b.SourceModifiedAt.After(*a.SourceModifiedAt) {
+			return false
+		}
+	}
+	if a.SourceVersion != b.SourceVersion {
+		return a.SourceVersion > b.SourceVersion
+	}
+	return a.ExternalRef > b.ExternalRef
+}
+
+func isPathWithinRoot(rootPath, scopedPath string) bool {
+	rootPath = normalizeRclonePath(rootPath)
+	scopedPath = normalizeRclonePath(scopedPath)
+	if rootPath == "" || scopedPath == "" {
+		return true
+	}
+	rootAbs := "/" + rootPath
+	scopeAbs := "/" + scopedPath
+	return scopeAbs == rootAbs || strings.HasPrefix(scopeAbs, rootAbs+"/")
 }
 
 type microsoftDriveItem struct {

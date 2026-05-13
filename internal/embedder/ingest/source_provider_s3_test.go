@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-package ingest
+package ingest_test
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
+	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
 )
 
 func TestS3SourceProvider_ListAndDownload_Smoke(t *testing.T) {
@@ -85,7 +86,7 @@ func TestS3SourceProvider_ListAndDownload_Smoke(t *testing.T) {
 		t.Fatalf("marshal config: %v", err)
 	}
 
-	provider := NewS3SourceProvider()
+	provider := s3source.NewSourceProvider()
 	src := domain.Source{
 		ID:     "src-s3-1",
 		Type:   domain.SourceTypeS3,

@@ -23,6 +23,10 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/google"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/rclone"
+	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
 	"github.com/ultravioletrs/cube/internal/embedder/service"
 	objstore "github.com/ultravioletrs/cube/internal/embedder/storage"
@@ -186,10 +190,10 @@ func main() {
 	conversationsRepo := postgres.NewConversationsRepository(pool)
 	rcloneClient := ingest.NewCommandRcloneClient(cfg.rcloneBinary, cfg.rcloneConfigDir, cfg.rcloneTimeout)
 	sourceProviders := ingest.NewSourceProviderRegistry(
-		ingest.NewGoogleDriveSourceProvider(),
-		ingest.NewS3SourceProvider(),
-		ingest.NewMicrosoftSourceProvider(),
-		ingest.NewRcloneSourceProvider(rcloneClient),
+		google.NewSourceProvider(),
+		s3source.NewSourceProvider(),
+		microsoft.NewSourceProvider(),
+		rclone.NewSourceProvider(rcloneClient),
 	)
 	for alias, target := range domain.SourceProviderAliases() {
 		sourceProviders.RegisterAlias(alias, target)

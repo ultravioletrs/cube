@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-package ingest
+package ingest_test
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/google"
 )
 
 func TestGoogleSourceProvider_ListAndDownload_Smoke(t *testing.T) {
@@ -55,7 +57,7 @@ func TestGoogleSourceProvider_ListAndDownload_Smoke(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	restore := overrideDriveAPIEndpointsForTest(t,
+	restore := ingest.SetDriveAPIEndpoints(
 		srv.URL+"/drive/v3/files",
 		srv.URL+"/drive/v3/files/%s/export",
 		srv.URL+"/drive/v3/files/%s?alt=media",
@@ -69,7 +71,7 @@ func TestGoogleSourceProvider_ListAndDownload_Smoke(t *testing.T) {
 		t.Fatalf("marshal config: %v", err)
 	}
 
-	provider := NewGoogleDriveSourceProvider()
+	provider := google.NewSourceProvider()
 	src := domain.Source{
 		ID:     "src-g1",
 		Type:   domain.SourceTypeGoogleDrive,
@@ -104,28 +106,5 @@ func TestGoogleSourceProvider_ListAndDownload_Smoke(t *testing.T) {
 	}
 	if pageCount != nil {
 		t.Fatalf("expected nil page count, got %d", *pageCount)
-	}
-}
-
-func overrideDriveAPIEndpointsForTest(
-	t *testing.T,
-	filesURL string,
-	exportURLFmt string,
-	downloadURLFmt string,
-) func() {
-	t.Helper()
-
-	prevFilesURL := driveFilesURL
-	prevExportURLFmt := driveExportURLFmt
-	prevDownloadURLFmt := driveDownloadURL
-
-	driveFilesURL = filesURL
-	driveExportURLFmt = exportURLFmt
-	driveDownloadURL = downloadURLFmt
-
-	return func() {
-		driveFilesURL = prevFilesURL
-		driveExportURLFmt = prevExportURLFmt
-		driveDownloadURL = prevDownloadURLFmt
 	}
 }
