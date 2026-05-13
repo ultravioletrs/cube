@@ -247,6 +247,9 @@ services:
       EMBEDDER_S3_PATH_STYLE: ${EMBEDDER_S3_PATH_STYLE}
       EMBEDDER_S3_ENSURE_BUCKET: ${EMBEDDER_S3_ENSURE_BUCKET}
       EMBEDDER_UPLOAD_DIR: ${EMBEDDER_UPLOAD_DIR}
+      EMBEDDER_RCLONE_BINARY: /usr/bin/rclone
+      EMBEDDER_RCLONE_CONFIG_DIR: /etc/cube/rclone
+      EMBEDDER_RCLONE_TIMEOUT: 2m
       EMBEDDER_LOG_LEVEL: ${EMBEDDER_LOG_LEVEL}
       EMBEDDER_LLM_PROVIDER: ${EMBEDDER_LLM_PROVIDER}
       EMBEDDER_LLM_BASE_URL: ${EMBEDDER_LLM_BASE_URL}
@@ -257,7 +260,10 @@ services:
       EMBEDDER_RERANKER_BASE_URL: ${EMBEDDER_RERANKER_BASE_URL}
     volumes:
       - cube-embedder-upload-volume:/tmp/embedder/uploads
-      - ./rclone:/etc/cube/rclone
+      - type: bind
+        source: ./rclone
+        target: /etc/cube/rclone
+        read_only: true
     ports:
       - ${EMBEDDER_PORT}:${EMBEDDER_PORT}
 

@@ -16,7 +16,8 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 )
 
-func (w *Worker) downloadFromRcloneSource(
+// DownloadFromRcloneSource downloads and extracts a record via rclone.
+func DownloadFromRcloneSource(
 	ctx context.Context,
 	rec domain.Record,
 	src domain.Source,

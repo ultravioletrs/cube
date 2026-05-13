@@ -1,0 +1,81 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+groups:
+  - name: cube_embedder_provider_alerts
+    interval: 30s
+    rules:
+      - alert: CubeEmbedderSourceSyncErrorRateHigh
+        expr: |
+          (
+            sum by (source_type, provider_type) (
+              increase(cube_embedder_source_sync_runs_total{result="error"}[30m])
+            )
+            /
+            clamp_min(
+              sum by (source_type, provider_type) (
+                increase(cube_embedder_source_sync_runs_total[30m])
+              ),
+              1
+            )
+          ) > 0.20
+          and
+          sum by (source_type, provider_type) (
+            increase(cube_embedder_source_sync_runs_total[30m])
+          ) >= 5
+        for: 10m
+        labels:
+          severity: warning
+          service: cube-embedder
+          team: ingest
+        annotations:
+          summary: "High source sync error rate ({{ $labels.source_type }} via {{ $labels.provider_type }})"
+          description: "Source sync error ratio exceeded 20% over the last 30m."
+
+      - alert: CubeEmbedderSourceDownloadErrorRateHigh
+        expr: |
+          (
+            sum by (source_type, provider_type) (
+              increase(cube_embedder_source_download_runs_total{result="error"}[15m])
+            )
+            /
+            clamp_min(
+              sum by (source_type, provider_type) (
+                increase(cube_embedder_source_download_runs_total[15m])
+              ),
+              1
+            )
+          ) > 0.10
+          and
+          sum by (source_type, provider_type) (
+            increase(cube_embedder_source_download_runs_total[15m])
+          ) >= 20
+        for: 5m
+        labels:
+          severity: warning
+          service: cube-embedder
+          team: ingest
+        annotations:
+          summary: "High source download error rate ({{ $labels.source_type }} via {{ $labels.provider_type }})"
+          description: "Source download error ratio exceeded 10% over the last 15m."
+
+      - alert: CubeEmbedderSourceSyncLatencyP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le, source_type, provider_type) (
+              rate(cube_embedder_source_sync_duration_seconds_bucket[15m])
+            )
+          ) > 120
+          and
+          sum by (source_type, provider_type) (
+            rate(cube_embedder_source_sync_duration_seconds_count[15m])
+          ) > 0.001
+        for: 15m
+        labels:
+          severity: warning
+          service: cube-embedder
+          team: ingest
+        annotations:
+          summary: "High source sync p95 latency ({{ $labels.source_type }} via {{ $labels.provider_type }})"
+          description: "P95 source sync latency is above 120s for at least 15m."

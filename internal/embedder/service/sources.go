@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"path"
 	"sort"
 	"strings"
@@ -46,8 +47,24 @@ func (s *sourcesService) Create(ctx context.Context, src domain.Source) (domain.
 		}
 		src.Config = sanitized
 	}
-	if src.Type == domain.SourceTypeRclone {
-		sanitized, err := sanitizeRcloneConfig(src.Config)
+	if isRcloneBackedSourceType(src.Type) {
+		sanitized, err := sanitizeRcloneConfig(src.Type, src.Config)
+		if err != nil {
+			return domain.Source{}, err
+		}
+		src.Config = sanitized
+	}
+	if src.Type == domain.SourceTypeS3 {
+		sanitized, err := sanitizeS3Config(src.Config)
+		if err != nil {
+			return domain.Source{}, err
+		}
+		src.Config = sanitized
+	}
+	if src.Type == domain.SourceTypeMicrosoft ||
+		src.Type == domain.SourceTypeOneDrive ||
+		src.Type == domain.SourceTypeSharePoint {
+		sanitized, err := sanitizeMicrosoftConfig(src.Config)
 		if err != nil {
 			return domain.Source{}, err
 		}
@@ -213,14 +230,111 @@ func normalizeIDList(values []string) []string {
 }
 
 func validSourceType(t domain.SourceType) bool {
-	switch t {
-	case domain.SourceTypeLocalFS, domain.SourceTypeRclone, domain.SourceTypeGoogleDrive:
-		return true
-	}
-	return false
+	return domain.IsSupportedSourceType(t)
 }
 
-func sanitizeRcloneConfig(raw json.RawMessage) (json.RawMessage, error) {
+func sanitizeS3Config(raw json.RawMessage) (json.RawMessage, error) {
+	var cfg domain.S3Config
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			return nil, fmt.Errorf("decode s3 config: %w", err)
+		}
+	}
+
+	endpoint, inferredTLS, err := normalizeS3Endpoint(cfg.Endpoint)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Endpoint = endpoint
+	cfg.Region = strings.TrimSpace(cfg.Region)
+	if cfg.Region == "" {
+		cfg.Region = "us-east-1"
+	}
+	cfg.Bucket = strings.TrimSpace(cfg.Bucket)
+	cfg.AccessKeyID = strings.TrimSpace(cfg.AccessKeyID)
+	cfg.SecretAccessKey = strings.TrimSpace(cfg.SecretAccessKey)
+	cfg.SessionToken = strings.TrimSpace(cfg.SessionToken)
+	cfg.RootPath = normalizeRclonePath(cfg.RootPath)
+	cfg.ScopePaths = normalizeRcloneScopeList(cfg.ScopePaths)
+	cfg.SelectedPaths = normalizeRclonePathList(cfg.SelectedPaths)
+	cfg.ConfigRef = strings.TrimSpace(cfg.ConfigRef)
+
+	if cfg.UseSSL == nil {
+		cfg.UseSSL = boolPtr(true)
+	}
+	if inferredTLS != nil {
+		cfg.UseSSL = inferredTLS
+	}
+	if cfg.PathStyle == nil {
+		cfg.PathStyle = boolPtr(true)
+	}
+
+	if cfg.Bucket == "" {
+		return nil, fmt.Errorf("s3 bucket is required")
+	}
+	if cfg.RootPath == "" && len(cfg.ScopePaths) == 0 && len(cfg.SelectedPaths) == 0 {
+		return nil, fmt.Errorf("s3 root_path, scope_paths or selected_paths is required")
+	}
+	if cfg.AccessKeyID == "" && cfg.SecretAccessKey != "" {
+		return nil, fmt.Errorf("s3 access_key_id is required when secret_access_key is set")
+	}
+	if cfg.AccessKeyID != "" && cfg.SecretAccessKey == "" {
+		return nil, fmt.Errorf("s3 secret_access_key is required when access_key_id is set")
+	}
+	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.ScopePaths); err != nil {
+		return nil, fmt.Errorf("invalid s3 scope_paths: %w", err)
+	}
+	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.SelectedPaths); err != nil {
+		return nil, fmt.Errorf("invalid s3 selected_paths: %w", err)
+	}
+
+	sanitized, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("encode s3 config: %w", err)
+	}
+	return sanitized, nil
+}
+
+func normalizeS3Endpoint(raw string) (string, *bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "s3.amazonaws.com", nil, nil
+	}
+	if strings.Contains(raw, "://") {
+		parsed, err := url.Parse(raw)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid s3 endpoint: %w", err)
+		}
+		if parsed.Host == "" {
+			return "", nil, fmt.Errorf("invalid s3 endpoint: host is required")
+		}
+		if parsed.Path != "" && parsed.Path != "/" {
+			return "", nil, fmt.Errorf("invalid s3 endpoint: path is not allowed")
+		}
+		if parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
+			return "", nil, fmt.Errorf("invalid s3 endpoint: query, fragment and userinfo are not allowed")
+		}
+		switch parsed.Scheme {
+		case "http":
+			return parsed.Host, boolPtr(false), nil
+		case "https":
+			return parsed.Host, boolPtr(true), nil
+		default:
+			return "", nil, fmt.Errorf("invalid s3 endpoint scheme %q", parsed.Scheme)
+		}
+	}
+	return raw, nil, nil
+}
+
+func boolPtr(v bool) *bool {
+	return &v
+}
+
+func isRcloneBackedSourceType(t domain.SourceType) bool {
+	return domain.IsRcloneBackedSourceType(t)
+}
+
+func sanitizeRcloneConfig(sourceType domain.SourceType, raw json.RawMessage) (json.RawMessage, error) {
 	var cfg domain.RcloneConfig
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &cfg); err != nil {
@@ -228,12 +342,22 @@ func sanitizeRcloneConfig(raw json.RawMessage) (json.RawMessage, error) {
 		}
 	}
 
+	cfg.Backend = strings.ToLower(strings.TrimSpace(cfg.Backend))
 	cfg.Remote = strings.TrimSpace(cfg.Remote)
 	cfg.RootPath = normalizeRclonePath(cfg.RootPath)
 	cfg.ScopePaths = normalizeRcloneScopeList(cfg.ScopePaths)
 	cfg.SelectedPaths = normalizeRclonePathList(cfg.SelectedPaths)
 	cfg.ConfigRef = strings.TrimSpace(cfg.ConfigRef)
 
+	if cfg.Backend != "" && !isValidRcloneBackendName(cfg.Backend) {
+		return nil, fmt.Errorf("rclone backend %q is invalid", cfg.Backend)
+	}
+	if sourceType == domain.SourceTypeDropbox {
+		cfg.Backend = "dropbox"
+		if cfg.Remote == "" {
+			cfg.Remote = "dropbox"
+		}
+	}
 	if cfg.Remote == "" {
 		return nil, fmt.Errorf("rclone remote is required")
 	}
@@ -250,6 +374,79 @@ func sanitizeRcloneConfig(raw json.RawMessage) (json.RawMessage, error) {
 	sanitized, err := json.Marshal(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("encode rclone config: %w", err)
+	}
+	return sanitized, nil
+}
+
+func isValidRcloneBackendName(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9':
+		case r == '_', r == '-', r == '+':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func sanitizeMicrosoftConfig(raw json.RawMessage) (json.RawMessage, error) {
+	var cfg domain.MicrosoftConfig
+	if len(raw) > 0 {
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			return nil, fmt.Errorf("decode microsoft config: %w", err)
+		}
+	}
+
+	cfg.TenantID = normalizeOAuthValue(cfg.TenantID)
+	cfg.ClientID = normalizeOAuthValue(cfg.ClientID)
+	cfg.ClientSecret = normalizeOAuthValue(cfg.ClientSecret)
+	cfg.AccessToken = normalizeOAuthValue(cfg.AccessToken)
+	cfg.RefreshToken = normalizeOAuthValue(cfg.RefreshToken)
+	cfg.DriveID = strings.TrimSpace(cfg.DriveID)
+	cfg.SiteID = strings.TrimSpace(cfg.SiteID)
+	cfg.RootPath = normalizeRclonePath(cfg.RootPath)
+	cfg.ScopePaths = normalizeRcloneScopeList(cfg.ScopePaths)
+	cfg.SelectedPaths = normalizeRclonePathList(cfg.SelectedPaths)
+	cfg.ConfigRef = strings.TrimSpace(cfg.ConfigRef)
+
+	if cfg.RootPath == "" && len(cfg.ScopePaths) == 0 && len(cfg.SelectedPaths) == 0 {
+		return nil, fmt.Errorf("microsoft root_path, scope_paths or selected_paths is required")
+	}
+	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.ScopePaths); err != nil {
+		return nil, fmt.Errorf("invalid microsoft scope_paths: %w", err)
+	}
+	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.SelectedPaths); err != nil {
+		return nil, fmt.Errorf("invalid microsoft selected_paths: %w", err)
+	}
+
+	clientCredParts := 0
+	if cfg.TenantID != "" {
+		clientCredParts++
+	}
+	if cfg.ClientID != "" {
+		clientCredParts++
+	}
+	if cfg.ClientSecret != "" {
+		clientCredParts++
+	}
+	if clientCredParts > 0 && clientCredParts < 3 {
+		return nil, fmt.Errorf("microsoft tenant_id, client_id and client_secret must all be set together")
+	}
+	if cfg.AccessToken == "" && clientCredParts != 3 {
+		return nil, fmt.Errorf("microsoft access_token or tenant_id/client_id/client_secret is required")
+	}
+	if cfg.RefreshToken != "" && clientCredParts != 3 {
+		return nil, fmt.Errorf("microsoft refresh_token requires tenant_id, client_id and client_secret")
+	}
+
+	sanitized, err := json.Marshal(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("encode microsoft config: %w", err)
 	}
 	return sanitized, nil
 }

@@ -27,12 +27,33 @@ import (
 )
 
 const (
-	driveFilesURL     = "https://www.googleapis.com/drive/v3/files"
-	driveExport       = "https://www.googleapis.com/drive/v3/files/%s/export"
-	driveDownload     = "https://www.googleapis.com/drive/v3/files/%s?alt=media"
 	driveScope        = "https://www.googleapis.com/auth/drive.readonly"
 	driveFileMaxBytes = 200 << 20
 )
+
+var (
+	driveFilesURL     = "https://www.googleapis.com/drive/v3/files"
+	driveExportURLFmt = "https://www.googleapis.com/drive/v3/files/%s/export"
+	driveDownloadURL  = "https://www.googleapis.com/drive/v3/files/%s?alt=media"
+)
+
+// SetDriveAPIEndpoints overrides Drive API endpoints and returns a restore function.
+// Intended for tests that need deterministic HTTP fixtures.
+func SetDriveAPIEndpoints(filesURL, exportURLFmt, downloadURLFmt string) func() {
+	prevFilesURL := driveFilesURL
+	prevExportURLFmt := driveExportURLFmt
+	prevDownloadURLFmt := driveDownloadURL
+
+	driveFilesURL = filesURL
+	driveExportURLFmt = exportURLFmt
+	driveDownloadURL = downloadURLFmt
+
+	return func() {
+		driveFilesURL = prevFilesURL
+		driveExportURLFmt = prevExportURLFmt
+		driveDownloadURL = prevDownloadURLFmt
+	}
+}
 
 // DriveFile is a single file entry from the Drive files.list API.
 type DriveFile struct {
@@ -387,9 +408,9 @@ func (d *DriveReader) DownloadFile(ctx context.Context, f DriveFile) ([]byte, er
 	var reqURL string
 	switch {
 	case strings.HasPrefix(f.MimeType, "application/vnd.google-apps."):
-		reqURL = fmt.Sprintf(driveExport, f.ID) + "?mimeType=" + url.QueryEscape(googleAppsExportMIME(f.MimeType))
+		reqURL = fmt.Sprintf(driveExportURLFmt, f.ID) + "?mimeType=" + url.QueryEscape(googleAppsExportMIME(f.MimeType))
 	default:
-		reqURL = fmt.Sprintf(driveDownload, f.ID)
+		reqURL = fmt.Sprintf(driveDownloadURL, f.ID)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)

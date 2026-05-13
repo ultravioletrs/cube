@@ -10,24 +10,29 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	embedapi "github.com/ultravioletrs/cube/internal/embedder/api"
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/google"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/rclone"
+	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
 	"github.com/ultravioletrs/cube/internal/embedder/llm"
 	"github.com/ultravioletrs/cube/internal/embedder/llm/ollama"
 	llmopenai "github.com/ultravioletrs/cube/internal/embedder/llm/openai"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
 	"github.com/ultravioletrs/cube/internal/embedder/service"
 	objstore "github.com/ultravioletrs/cube/internal/embedder/storage"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type config struct {
@@ -41,6 +46,7 @@ type config struct {
 	rcloneBinary            string
 	rcloneConfigDir         string
 	rcloneTimeout           time.Duration
+	rclonePreflight         bool
 	embeddingConfig         embedding.Config
 	llmConfig               llm.Config
 	chatTopK                int
@@ -97,6 +103,7 @@ func loadConfig() config {
 		rcloneBinary:            env("EMBEDDER_RCLONE_BINARY", "rclone"),
 		rcloneConfigDir:         env("EMBEDDER_RCLONE_CONFIG_DIR", "/etc/cube/rclone"),
 		rcloneTimeout:           envDuration("EMBEDDER_RCLONE_TIMEOUT", 2*time.Minute),
+		rclonePreflight:         envBool("EMBEDDER_RCLONE_PREFLIGHT", true),
 		embeddingConfig:         embeddingConfig,
 		storageConfig: objstore.Config{
 			Provider:          env("EMBEDDER_OBJECT_STORAGE_PROVIDER", objstore.ProviderLocal),
@@ -156,6 +163,11 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	if err := runRclonePreflight(ctx, cfg); err != nil {
+		slog.Error("rclone preflight failed", "err", err)
+		os.Exit(1)
+	}
+
 	// ── Database ──────────────────────────────────────────────────────────────
 
 	pool, err := pgxpool.New(ctx, cfg.dbURL)
@@ -193,9 +205,18 @@ func main() {
 	chunksRepo := postgres.NewChunksRepository(pool)
 	conversationsRepo := postgres.NewConversationsRepository(pool)
 	rcloneClient := ingest.NewCommandRcloneClient(cfg.rcloneBinary, cfg.rcloneConfigDir, cfg.rcloneTimeout)
+	sourceProviders := ingest.NewSourceProviderRegistry(
+		google.NewSourceProvider(),
+		s3source.NewSourceProvider(),
+		microsoft.NewSourceProvider(),
+		rclone.NewSourceProvider(rcloneClient),
+	)
+	for alias, target := range domain.SourceProviderAliases() {
+		sourceProviders.RegisterAlias(alias, target)
+	}
 
 	sourcesSvc := service.NewSourcesService(sourcesRepo)
-	sourceSyncSvc := service.NewSourceSyncService(sourcesRepo, recordsRepo, rcloneClient)
+	sourceSyncSvc := service.NewSourceSyncService(sourcesRepo, recordsRepo, sourceProviders)
 	recordsSvc := service.NewRecordsService(recordsRepo)
 	embeddingRegistry, err := embedding.NewRegistry(cfg.embeddingConfig)
 	if err != nil {
@@ -208,7 +229,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	worker := ingest.NewWorker(recordsRepo, sourcesRepo, chunksRepo, embeddingRegistry, uploadStore, cfg.chunkSize, cfg.chunkOverlap)
+	worker := ingest.NewWorker(
+		recordsRepo,
+		sourcesRepo,
+		chunksRepo,
+		embeddingRegistry,
+		uploadStore,
+		sourceProviders,
+		cfg.chunkSize,
+		cfg.chunkOverlap,
+	)
 	worker.SetBatchSize(cfg.ingestBatchSize)
 	worker.SetMaxConcurrent(cfg.ingestMaxConcurrency)
 	worker.SetPollInterval(cfg.ingestPollInterval)
@@ -336,6 +366,53 @@ func mustEnv(key string) string {
 		os.Exit(1)
 	}
 	return v
+}
+
+func runRclonePreflight(ctx context.Context, cfg config) error {
+	if !cfg.rclonePreflight {
+		slog.Info("rclone preflight skipped")
+		return nil
+	}
+
+	binary := strings.TrimSpace(cfg.rcloneBinary)
+	if binary == "" {
+		return fmt.Errorf("EMBEDDER_RCLONE_BINARY is empty")
+	}
+	configDir := strings.TrimSpace(cfg.rcloneConfigDir)
+	if configDir == "" {
+		return fmt.Errorf("EMBEDDER_RCLONE_CONFIG_DIR is empty")
+	}
+
+	stat, err := os.Stat(configDir)
+	if err != nil {
+		return fmt.Errorf("check EMBEDDER_RCLONE_CONFIG_DIR %q: %w", configDir, err)
+	}
+	if !stat.IsDir() {
+		return fmt.Errorf("EMBEDDER_RCLONE_CONFIG_DIR %q is not a directory", configDir)
+	}
+	if _, err := os.ReadDir(configDir); err != nil {
+		return fmt.Errorf("read EMBEDDER_RCLONE_CONFIG_DIR %q: %w", configDir, err)
+	}
+
+	timeout := cfg.rcloneTimeout
+	if timeout <= 0 || timeout > 15*time.Second {
+		timeout = 15 * time.Second
+	}
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	out, err := exec.CommandContext(runCtx, binary, "version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("exec %q version: %w (%s)", binary, err, strings.TrimSpace(string(out)))
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	versionLine := ""
+	if len(lines) > 0 {
+		versionLine = strings.TrimSpace(lines[0])
+	}
+	slog.Info("rclone preflight passed", "binary", binary, "config_dir", configDir, "version", versionLine)
+	return nil
 }
 
 func loadEmbeddingConfigFromEnv(cfg *embedding.Config) {

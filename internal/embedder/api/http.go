@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ultravioletrs/cube/internal/embedder/api/transport"
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
@@ -36,6 +37,7 @@ func NewRouter(
 	r.Use(chimw.Logger)
 
 	r.Get("/health", healthHandler)
+	r.Handle("/metrics", promhttp.Handler())
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(authenticator))

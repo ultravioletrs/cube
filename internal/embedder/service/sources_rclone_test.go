@@ -12,7 +12,7 @@ import (
 
 func TestSanitizeRcloneConfig(t *testing.T) {
 	t.Run("normalizes valid config", func(t *testing.T) {
-		raw, err := sanitizeRcloneConfig(json.RawMessage(`{
+		raw, err := sanitizeRcloneConfig(domain.SourceTypeRclone, json.RawMessage(`{
 			"remote":" corp-files ",
 			"root_path":" /team/docs/ ",
 			"scope_paths":["/team/docs/specs","team/docs/specs","team/docs/guides/../guides"],
@@ -45,27 +45,58 @@ func TestSanitizeRcloneConfig(t *testing.T) {
 	})
 
 	t.Run("requires remote", func(t *testing.T) {
-		_, err := sanitizeRcloneConfig(json.RawMessage(`{"root_path":"team/docs"}`))
+		_, err := sanitizeRcloneConfig(domain.SourceTypeRclone, json.RawMessage(`{"root_path":"team/docs"}`))
 		if err == nil {
 			t.Fatal("expected error when remote is missing")
 		}
 	})
 
 	t.Run("requires root or scopes", func(t *testing.T) {
-		_, err := sanitizeRcloneConfig(json.RawMessage(`{"remote":"corp-files"}`))
+		_, err := sanitizeRcloneConfig(domain.SourceTypeRclone, json.RawMessage(`{"remote":"corp-files"}`))
 		if err == nil {
 			t.Fatal("expected error when root_path and scope_paths are missing")
 		}
 	})
 
 	t.Run("rejects scope outside root", func(t *testing.T) {
-		_, err := sanitizeRcloneConfig(json.RawMessage(`{
+		_, err := sanitizeRcloneConfig(domain.SourceTypeRclone, json.RawMessage(`{
 			"remote":"corp-files",
 			"root_path":"team/docs",
 			"scope_paths":["team/other"]
 		}`))
 		if err == nil {
 			t.Fatal("expected error for scope outside root")
+		}
+	})
+
+	t.Run("dropbox infers backend and default remote", func(t *testing.T) {
+		raw, err := sanitizeRcloneConfig(domain.SourceTypeDropbox, json.RawMessage(`{
+			"root_path":"team/docs"
+		}`))
+		if err != nil {
+			t.Fatalf("sanitizeRcloneConfig returned error: %v", err)
+		}
+
+		var cfg domain.RcloneConfig
+		if err := json.Unmarshal(raw, &cfg); err != nil {
+			t.Fatalf("decode sanitized config: %v", err)
+		}
+		if cfg.Backend != "dropbox" {
+			t.Fatalf("expected backend=dropbox, got %q", cfg.Backend)
+		}
+		if cfg.Remote != "dropbox" {
+			t.Fatalf("expected default remote=dropbox, got %q", cfg.Remote)
+		}
+	})
+
+	t.Run("rejects invalid backend name", func(t *testing.T) {
+		_, err := sanitizeRcloneConfig(domain.SourceTypeRclone, json.RawMessage(`{
+			"backend":"DROPBOX!",
+			"remote":"corp-files",
+			"root_path":"team/docs"
+		}`))
+		if err == nil {
+			t.Fatal("expected backend validation error")
 		}
 	})
 }
