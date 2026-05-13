@@ -190,7 +190,7 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		chunkObjs[i] = postgres.Chunk{Content: c, Embedding: embeddings[i]}
 	}
 
-	if err := w.chunks.StoreChunks(ctx, rec.UserID, rec.ID, chunkObjs); err != nil {
+	if err := w.chunks.StoreChunks(ctx, rec.DomainID, rec.UserID, rec.ID, chunkObjs); err != nil {
 		logger.Error("ingest: store chunks", "err", err)
 		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
 		return
@@ -233,7 +233,7 @@ func (w *Worker) downloadContent(ctx context.Context, rec domain.Record) (string
 		return "", nil, fmt.Errorf("record %s is missing source_id", rec.ID)
 	}
 
-	src, err := w.sources.GetByID(ctx, rec.SourceID, rec.UserID)
+	src, err := w.sources.GetByID(ctx, rec.SourceID, rec.DomainID)
 	if err != nil {
 		return "", nil, err
 	}

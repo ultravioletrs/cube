@@ -25,11 +25,11 @@ export interface ChatEvent {
   conversation_id?: string
 }
 
-// listRecords fetches the user's records from the embedder API.
-export async function listRecords(token: string): Promise<AppRecord[]> {
-  const res = await fetch('/api/v1/records', {
-    headers: { Authorization: `Bearer ${token}` },
-  })
+// listRecords fetches the domain's records from the embedder API.
+export async function listRecords(token: string, domainID: string): Promise<AppRecord[]> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
+  if (domainID) headers['X-Domain-ID'] = domainID
+  const res = await fetch('/api/v1/records', { headers })
   if (!res.ok) throw new Error(`listRecords: ${res.status}`)
   const data = await res.json()
   return (data.records ?? []).map(toAppRecord)
@@ -39,18 +39,21 @@ export async function listRecords(token: string): Promise<AppRecord[]> {
 // for each parsed event.  Returns a cleanup function that aborts the stream.
 export function streamChat(
   token: string,
+  domainID: string,
   messages: ChatMessage[],
   recordIDs: string[],
   onEvent: (event: ChatEvent) => void,
   signal?: AbortSignal,
   conversationId?: string | null,
 ): Promise<void> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  }
+  if (domainID) headers['X-Domain-ID'] = domainID
   return fetch('/api/v1/chat', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+    headers,
     body: JSON.stringify({ messages, record_ids: recordIDs, conversation_id: conversationId ?? undefined }),
     signal,
   }).then(async (res) => {

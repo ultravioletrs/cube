@@ -134,7 +134,9 @@ const (
 // The model is intentionally open to additional source types.
 type Source struct {
 	ID string
-	// UserID scopes this source to a single authenticated user.
+	// DomainID scopes this source to a domain (workspace); all domain members share it.
+	DomainID string
+	// UserID records the creating user for audit purposes.
 	UserID string
 	Type   SourceType
 	Name   string
@@ -248,30 +250,30 @@ type SourceSyncResult struct {
 // SourceRepository defines the persistence contract for sources.
 type SourceRepository interface {
 	Create(ctx context.Context, s Source) (Source, error)
-	GetByID(ctx context.Context, id, userID string) (Source, error)
-	List(ctx context.Context, userID string, p Page) (SourcePage, error)
-	Delete(ctx context.Context, id, userID string) error
+	GetByID(ctx context.Context, id, domainID string) (Source, error)
+	List(ctx context.Context, domainID string, p Page) (SourcePage, error)
+	Delete(ctx context.Context, id, domainID string) error
 	UpdateSyncResult(
 		ctx context.Context,
-		id, userID string,
+		id, domainID string,
 		status SourceStatus,
 		lastSyncAt time.Time,
 		lastSyncError *string,
 	) (Source, error)
-	UpdateConfig(ctx context.Context, id, userID string, config json.RawMessage) (Source, error)
+	UpdateConfig(ctx context.Context, id, domainID string, config json.RawMessage) (Source, error)
 }
 
 // SourceService defines the business-logic contract for sources.
 type SourceService interface {
 	Create(ctx context.Context, s Source) (Source, error)
-	GetByID(ctx context.Context, id, userID string) (Source, error)
-	List(ctx context.Context, userID string, p Page) (SourcePage, error)
-	Delete(ctx context.Context, id, userID string) error
-	UpdateGoogleDriveCredentials(ctx context.Context, id, userID string, update GoogleDriveCredentialUpdate) (Source, error)
-	UpdateGoogleDriveSelection(ctx context.Context, id, userID string, update GoogleDriveSelectionUpdate) (Source, error)
+	GetByID(ctx context.Context, id, domainID string) (Source, error)
+	List(ctx context.Context, domainID string, p Page) (SourcePage, error)
+	Delete(ctx context.Context, id, domainID string) error
+	UpdateGoogleDriveCredentials(ctx context.Context, id, domainID string, update GoogleDriveCredentialUpdate) (Source, error)
+	UpdateGoogleDriveSelection(ctx context.Context, id, domainID string, update GoogleDriveSelectionUpdate) (Source, error)
 }
 
 // SourceSyncService defines source-specific synchronization behavior.
 type SourceSyncService interface {
-	Sync(ctx context.Context, id, userID string) (SourceSyncResult, error)
+	Sync(ctx context.Context, id, domainID string) (SourceSyncResult, error)
 }

@@ -300,10 +300,11 @@ function SourcesPanel({
 }
 
 export default function ChatPage() {
-  const { records, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations } = useOutletContext<AppContext>()
+  const { records, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations, activeDomain } = useOutletContext<AppContext>()
   const { tokens } = useAuth()
   const location = useLocation()
   const accessToken = tokens?.accessToken
+  const domainID = activeDomain?.id ?? ''
   const routeState = (location.state ?? null) as ChatRouteState | null
   const selectedRecord = routeState?.source
   const selectedSourceID = routeState?.sourceID
@@ -341,7 +342,7 @@ export default function ChatPage() {
     if (!accessToken || loadingConv) return
     setLoadingConv(true)
     try {
-      const { messages } = await getConversation(accessToken, id)
+      const { messages } = await getConversation(accessToken, domainID, id)
       setChatMessages(messages)
       setConversationId(id)
     } catch (err) {
@@ -354,7 +355,7 @@ export default function ChatPage() {
   const handleDeleteConversation = useCallback(async (id: string) => {
     if (!accessToken) return
     try {
-      await deleteConversation(accessToken, id)
+      await deleteConversation(accessToken, domainID, id)
       setConversations(prev => prev.filter(c => c.id !== id))
       if (conversationId === id) {
         clearChatMessages()
@@ -399,7 +400,7 @@ export default function ChatPage() {
     if (!selectedSourceID || !accessToken) return
     let cancelled = false
 
-    listRecordsBySource(accessToken, selectedSourceID)
+    listRecordsBySource(accessToken, domainID, selectedSourceID)
       .then(nextRecords => {
         if (cancelled) return
         const indexedRecordIDs = nextRecords
@@ -428,8 +429,8 @@ export default function ChatPage() {
     setSourceSyncNotice({ sourceID: selectedSourceID, kind: 'info', text: 'Sync in progress...' })
 
     try {
-      const res = await syncSource(accessToken, selectedSourceID)
-      const nextRecords = await listRecordsBySource(accessToken, selectedSourceID)
+      const res = await syncSource(accessToken, domainID, selectedSourceID)
+      const nextRecords = await listRecordsBySource(accessToken, domainID, selectedSourceID)
       const indexedRecordIDs = nextRecords
         .filter(r => r.status === 'indexed' && (r.chunks ?? 0) > 0)
         .map(r => r.id)
@@ -501,6 +502,7 @@ export default function ChatPage() {
 
     streamChat(
       accessToken,
+      domainID,
       apiMessages,
       targetRecordIDs,
       (event) => {

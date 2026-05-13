@@ -22,7 +22,7 @@ func NewVectorRetrieveService(chunks *postgres.ChunksRepository, embedder *embed
 	return &vectorRetrieveService{chunks: chunks, embedder: embedder}
 }
 
-func (s *vectorRetrieveService) Retrieve(ctx context.Context, userID, query string, recordIDs []string, topK int) ([]domain.VectorChunk, error) {
+func (s *vectorRetrieveService) Retrieve(ctx context.Context, domainID, query string, recordIDs []string, topK int) ([]domain.VectorChunk, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query is required")
 	}
@@ -40,7 +40,7 @@ func (s *vectorRetrieveService) Retrieve(ctx context.Context, userID, query stri
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
 
-	results, err := s.chunks.HybridSearchChunks(ctx, userID, vecs[0], domain.RetrievalQuery{
+	results, err := s.chunks.HybridSearchChunks(ctx, domainID, vecs[0], domain.RetrievalQuery{
 		Query:     query,
 		RecordIDs: recordIDs,
 		TopK:      topK,

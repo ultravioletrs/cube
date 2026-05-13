@@ -337,6 +337,22 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
+function domainInit(domainID: string, init?: RequestInit): RequestInit {
+  return {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      ...(domainID ? { 'X-Domain-ID': domainID } : {}),
+    },
+  }
+}
+
+function authHeaders(token: string, domainID: string): Record<string, string> {
+  const h: Record<string, string> = { Authorization: `Bearer ${token}` }
+  if (domainID) h['X-Domain-ID'] = domainID
+  return h
+}
+
 async function apiJSON<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(buildURL(path), {
     ...init,
@@ -352,22 +368,22 @@ async function apiJSON<T>(path: string, token: string, init?: RequestInit): Prom
   return await res.json() as T
 }
 
-export async function listRecords(token: string): Promise<AppRecord[]> {
-  const data = await apiJSON<RecordListDTO>('/api/v1/records?limit=1000', token, { method: 'GET' })
+export async function listRecords(token: string, domainID: string): Promise<AppRecord[]> {
+  const data = await apiJSON<RecordListDTO>('/api/v1/records?limit=1000', token, domainInit(domainID, { method: 'GET' }))
   return data.records.map(mapRecord)
 }
 
-export async function listRecordsBySource(token: string, sourceID: string): Promise<AppRecord[]> {
-  const data = await apiJSON<RecordListDTO>(`/api/v1/sources/${sourceID}/records?limit=1000`, token, { method: 'GET' })
+export async function listRecordsBySource(token: string, domainID: string, sourceID: string): Promise<AppRecord[]> {
+  const data = await apiJSON<RecordListDTO>(`/api/v1/sources/${sourceID}/records?limit=1000`, token, domainInit(domainID, { method: 'GET' }))
   return data.records.map(mapRecord)
 }
 
-export async function listSources(token: string): Promise<DriveSource[]> {
-  const data = await apiJSON<SourceListDTO>('/api/v1/sources', token, { method: 'GET' })
+export async function listSources(token: string, domainID: string): Promise<DriveSource[]> {
+  const data = await apiJSON<SourceListDTO>('/api/v1/sources', token, domainInit(domainID, { method: 'GET' }))
   return data.sources.map(mapSource)
 }
 
-export async function createSource(token: string, source: DriveSourceDraft): Promise<DriveSource> {
+export async function createSource(token: string, domainID: string, source: DriveSourceDraft): Promise<DriveSource> {
   const config = source.sourceType === 'google_drive'
     ? {
       folder_id: source.folderLink ?? '',
@@ -386,7 +402,7 @@ export async function createSource(token: string, source: DriveSourceDraft): Pro
       config_ref: source.rcloneConfigRef ?? '',
     }
 
-  const created = await apiJSON<SourceDTO>('/api/v1/sources', token, {
+  const created = await apiJSON<SourceDTO>('/api/v1/sources', token, domainInit(domainID, {
     method: 'POST',
     body: JSON.stringify({
       source_type: source.sourceType,
@@ -395,7 +411,7 @@ export async function createSource(token: string, source: DriveSourceDraft): Pro
       auto_sync_interval: source.autoSyncInterval,
       config,
     }),
-  })
+  }))
 
   return mapSource(created)
 }
@@ -557,10 +573,10 @@ export interface SourceSyncResult {
   deleted: number
 }
 
-export async function syncSource(token: string, sourceID: string): Promise<SourceSyncResult> {
-  const data = await apiJSON<SourceSyncDTO>(`/api/v1/sources/${sourceID}/sync`, token, {
+export async function syncSource(token: string, domainID: string, sourceID: string): Promise<SourceSyncResult> {
+  const data = await apiJSON<SourceSyncDTO>(`/api/v1/sources/${sourceID}/sync`, token, domainInit(domainID, {
     method: 'POST',
-  })
+  }))
   return {
     source: mapSource(data.source),
     discovered: data.discovered,
@@ -573,44 +589,45 @@ export async function syncSource(token: string, sourceID: string): Promise<Sourc
 
 export async function updateGoogleSourceSelection(
   token: string,
+  domainID: string,
   sourceID: string,
   selectedFileIDs: string[],
   selectedFolderIDs: string[] = [],
 ): Promise<DriveSource> {
-  const updated = await apiJSON<SourceDTO>(`/api/v1/sources/${sourceID}/selection`, token, {
+  const updated = await apiJSON<SourceDTO>(`/api/v1/sources/${sourceID}/selection`, token, domainInit(domainID, {
     method: 'PUT',
     body: JSON.stringify({
       selected_file_ids: selectedFileIDs,
       selected_folder_ids: selectedFolderIDs,
     }),
-  })
+  }))
   return mapSource(updated)
 }
 
-export async function deleteSource(token: string, sourceID: string): Promise<void> {
+export async function deleteSource(token: string, domainID: string, sourceID: string): Promise<void> {
   const res = await fetch(buildURL(`/api/v1/sources/${sourceID}`), {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
     throw new Error(await readError(res))
   }
 }
 
-export async function deleteRecord(token: string, recordID: string): Promise<void> {
+export async function deleteRecord(token: string, domainID: string, recordID: string): Promise<void> {
   const res = await fetch(buildURL(`/api/v1/records/${recordID}`), {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
     throw new Error(await readError(res))
   }
 }
 
-export async function retryRecordIngest(token: string, recordID: string): Promise<void> {
+export async function retryRecordIngest(token: string, domainID: string, recordID: string): Promise<void> {
   const res = await fetch(buildURL(`/api/v1/records/${recordID}/retry`), {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
     throw new Error(await readError(res))
@@ -619,6 +636,7 @@ export async function retryRecordIngest(token: string, recordID: string): Promis
 
 export async function uploadRecordFile(
   token: string,
+  domainID: string,
   file: File,
   name?: string,
   sourceID?: string,
@@ -630,9 +648,7 @@ export async function uploadRecordFile(
 
   const res = await fetch(buildURL('/api/v1/records/upload'), {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: authHeaders(token, domainID),
     body: formData,
   })
   if (!res.ok) {
@@ -652,16 +668,17 @@ function mapConversation(dto: ConversationDTO): Conversation {
   }
 }
 
-export async function listConversations(token: string): Promise<Conversation[]> {
-  const data = await apiJSON<ConversationListDTO>('/api/v1/conversations', token, { method: 'GET' })
+export async function listConversations(token: string, domainID: string): Promise<Conversation[]> {
+  const data = await apiJSON<ConversationListDTO>('/api/v1/conversations', token, domainInit(domainID, { method: 'GET' }))
   return (data.conversations ?? []).map(mapConversation)
 }
 
 export async function getConversation(
   token: string,
+  domainID: string,
   id: string,
 ): Promise<{ conversation: Conversation; messages: ChatMessage[] }> {
-  const data = await apiJSON<ConversationDetailDTO>(`/api/v1/conversations/${id}`, token, { method: 'GET' })
+  const data = await apiJSON<ConversationDetailDTO>(`/api/v1/conversations/${id}`, token, domainInit(domainID, { method: 'GET' }))
   const messages: ChatMessage[] = (data.messages ?? []).map((m, i) => ({
     id: i,
     role: m.role as 'user' | 'assistant',
@@ -670,10 +687,10 @@ export async function getConversation(
   return { conversation: mapConversation(data.conversation), messages }
 }
 
-export async function deleteConversation(token: string, id: string): Promise<void> {
+export async function deleteConversation(token: string, domainID: string, id: string): Promise<void> {
   const res = await fetch(buildURL(`/api/v1/conversations/${id}`), {
     method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
     throw new Error(await readError(res))

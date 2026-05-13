@@ -22,24 +22,28 @@ func NewConversationsRepository(pool *pgxpool.Pool) domain.ConversationRepositor
 	return &conversationsRepo{pool: pool}
 }
 
-func (r *conversationsRepo) Create(ctx context.Context, userID, title string) (domain.Conversation, error) {
+func (r *conversationsRepo) Create(ctx context.Context, domainID, userID, title string) (domain.Conversation, error) {
 	var c domain.Conversation
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO conversations (user_id, title) VALUES ($1, $2)
+		`INSERT INTO conversations (domain_id, user_id, title) VALUES ($1, $2, $3)
 		 RETURNING id, user_id, title, created_at, updated_at`,
-		userID, title,
+		domainID, userID, title,
 	).Scan(&c.ID, &c.UserID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+	c.DomainID = domainID
 	if err != nil {
 		return domain.Conversation{}, fmt.Errorf("create conversation: %w", err)
 	}
 	return c, nil
 }
 
-func (r *conversationsRepo) List(ctx context.Context, userID string) ([]domain.Conversation, error) {
+func (r *conversationsRepo) List(ctx context.Context, domainID string) ([]domain.Conversation, error) {
+	if domainID == "" {
+		return nil, nil
+	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, user_id, title, created_at, updated_at
-		 FROM conversations WHERE user_id = $1 ORDER BY updated_at DESC`,
-		userID,
+		`SELECT id, domain_id, user_id, title, created_at, updated_at
+		 FROM conversations WHERE domain_id = $1 ORDER BY updated_at DESC`,
+		domainID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list conversations: %w", err)
@@ -49,7 +53,7 @@ func (r *conversationsRepo) List(ctx context.Context, userID string) ([]domain.C
 	var convs []domain.Conversation
 	for rows.Next() {
 		var c domain.Conversation
-		if err := rows.Scan(&c.ID, &c.UserID, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.DomainID, &c.UserID, &c.Title, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan conversation: %w", err)
 		}
 		convs = append(convs, c)
@@ -57,13 +61,13 @@ func (r *conversationsRepo) List(ctx context.Context, userID string) ([]domain.C
 	return convs, rows.Err()
 }
 
-func (r *conversationsRepo) Get(ctx context.Context, id, userID string) (domain.Conversation, error) {
+func (r *conversationsRepo) Get(ctx context.Context, id, domainID string) (domain.Conversation, error) {
 	var c domain.Conversation
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, user_id, title, created_at, updated_at
-		 FROM conversations WHERE id = $1 AND user_id = $2`,
-		id, userID,
-	).Scan(&c.ID, &c.UserID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
+		`SELECT id, domain_id, user_id, title, created_at, updated_at
+		 FROM conversations WHERE id = $1 AND domain_id = $2`,
+		id, domainID,
+	).Scan(&c.ID, &c.DomainID, &c.UserID, &c.Title, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Conversation{}, domain.ErrNotFound
@@ -73,9 +77,9 @@ func (r *conversationsRepo) Get(ctx context.Context, id, userID string) (domain.
 	return c, nil
 }
 
-func (r *conversationsRepo) Delete(ctx context.Context, id, userID string) error {
+func (r *conversationsRepo) Delete(ctx context.Context, id, domainID string) error {
 	tag, err := r.pool.Exec(ctx,
-		`DELETE FROM conversations WHERE id = $1 AND user_id = $2`, id, userID,
+		`DELETE FROM conversations WHERE id = $1 AND domain_id = $2`, id, domainID,
 	)
 	if err != nil {
 		return fmt.Errorf("delete conversation: %w", err)
@@ -113,15 +117,15 @@ func (r *conversationsRepo) AppendMessages(ctx context.Context, conversationID s
 	return tx.Commit(ctx)
 }
 
-func (r *conversationsRepo) ListMessages(ctx context.Context, conversationID, userID string) ([]domain.ConversationMessage, error) {
-	// Verify ownership via join.
+func (r *conversationsRepo) ListMessages(ctx context.Context, conversationID, domainID string) ([]domain.ConversationMessage, error) {
+	// Verify domain ownership via join.
 	rows, err := r.pool.Query(ctx,
 		`SELECT m.id, m.conversation_id, m.role, m.content, m.created_at
 		 FROM conversation_messages m
 		 JOIN conversations c ON c.id = m.conversation_id
-		 WHERE m.conversation_id = $1 AND c.user_id = $2
+		 WHERE m.conversation_id = $1 AND c.domain_id = $2
 		 ORDER BY m.created_at`,
-		conversationID, userID,
+		conversationID, domainID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list messages: %w", err)

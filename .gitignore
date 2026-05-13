@@ -21,3 +21,9 @@ docker/data/
 # Filesystem
 *.ext4
 *.backup
+
+# Compiled binaries
+embedder
+
+# Vite cache
+ui/.vite/

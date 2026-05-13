@@ -22,11 +22,11 @@ func NewRetrievalService(repo domain.RetrievalRepository) domain.RetrievalServic
 
 func (s *retrievalService) Retrieve(
 	ctx context.Context,
-	userID string,
+	domainID string,
 	q domain.RetrievalQuery,
 ) (domain.RetrievalResult, error) {
-	if strings.TrimSpace(userID) == "" {
-		return domain.RetrievalResult{}, fmt.Errorf("user_id is required")
+	if strings.TrimSpace(domainID) == "" {
+		return domain.RetrievalResult{}, fmt.Errorf("domain_id is required")
 	}
 	if strings.TrimSpace(q.Query) == "" {
 		return domain.RetrievalResult{}, fmt.Errorf("query is required")
@@ -38,7 +38,7 @@ func (s *retrievalService) Retrieve(
 		q.TopK = 20
 	}
 
-	matches, err := s.repo.KeywordSearchChunks(ctx, userID, q)
+	matches, err := s.repo.KeywordSearchChunks(ctx, domainID, q)
 	if err != nil {
 		return domain.RetrievalResult{}, err
 	}

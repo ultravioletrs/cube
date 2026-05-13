@@ -30,7 +30,7 @@ type Chunk struct {
 
 // StoreChunks deletes existing chunks for recordID then inserts the new batch.
 // The embedding column is written as a pgvector literal: '[f1,f2,...]'.
-func (r *ChunksRepository) StoreChunks(ctx context.Context, userID, recordID string, chunks []Chunk) error {
+func (r *ChunksRepository) StoreChunks(ctx context.Context, domainID, userID, recordID string, chunks []Chunk) error {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -46,9 +46,9 @@ func (r *ChunksRepository) StoreChunks(ctx context.Context, userID, recordID str
 	for i, c := range chunks {
 		vec := float32SliceToPGVector(c.Embedding)
 		_, err := tx.Exec(ctx,
-			`INSERT INTO chunks (user_id, record_id, content, embedding, chunk_index)
-			 VALUES ($1, $2, $3, $4::vector, $5)`,
-			userID, recordID, c.Content, vec, i,
+			`INSERT INTO chunks (domain_id, user_id, record_id, content, embedding, chunk_index)
+			 VALUES ($1, $2, $3, $4, $5::vector, $6)`,
+			domainID, userID, recordID, c.Content, vec, i,
 		)
 		if err != nil {
 			return fmt.Errorf("insert chunk %d: %w", i, err)
@@ -69,20 +69,20 @@ type ChunkSearchResult struct {
 }
 
 // SearchChunks performs a cosine-distance vector similarity search over the
-// authenticated user's chunks.  If recordIDs is non-empty the search is
+// domain's chunks.  If recordIDs is non-empty the search is
 // scoped to those records only.  Results are ordered by ascending distance
 // (most similar first).
-func (r *ChunksRepository) SearchChunks(ctx context.Context, userID string, queryVec []float32, limit int, recordIDs []string) ([]ChunkSearchResult, error) {
+func (r *ChunksRepository) SearchChunks(ctx context.Context, domainID string, queryVec []float32, limit int, recordIDs []string) ([]ChunkSearchResult, error) {
 	vec := float32SliceToPGVector(queryVec)
 
 	var sb strings.Builder
-	args := []any{userID, vec, limit} // $1 $2 $3
+	args := []any{domainID, vec, limit} // $1 $2 $3
 
 	sb.WriteString(`
 		SELECT c.content, c.record_id, rec.name, COALESCE(rec.external_url, ''), c.chunk_index
 		FROM chunks c
 		JOIN records rec ON rec.id = c.record_id
-		WHERE c.user_id = $1
+		WHERE c.domain_id = $1
 		  AND c.embedding IS NOT NULL`)
 
 	if len(recordIDs) > 0 {

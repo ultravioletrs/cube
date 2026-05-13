@@ -48,5 +48,5 @@ type ChatService interface {
 	// Chat embeds the query, retrieves relevant chunks, calls the LLM, and
 	// streams events to the returned channel.  The channel is closed when the
 	// stream ends (either successfully or after an error event).
-	Chat(ctx context.Context, userID string, messages []ChatMessage, recordIDs []string) (<-chan ChatEvent, error)
+	Chat(ctx context.Context, domainID string, messages []ChatMessage, recordIDs []string) (<-chan ChatEvent, error)
 }

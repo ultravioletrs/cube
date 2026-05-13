@@ -25,6 +25,9 @@ func NewSourcesService(repo domain.SourceRepository) domain.SourceService {
 }
 
 func (s *sourcesService) Create(ctx context.Context, src domain.Source) (domain.Source, error) {
+	if src.DomainID == "" {
+		return domain.Source{}, fmt.Errorf("domain_id is required")
+	}
 	if src.UserID == "" {
 		return domain.Source{}, fmt.Errorf("user_id is required")
 	}
@@ -76,24 +79,24 @@ func (s *sourcesService) Create(ctx context.Context, src domain.Source) (domain.
 	return s.repo.Create(ctx, src)
 }
 
-func (s *sourcesService) GetByID(ctx context.Context, id, userID string) (domain.Source, error) {
-	return s.repo.GetByID(ctx, id, userID)
+func (s *sourcesService) GetByID(ctx context.Context, id, domainID string) (domain.Source, error) {
+	return s.repo.GetByID(ctx, id, domainID)
 }
 
-func (s *sourcesService) List(ctx context.Context, userID string, p domain.Page) (domain.SourcePage, error) {
-	return s.repo.List(ctx, userID, p)
+func (s *sourcesService) List(ctx context.Context, domainID string, p domain.Page) (domain.SourcePage, error) {
+	return s.repo.List(ctx, domainID, p)
 }
 
-func (s *sourcesService) Delete(ctx context.Context, id, userID string) error {
-	return s.repo.Delete(ctx, id, userID)
+func (s *sourcesService) Delete(ctx context.Context, id, domainID string) error {
+	return s.repo.Delete(ctx, id, domainID)
 }
 
 func (s *sourcesService) UpdateGoogleDriveCredentials(
 	ctx context.Context,
-	id, userID string,
+	id, domainID string,
 	update domain.GoogleDriveCredentialUpdate,
 ) (domain.Source, error) {
-	src, err := s.repo.GetByID(ctx, id, userID)
+	src, err := s.repo.GetByID(ctx, id, domainID)
 	if err != nil {
 		return domain.Source{}, err
 	}
@@ -133,15 +136,15 @@ func (s *sourcesService) UpdateGoogleDriveCredentials(
 	if err != nil {
 		return domain.Source{}, fmt.Errorf("encode source config: %w", err)
 	}
-	return s.repo.UpdateConfig(ctx, id, userID, raw)
+	return s.repo.UpdateConfig(ctx, id, domainID, raw)
 }
 
 func (s *sourcesService) UpdateGoogleDriveSelection(
 	ctx context.Context,
-	id, userID string,
+	id, domainID string,
 	update domain.GoogleDriveSelectionUpdate,
 ) (domain.Source, error) {
-	src, err := s.repo.GetByID(ctx, id, userID)
+	src, err := s.repo.GetByID(ctx, id, domainID)
 	if err != nil {
 		return domain.Source{}, err
 	}
@@ -163,7 +166,7 @@ func (s *sourcesService) UpdateGoogleDriveSelection(
 	if err != nil {
 		return domain.Source{}, fmt.Errorf("encode source config: %w", err)
 	}
-	return s.repo.UpdateConfig(ctx, id, userID, raw)
+	return s.repo.UpdateConfig(ctx, id, domainID, raw)
 }
 
 func sanitizeGoogleDriveConfig(raw json.RawMessage) (json.RawMessage, error) {

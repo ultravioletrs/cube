@@ -16,5 +16,5 @@ type VectorChunk struct {
 
 // VectorRetrieveService retrieves relevant chunks via embedding similarity.
 type VectorRetrieveService interface {
-	Retrieve(ctx context.Context, userID, query string, recordIDs []string, topK int) ([]VectorChunk, error)
+	Retrieve(ctx context.Context, domainID, query string, recordIDs []string, topK int) ([]VectorChunk, error)
 }

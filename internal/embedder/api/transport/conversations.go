@@ -64,8 +64,8 @@ func listConversations(repo domain.ConversationRepository) http.HandlerFunc {
 		Conversations []conversationResponse `json:"conversations"`
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := auth.UserID(r.Context())
-		convs, err := repo.List(r.Context(), userID)
+		domainID := auth.DomainID(r.Context())
+		convs, err := repo.List(r.Context(), domainID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
 			return
@@ -89,7 +89,8 @@ func createConversation(repo domain.ConversationRepository) http.HandlerFunc {
 			return
 		}
 		userID := auth.UserID(r.Context())
-		conv, err := repo.Create(r.Context(), userID, req.Title)
+		domainID := auth.DomainID(r.Context())
+		conv, err := repo.Create(r.Context(), domainID, userID, req.Title)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
 			return
@@ -105,9 +106,9 @@ func getConversation(repo domain.ConversationRepository) http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		conv, err := repo.Get(r.Context(), id, userID)
+		conv, err := repo.Get(r.Context(), id, domainID)
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("conversation not found"))
@@ -117,7 +118,7 @@ func getConversation(repo domain.ConversationRepository) http.HandlerFunc {
 			return
 		}
 
-		msgs, err := repo.ListMessages(r.Context(), id, userID)
+		msgs, err := repo.ListMessages(r.Context(), id, domainID)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
 			return
@@ -137,9 +138,9 @@ func getConversation(repo domain.ConversationRepository) http.HandlerFunc {
 func deleteConversation(repo domain.ConversationRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		if err := repo.Delete(r.Context(), id, userID); err != nil {
+		if err := repo.Delete(r.Context(), id, domainID); err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("conversation not found"))
 				return
@@ -161,10 +162,10 @@ func appendMessages(repo domain.ConversationRepository) http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		// Verify ownership before appending.
-		if _, err := repo.Get(r.Context(), id, userID); err != nil {
+		// Verify domain ownership before appending.
+		if _, err := repo.Get(r.Context(), id, domainID); err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("conversation not found"))
 				return

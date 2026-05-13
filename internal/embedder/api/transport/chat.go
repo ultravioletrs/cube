@@ -6,6 +6,7 @@ package transport
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -27,6 +28,7 @@ type chatRequest struct {
 func chatHandler(svc domain.ChatService, conversations domain.ConversationRepository) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
 		var req chatRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -43,9 +45,11 @@ func chatHandler(svc domain.ChatService, conversations domain.ConversationReposi
 		isNew := convID == ""
 		if isNew && conversations != nil {
 			title := conversationTitle(req.Messages)
-			conv, err := conversations.Create(r.Context(), userID, title)
+			conv, err := conversations.Create(r.Context(), domainID, userID, title)
 			if err == nil {
 				convID = conv.ID
+			} else {
+				slog.Warn("create conversation failed", "err", err, "domain_id", domainID, "user_id", userID)
 			}
 		}
 
@@ -54,7 +58,7 @@ func chatHandler(svc domain.ChatService, conversations domain.ConversationReposi
 			_ = conversations.AppendMessages(r.Context(), convID, toDomainMessages(req.Messages))
 		}
 
-		events, err := svc.Chat(r.Context(), userID, req.Messages, req.RecordIDs)
+		events, err := svc.Chat(r.Context(), domainID, req.Messages, req.RecordIDs)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("chat failed: "+err.Error()))
 			return

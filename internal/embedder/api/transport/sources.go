@@ -1145,6 +1145,7 @@ func createSource(svc domain.SourceService, oauth *googleOAuth) http.HandlerFunc
 		}
 
 		src := domain.Source{
+			DomainID:         auth.DomainID(r.Context()),
 			UserID:           auth.UserID(r.Context()),
 			Type:             domain.SourceType(req.SourceType),
 			Name:             req.Name,
@@ -1171,9 +1172,9 @@ func createSource(svc domain.SourceService, oauth *googleOAuth) http.HandlerFunc
 func getSource(svc domain.SourceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		src, err := svc.GetByID(r.Context(), id, userID)
+		src, err := svc.GetByID(r.Context(), id, domainID)
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("source not found"))
@@ -1195,9 +1196,9 @@ func listSources(svc domain.SourceService) http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		p := parsePage(r)
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		page, err := svc.List(r.Context(), userID, p)
+		page, err := svc.List(r.Context(), domainID, p)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
 			return
@@ -1217,9 +1218,9 @@ func listSources(svc domain.SourceService) http.HandlerFunc {
 func deleteSource(svc domain.SourceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		if err := svc.Delete(r.Context(), id, userID); err != nil {
+		if err := svc.Delete(r.Context(), id, domainID); err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("source not found"))
 				return
@@ -1243,9 +1244,9 @@ func syncSource(syncSvc domain.SourceSyncService, trigger func()) http.HandlerFu
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		res, err := syncSvc.Sync(r.Context(), id, userID)
+		res, err := syncSvc.Sync(r.Context(), id, domainID)
 		if err != nil {
 			switch {
 			case errors.Is(err, domain.ErrNotFound):
@@ -1281,7 +1282,7 @@ func updateSourceCredentials(svc domain.SourceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
 		var req request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1289,7 +1290,7 @@ func updateSourceCredentials(svc domain.SourceService) http.HandlerFunc {
 			return
 		}
 
-		updated, err := svc.UpdateGoogleDriveCredentials(r.Context(), id, userID, domain.GoogleDriveCredentialUpdate{
+		updated, err := svc.UpdateGoogleDriveCredentials(r.Context(), id, domainID, domain.GoogleDriveCredentialUpdate{
 			AccessToken:  req.AccessToken,
 			RefreshToken: req.RefreshToken,
 			ClientID:     req.ClientID,
@@ -1317,7 +1318,7 @@ func updateSourceSelection(svc domain.SourceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
 		var req request
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1325,7 +1326,7 @@ func updateSourceSelection(svc domain.SourceService) http.HandlerFunc {
 			return
 		}
 
-		updated, err := svc.UpdateGoogleDriveSelection(r.Context(), id, userID, domain.GoogleDriveSelectionUpdate{
+		updated, err := svc.UpdateGoogleDriveSelection(r.Context(), id, domainID, domain.GoogleDriveSelectionUpdate{
 			SelectedFileIDs:   req.SelectedFileIDs,
 			SelectedFolderIDs: req.SelectedFolderIDs,
 		})

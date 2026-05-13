@@ -34,8 +34,8 @@ func NewSourceSyncService(
 	}
 }
 
-func (s *sourceSyncService) Sync(ctx context.Context, id, userID string) (res domain.SourceSyncResult, err error) {
-	src, err := s.sources.GetByID(ctx, id, userID)
+func (s *sourceSyncService) Sync(ctx context.Context, id, domainID string) (res domain.SourceSyncResult, err error) {
+	src, err := s.sources.GetByID(ctx, id, domainID)
 	if err != nil {
 		return domain.SourceSyncResult{}, err
 	}
@@ -64,10 +64,10 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, userID string) (res do
 	}()
 
 	now := time.Now().UTC()
-	files, err := provider.ListFiles(ctx, userID, src)
+	files, err := provider.ListFiles(ctx, src.UserID, src)
 	if err != nil {
 		msg := err.Error()
-		updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, userID, domain.SourceStatusError, now, &msg)
+		updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, src.DomainID, domain.SourceStatusError, now, &msg)
 		if markErr == nil {
 			src = updatedSource
 		}
@@ -88,7 +88,8 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, userID string) (res do
 		liveExternalIDs[externalID] = struct{}{}
 
 		upsert, err := s.records.UpsertFromSource(ctx, domain.Record{
-			UserID:           userID,
+			DomainID:         src.DomainID,
+			UserID:           src.UserID,
 			SourceID:         src.ID,
 			Name:             file.Name,
 			Format:           DetectRecordFormat(file.Name, file.MimeType),
@@ -102,7 +103,7 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, userID string) (res do
 		})
 		if err != nil {
 			msg := err.Error()
-			updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, userID, domain.SourceStatusError, now, &msg)
+			updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, src.DomainID, domain.SourceStatusError, now, &msg)
 			if markErr == nil {
 				src = updatedSource
 			}
@@ -121,19 +122,19 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, userID string) (res do
 	}
 
 	if provider.PrunesStaleRecords() {
-		toDelete, err := s.resolveStaleSourceExternalIDs(ctx, userID, src.ID, liveExternalIDs)
+		toDelete, err := s.resolveStaleSourceExternalIDs(ctx, src.DomainID, src.ID, liveExternalIDs)
 		if err != nil {
 			msg := err.Error()
-			updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, userID, domain.SourceStatusError, now, &msg)
+			updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, src.DomainID, domain.SourceStatusError, now, &msg)
 			if markErr == nil {
 				src = updatedSource
 			}
 			return domain.SourceSyncResult{}, err
 		}
-		deleted, err := s.records.DeleteBySourceExternalIDs(ctx, userID, src.ID, toDelete)
+		deleted, err := s.records.DeleteBySourceExternalIDs(ctx, src.DomainID, src.ID, toDelete)
 		if err != nil {
 			msg := err.Error()
-			updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, userID, domain.SourceStatusError, now, &msg)
+			updatedSource, markErr := s.sources.UpdateSyncResult(ctx, src.ID, src.DomainID, domain.SourceStatusError, now, &msg)
 			if markErr == nil {
 				src = updatedSource
 			}
@@ -142,7 +143,7 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, userID string) (res do
 		result.Deleted = uint64(deleted)
 	}
 
-	updatedSource, updateErr := s.sources.UpdateSyncResult(ctx, src.ID, userID, domain.SourceStatusActive, now, nil)
+	updatedSource, updateErr := s.sources.UpdateSyncResult(ctx, src.ID, src.DomainID, domain.SourceStatusActive, now, nil)
 	if updateErr == nil {
 		result.Source = updatedSource
 	}
@@ -150,39 +151,9 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, userID string) (res do
 	return result, nil
 }
 
-func recordFormatFromDriveFile(file ingest.DriveFile) domain.RecordFormat {
-	return DetectRecordFormat(file.Name, file.MimeType)
-}
-
-func filterDriveFilesBySelection(files []ingest.DriveFile, selectedIDs []string) []ingest.DriveFile {
-	if len(selectedIDs) == 0 {
-		return files
-	}
-
-	selected := make(map[string]struct{}, len(selectedIDs))
-	for _, id := range selectedIDs {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		selected[id] = struct{}{}
-	}
-	if len(selected) == 0 {
-		return files
-	}
-
-	filtered := make([]ingest.DriveFile, 0, len(files))
-	for _, file := range files {
-		if _, ok := selected[file.ID]; ok {
-			filtered = append(filtered, file)
-		}
-	}
-	return filtered
-}
-
 func (s *sourceSyncService) resolveStaleSourceExternalIDs(
 	ctx context.Context,
-	userID, sourceID string,
+	domainID, sourceID string,
 	live map[string]struct{},
 ) ([]string, error) {
 	filter := domain.RecordFilter{SourceID: &sourceID}
@@ -191,7 +162,7 @@ func (s *sourceSyncService) resolveStaleSourceExternalIDs(
 
 	stale := make([]string, 0)
 	for {
-		page, err := s.records.List(ctx, userID, filter, domain.Page{
+		page, err := s.records.List(ctx, domainID, filter, domain.Page{
 			Offset: offset,
 			Limit:  pageLimit,
 		})
