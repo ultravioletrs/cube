@@ -196,14 +196,13 @@ services:
 
   cube-embedder:
     container_name: cube-embedder
-    image: ghcr.io/ultravioletrs/cube/embedder:latest
+    image: cube-embedder-local:latest
     restart: on-failure
     networks:
       - cube-network
     depends_on:
       - auth
       - cube-embedder-db
-      - ollama
       - magistrala-seaweedfs-s3
     environment:
       EMBEDDER_HTTP_ADDR: ${EMBEDDER_HTTP_ADDR}
@@ -249,6 +248,13 @@ services:
       EMBEDDER_S3_ENSURE_BUCKET: ${EMBEDDER_S3_ENSURE_BUCKET}
       EMBEDDER_UPLOAD_DIR: ${EMBEDDER_UPLOAD_DIR}
       EMBEDDER_LOG_LEVEL: ${EMBEDDER_LOG_LEVEL}
+      EMBEDDER_LLM_PROVIDER: ${EMBEDDER_LLM_PROVIDER}
+      EMBEDDER_LLM_BASE_URL: ${EMBEDDER_LLM_BASE_URL}
+      EMBEDDER_LLM_MODEL: ${EMBEDDER_LLM_MODEL}
+      EMBEDDER_LLM_API_KEY: ${EMBEDDER_LLM_API_KEY}
+      EMBEDDER_CHAT_TOP_K: ${EMBEDDER_CHAT_TOP_K}
+      EMBEDDER_RERANKER_MODEL: ${EMBEDDER_RERANKER_MODEL}
+      EMBEDDER_RERANKER_BASE_URL: ${EMBEDDER_RERANKER_BASE_URL}
     volumes:
       - cube-embedder-upload-volume:/tmp/embedder/uploads
       - ./rclone:/etc/cube/rclone

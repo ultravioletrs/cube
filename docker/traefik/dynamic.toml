@@ -132,7 +132,7 @@
   priority = 10
 
 [http.routers.domains]
-  rule = "PathPrefix(`/domains`)"
+  rule = "PathPrefix(`/domains`) || PathPrefix(`/invitations`)"
   entryPoints = ["websecure"]
   service = "domains"
   middlewares = ["retry-middleware", "headers-middleware"]
@@ -144,6 +144,22 @@
   service = "seaweedfs"
   middlewares = ["retry-middleware"]
   priority = 10
+
+[http.services.journal.loadBalancer]
+  [[http.services.journal.loadBalancer.servers]]
+    url = "http://supermq-journal:9011"
+  [http.services.journal.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
+
+[http.routers.journal]
+  rule = "PathPrefix(`/journal`) || PathRegexp(`^/[a-f0-9-]+/journal`)"
+  entryPoints = ["websecure"]
+  service = "journal"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 9
 
 [http.routers.ui]
   rule = "PathPrefix(`/`) || PathPrefix(`/api`)"

@@ -1,0 +1,15 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+
+EXPOSE 5173
+
+# --host 0.0.0.0 makes Vite bind to all interfaces inside the container
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

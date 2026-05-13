@@ -40,7 +40,11 @@ func (s *vectorRetrieveService) Retrieve(ctx context.Context, userID, query stri
 		return nil, fmt.Errorf("embed query: %w", err)
 	}
 
-	results, err := s.chunks.SearchChunks(ctx, userID, vecs[0], topK, recordIDs)
+	results, err := s.chunks.HybridSearchChunks(ctx, userID, vecs[0], domain.RetrievalQuery{
+		Query:     query,
+		RecordIDs: recordIDs,
+		TopK:      topK,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("search chunks: %w", err)
 	}
