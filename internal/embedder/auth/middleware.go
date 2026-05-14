@@ -96,7 +96,7 @@ func Middleware(auth *Authenticator) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), userIDKey, userID)
-			if domainID := r.Header.Get("X-Domain-ID"); domainID != "" {
+			if domainID := r.Header.Get("X-Domain-Id"); domainID != "" {
 				ctx = context.WithValue(ctx, domainIDKey, domainID)
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))

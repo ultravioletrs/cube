@@ -28,7 +28,7 @@ export interface ChatEvent {
 // listRecords fetches the domain's records from the embedder API.
 export async function listRecords(token: string, domainID: string): Promise<AppRecord[]> {
   const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
-  if (domainID) headers['X-Domain-ID'] = domainID
+  if (domainID) headers['X-Domain-Id'] = domainID
   const res = await fetch('/api/v1/records', { headers })
   if (!res.ok) throw new Error(`listRecords: ${res.status}`)
   const data = await res.json()
@@ -50,7 +50,7 @@ export function streamChat(
     'Content-Type': 'application/json',
     Authorization: `Bearer ${token}`,
   }
-  if (domainID) headers['X-Domain-ID'] = domainID
+  if (domainID) headers['X-Domain-Id'] = domainID
   return fetch('/api/v1/chat', {
     method: 'POST',
     headers,
