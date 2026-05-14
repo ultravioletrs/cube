@@ -1,23 +1,18 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 
-import { CUBE_PROXY_URL } from './features'
-
-function proxyURL(path: string): string {
-  return `${CUBE_PROXY_URL}${path}`
-}
-
 // AttestationPolicy is the raw JSON stored as JSONB on the proxy.
 // The schema is intentionally open — it is defined by the attestation provider.
 export type AttestationPolicy = Record<string, unknown>
 
 // getAttestationPolicy fetches the latest attestation policy for a domain.
-// Endpoint: GET /{domainID}/attestation/policy
+// Traefik routes /proxy/* → cube-proxy (strips the /proxy prefix).
+// Endpoint: GET /proxy/{domainID}/attestation/policy
 export async function getAttestationPolicy(
   token: string,
   domainID: string,
 ): Promise<AttestationPolicy | null> {
-  const res = await fetch(proxyURL(`/${domainID}/attestation/policy`), {
+  const res = await fetch(`/proxy/${domainID}/attestation/policy`, {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (res.status === 404) return null
@@ -28,12 +23,12 @@ export async function getAttestationPolicy(
 }
 
 // updateAttestationPolicy stores a new attestation policy.
-// Endpoint: POST /attestation/policy
+// Endpoint: POST /proxy/attestation/policy
 export async function updateAttestationPolicy(
   token: string,
   policy: AttestationPolicy,
 ): Promise<void> {
-  const res = await fetch(proxyURL('/attestation/policy'), {
+  const res = await fetch('/proxy/attestation/policy', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
