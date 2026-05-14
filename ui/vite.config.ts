@@ -49,6 +49,15 @@ export default defineConfig({
         target: process.env['EMBEDDER_PROXY_TARGET'] ?? 'http://localhost:8082',
         changeOrigin: true,
       },
+      // Cube Proxy: domain-scoped attestation and agent routes.
+      // Only active in dev when CUBE_PROXY_TARGET is set.
+      ...(process.env['CUBE_PROXY_TARGET'] ? {
+        '/attestation': {
+          target: process.env['CUBE_PROXY_TARGET'],
+          changeOrigin: true,
+          secure: false,
+        },
+      } : {}),
     },
   },
 })
