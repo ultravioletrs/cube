@@ -35,6 +35,7 @@ func (r *repository) GetAttestationPolicy(ctx context.Context) ([]byte, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
+
 		return nil, err
 	}
 
