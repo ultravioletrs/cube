@@ -24,9 +24,9 @@ func NewRecordsRepository(pool *pgxpool.Pool) domain.RecordRepository {
 	return &recordsRepo{pool: pool}
 }
 
-func (r *recordsRepo) GetByID(ctx context.Context, id, userID string) (domain.Record, error) {
+func (r *recordsRepo) GetByID(ctx context.Context, id, domainID string) (domain.Record, error) {
 	const q = `
-		SELECT r.id, r.user_id, r.source_id, r.name, r.format, r.status,
+		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.source_version, r.source_modified_at, r.error,
@@ -34,9 +34,9 @@ func (r *recordsRepo) GetByID(ctx context.Context, id, userID string) (domain.Re
 		       s.id, s.name, s.source_type, s.status
 		FROM records r
 		LEFT JOIN sources s ON s.id = r.source_id
-		WHERE r.id = $1 AND r.user_id = $2`
+		WHERE r.id = $1 AND r.domain_id = $2`
 
-	row := r.pool.QueryRow(ctx, q, id, userID)
+	row := r.pool.QueryRow(ctx, q, id, domainID)
 	rec, err := scanRecord(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -49,12 +49,15 @@ func (r *recordsRepo) GetByID(ctx context.Context, id, userID string) (domain.Re
 
 func (r *recordsRepo) List(
 	ctx context.Context,
-	userID string,
+	domainID string,
 	f domain.RecordFilter,
 	p domain.Page,
 ) (domain.RecordPage, error) {
-	args := []any{userID}
-	conds := []string{"r.user_id = $1"}
+	if domainID == "" {
+		return domain.RecordPage{}, nil
+	}
+	args := []any{domainID}
+	conds := []string{"r.domain_id = $1"}
 
 	if f.SourceID != nil {
 		args = append(args, *f.SourceID)
@@ -77,7 +80,7 @@ func (r *recordsRepo) List(
 	}
 
 	q := fmt.Sprintf(`
-		SELECT r.id, r.user_id, r.source_id, r.name, r.format, r.status,
+		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.source_version, r.source_modified_at, r.error,
@@ -147,7 +150,7 @@ func scanRecord(row interface {
 		linkStatus       pgtype.Text
 	)
 	if err := row.Scan(
-		&rec.ID, &rec.UserID, &sourceID, &rec.Name, &format, &status,
+		&rec.ID, &rec.DomainID, &rec.UserID, &sourceID, &rec.Name, &format, &status,
 		&externalID, &externalURL, &externalRef, &mimeType,
 		&description, &chunkCount, &sizeBytes, &pageCount,
 		&sourceVersion, &sourceModifiedAt, &recError,
@@ -215,11 +218,11 @@ func scanRecord(row interface {
 func (r *recordsRepo) Create(ctx context.Context, rec domain.Record) (domain.Record, error) {
 	const q = `
 		INSERT INTO records
-			(user_id, source_id, name, format, status,
+			(domain_id, user_id, source_id, name, format, status,
 			 external_id, external_url, external_ref, mime_type,
 			 source_version, source_modified_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id, user_id, source_id, name, format, status,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
 		          source_version, source_modified_at, error,
@@ -232,7 +235,7 @@ func (r *recordsRepo) Create(ctx context.Context, rec domain.Record) (domain.Rec
 	}
 
 	row := r.pool.QueryRow(ctx, q,
-		rec.UserID, rec.SourceID, rec.Name, string(rec.Format), string(rec.Status),
+		rec.DomainID, rec.UserID, rec.SourceID, rec.Name, string(rec.Format), string(rec.Status),
 		rec.ExternalID, rec.ExternalURL, rec.ExternalRef, rec.MimeType,
 		rec.SourceVersion, sourceModifiedAt,
 	)
@@ -248,7 +251,7 @@ func (r *recordsRepo) Create(ctx context.Context, rec domain.Record) (domain.Rec
 
 func (r *recordsRepo) ListQueued(ctx context.Context, limit int) ([]domain.Record, error) {
 	const q = `
-		SELECT r.id, r.user_id, r.source_id, r.name, r.format, r.status,
+		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.source_version, r.source_modified_at, r.error,
@@ -315,7 +318,7 @@ func (r *recordsRepo) UpsertFromSource(ctx context.Context, rec domain.Record) (
 	defer tx.Rollback(ctx)
 
 	const selectQ = `
-		SELECT r.id, r.user_id, r.source_id, r.name, r.format, r.status,
+		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.source_version, r.source_modified_at, r.error,
@@ -323,10 +326,10 @@ func (r *recordsRepo) UpsertFromSource(ctx context.Context, rec domain.Record) (
 		       s.id, s.name, s.source_type, s.status
 		FROM records r
 		LEFT JOIN sources s ON s.id = r.source_id
-		WHERE r.user_id = $1 AND r.source_id = $2 AND r.external_id = $3
+		WHERE r.domain_id = $1 AND r.source_id = $2 AND r.external_id = $3
 		FOR UPDATE OF r`
 
-	existing, err := scanRecord(tx.QueryRow(ctx, selectQ, rec.UserID, rec.SourceID, rec.ExternalID))
+	existing, err := scanRecord(tx.QueryRow(ctx, selectQ, rec.DomainID, rec.SourceID, rec.ExternalID))
 	switch {
 	case err == nil:
 	case errors.Is(err, pgx.ErrNoRows):
@@ -368,11 +371,11 @@ func (r *recordsRepo) UpsertFromSource(ctx context.Context, rec domain.Record) (
 func (r *recordsRepo) createInTx(ctx context.Context, tx pgx.Tx, rec domain.Record) (domain.Record, error) {
 	const q = `
 		INSERT INTO records
-			(user_id, source_id, name, format, status,
+			(domain_id, user_id, source_id, name, format, status,
 			 external_id, external_url, external_ref, mime_type,
 			 source_version, source_modified_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id, user_id, source_id, name, format, status,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
 		          source_version, source_modified_at, error,
@@ -385,7 +388,7 @@ func (r *recordsRepo) createInTx(ctx context.Context, tx pgx.Tx, rec domain.Reco
 	}
 
 	created, err := scanRecord(tx.QueryRow(ctx, q,
-		rec.UserID, rec.SourceID, rec.Name, string(rec.Format), string(rec.Status),
+		rec.DomainID, rec.UserID, rec.SourceID, rec.Name, string(rec.Format), string(rec.Status),
 		rec.ExternalID, rec.ExternalURL, rec.ExternalRef, rec.MimeType,
 		rec.SourceVersion, sourceModifiedAt,
 	))
@@ -426,7 +429,7 @@ func (r *recordsRepo) updateFromSourceInTx(
 		    page_count = $11,
 		    updated_at = now()
 		WHERE id = $12
-		RETURNING id, user_id, source_id, name, format, status,
+		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
 		          source_version, source_modified_at, error,
@@ -475,7 +478,7 @@ func existingOrQueuedStatus(requeue bool, current domain.RecordStatus) domain.Re
 
 func (r *recordsRepo) DeleteBySourceExternalIDs(
 	ctx context.Context,
-	userID, sourceID string,
+	domainID, sourceID string,
 	externalIDs []string,
 ) (int, error) {
 	if len(externalIDs) == 0 {
@@ -501,8 +504,8 @@ func (r *recordsRepo) DeleteBySourceExternalIDs(
 
 	tag, err := r.pool.Exec(ctx,
 		`DELETE FROM records
-		 WHERE user_id = $1 AND source_id = $2 AND external_id = ANY($3)`,
-		userID, sourceID, uniq,
+		 WHERE domain_id = $1 AND source_id = $2 AND external_id = ANY($3)`,
+		domainID, sourceID, uniq,
 	)
 	if err != nil {
 		return 0, fmt.Errorf("delete records by source external IDs: %w", err)
@@ -511,9 +514,9 @@ func (r *recordsRepo) DeleteBySourceExternalIDs(
 	return int(tag.RowsAffected()), nil
 }
 
-func (r *recordsRepo) Delete(ctx context.Context, id, userID string) error {
+func (r *recordsRepo) Delete(ctx context.Context, id, domainID string) error {
 	tag, err := r.pool.Exec(ctx,
-		`DELETE FROM records WHERE id = $1 AND user_id = $2`, id, userID,
+		`DELETE FROM records WHERE id = $1 AND domain_id = $2`, id, domainID,
 	)
 	if err != nil {
 		return fmt.Errorf("delete record: %w", err)

@@ -21,6 +21,18 @@ import type {
 
 export type { Domain, Invitation, User, MemberRoles, Journal }
 
+// The magistrala SDK throws plain objects { status, error } rather than Error
+// instances. This converts them so callers can use err.message normally.
+function sdkError(err: unknown): Error {
+  if (err instanceof Error) return err
+  if (err && typeof err === 'object' && 'error' in err) {
+    const e = err as { error: unknown; status?: unknown }
+    const msg = typeof e.error === 'string' ? e.error : JSON.stringify(e.error)
+    return new Error(msg || `request failed (${e.status ?? 'unknown'})`)
+  }
+  return new Error(String(err))
+}
+
 const sdk = new SDK({
   usersUrl: window.location.origin,
   domainsUrl: window.location.origin,
@@ -30,22 +42,39 @@ const sdk = new SDK({
 // ── Domains ────────────────────────────────────────────────────────────────
 
 export async function listDomains(token: string): Promise<Domain[]> {
-  const page: DomainsPage = await sdk.Domains.Domains({ limit: 100, offset: 0 } as PageMetadata, token)
-  return page.domains ?? []
+  try {
+    const page: DomainsPage = await sdk.Domains.Domains({ limit: 100, offset: 0 } as PageMetadata, token)
+    return page.domains ?? []
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function listUserDomains(userID: string, token: string): Promise<Domain[]> {
-  const page: DomainsPage = await sdk.Domains.ListUserDomains(userID, { limit: 100, offset: 0 } as PageMetadata, token)
-  return page.domains ?? []
+  try {
+    const page: DomainsPage = await sdk.Domains.ListUserDomains(userID, { limit: 100, offset: 0 } as PageMetadata, token)
+    return page.domains ?? []
+  } catch (e) { throw sdkError(e) }
 }
 
-export async function createDomain(name: string, token: string): Promise<Domain> {
-  const route = name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
-  return sdk.Domains.CreateDomain({ name, route } as Domain, token)
+export function toRoute(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+}
+
+export async function createDomain(name: string, route: string, token: string): Promise<Domain> {
+  try {
+    return await sdk.Domains.CreateDomain({ name, route } as Domain, token)
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function getDomain(domainID: string, token: string): Promise<Domain> {
-  return sdk.Domains.Domain(domainID, token)
+  try {
+    return await sdk.Domains.Domain(domainID, token)
+  } catch (e) { throw sdkError(e) }
+}
+
+export async function deleteDomain(domainID: string, token: string): Promise<void> {
+  try {
+    await sdk.Domains.DisableDomain(domainID, token)
+  } catch (e) { throw sdkError(e) }
 }
 
 // ── Members ────────────────────────────────────────────────────────────────
@@ -56,24 +85,30 @@ export interface MembersResult {
 }
 
 export async function listDomainMembers(domainID: string, token: string): Promise<MembersResult> {
-  const page: MemberRolesPage = await sdk.Domains.ListDomainMembers(
-    domainID,
-    { limit: 100, offset: 0 } as BasicPageMeta,
-    token,
-  )
-  return { members: page.members ?? [], total: page.total ?? 0 }
+  try {
+    const page: MemberRolesPage = await sdk.Domains.ListDomainMembers(
+      domainID,
+      { limit: 100, offset: 0 } as BasicPageMeta,
+      token,
+    )
+    return { members: page.members ?? [], total: page.total ?? 0 }
+  } catch (e) { throw sdkError(e) }
 }
 
 // ── Users ──────────────────────────────────────────────────────────────────
 
 export async function listUsers(token: string): Promise<User[]> {
-  const page: UsersPage = await sdk.Users.Users({ limit: 100, offset: 0 } as PageMetadata, token)
-  return page.users ?? []
+  try {
+    const page: UsersPage = await sdk.Users.Users({ limit: 100, offset: 0 } as PageMetadata, token)
+    return page.users ?? []
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function searchUsers(query: string, token: string): Promise<User[]> {
-  const page: UsersPage = await sdk.Users.SearchUsers({ limit: 20, offset: 0, name: query } as PageMetadata, token)
-  return page.users ?? []
+  try {
+    const page: UsersPage = await sdk.Users.SearchUsers({ limit: 20, offset: 0, name: query } as PageMetadata, token)
+    return page.users ?? []
+  } catch (e) { throw sdkError(e) }
 }
 
 // ── Roles ──────────────────────────────────────────────────────────────────
@@ -100,36 +135,48 @@ export interface InvitationsResult {
 }
 
 export async function listDomainInvitations(domainID: string, token: string): Promise<InvitationsResult> {
-  const page: InvitationsPage = await sdk.Domains.ListDomainInvitations(
-    { limit: 100, offset: 0 } as InvitationPageMeta,
-    domainID,
-    token,
-  )
-  return { invitations: page.invitations ?? [], total: page.total ?? 0 }
+  try {
+    const page: InvitationsPage = await sdk.Domains.ListDomainInvitations(
+      { limit: 100, offset: 0 } as InvitationPageMeta,
+      domainID,
+      token,
+    )
+    return { invitations: page.invitations ?? [], total: page.total ?? 0 }
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function listUserInvitations(token: string): Promise<InvitationsResult> {
-  const page: InvitationsPage = await sdk.Domains.ListUserInvitations(
-    { limit: 100, offset: 0 } as PageMetadata,
-    token,
-  )
-  return { invitations: page.invitations ?? [], total: page.total ?? 0 }
+  try {
+    const page: InvitationsPage = await sdk.Domains.ListUserInvitations(
+      { limit: 100, offset: 0 } as PageMetadata,
+      token,
+    )
+    return { invitations: page.invitations ?? [], total: page.total ?? 0 }
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function sendInvitation(userID: string, domainID: string, roleID: string, token: string): Promise<void> {
-  await sdk.Domains.SendInvitation(userID, domainID, roleID, token)
+  try {
+    await sdk.Domains.SendInvitation(userID, domainID, roleID, token)
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function acceptInvitation(domainID: string, token: string): Promise<void> {
-  await sdk.Domains.AcceptInvitation(domainID, token)
+  try {
+    await sdk.Domains.AcceptInvitation(domainID, token)
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function rejectInvitation(domainID: string, token: string): Promise<void> {
-  await sdk.Domains.RejectInvitation(domainID, token)
+  try {
+    await sdk.Domains.RejectInvitation(domainID, token)
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function deleteInvitation(userID: string, domainID: string, token: string): Promise<void> {
-  await sdk.Domains.DeleteInvitation(userID, domainID, token)
+  try {
+    await sdk.Domains.DeleteInvitation(userID, domainID, token)
+  } catch (e) { throw sdkError(e) }
 }
 
 // ── Journal / Audit Logs ───────────────────────────────────────────────────
@@ -142,9 +189,11 @@ export interface JournalsResult {
 export const JOURNAL_PAGE_SIZE = 10
 
 export async function listUserJournals(userID: string, token: string, page = 0): Promise<JournalsResult> {
-  const meta: JournalsPageMetadata = { limit: JOURNAL_PAGE_SIZE, offset: page * JOURNAL_PAGE_SIZE }
-  const res: JournalsPage = await sdk.Journal.UserJournals(userID, meta, token)
-  return { journals: res.journals ?? [], total: (res as any).total ?? 0 }
+  try {
+    const meta: JournalsPageMetadata = { limit: JOURNAL_PAGE_SIZE, offset: page * JOURNAL_PAGE_SIZE }
+    const res: JournalsPage = await sdk.Journal.UserJournals(userID, meta, token)
+    return { journals: res.journals ?? [], total: (res as any).total ?? 0 }
+  } catch (e) { throw sdkError(e) }
 }
 
 export async function listEntityJournals(
@@ -154,7 +203,9 @@ export async function listEntityJournals(
   token: string,
   page = 0,
 ): Promise<JournalsResult> {
-  const meta: JournalsPageMetadata = { limit: JOURNAL_PAGE_SIZE, offset: page * JOURNAL_PAGE_SIZE }
-  const res: JournalsPage = await sdk.Journal.EntityJournals(entityType, entityId, domainId, meta, token)
-  return { journals: res.journals ?? [], total: (res as any).total ?? 0 }
+  try {
+    const meta: JournalsPageMetadata = { limit: JOURNAL_PAGE_SIZE, offset: page * JOURNAL_PAGE_SIZE }
+    const res: JournalsPage = await sdk.Journal.EntityJournals(entityType, entityId, domainId, meta, token)
+    return { journals: res.journals ?? [], total: (res as any).total ?? 0 }
+  } catch (e) { throw sdkError(e) }
 }

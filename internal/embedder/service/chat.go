@@ -29,7 +29,7 @@ func NewChatService(retrieve domain.VectorRetrieveService, llmClient llm.Client,
 	return &chatService{retrieve: retrieve, llm: llmClient, reranker: reranker, topK: topK}
 }
 
-func (s *chatService) Chat(ctx context.Context, userID string, messages []domain.ChatMessage, recordIDs []string) (<-chan domain.ChatEvent, error) {
+func (s *chatService) Chat(ctx context.Context, domainID string, messages []domain.ChatMessage, recordIDs []string) (<-chan domain.ChatEvent, error) {
 	query := ""
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == "user" {
@@ -44,7 +44,7 @@ func (s *chatService) Chat(ctx context.Context, userID string, messages []domain
 
 	if query != "" {
 		var err error
-		chunks, err = s.retrieve.Retrieve(ctx, userID, query, recordIDs, s.topK)
+		chunks, err = s.retrieve.Retrieve(ctx, domainID, query, recordIDs, s.topK)
 		if err != nil {
 			retrievalWarning = "Retrieval failed: " + err.Error() + " — answering without document context."
 			chunks = nil
@@ -98,7 +98,7 @@ func (s *chatService) Chat(ctx context.Context, userID string, messages []domain
 	llmMessages := make([]llm.Message, 0, len(messages)+1)
 	llmMessages = append(llmMessages, llm.Message{
 		Role:    "system",
-		Content: "You are a helpful assistant. When document excerpts are provided, answer based on them.",
+		Content: "You are a helpful, knowledgeable assistant. When document excerpts are provided, use them as your primary source and cite them, but also use your general knowledge to give complete, thorough answers.",
 	})
 	if contextBlock.Len() > 0 {
 		// RAG mode: only send the last user message augmented with context.
@@ -108,8 +108,8 @@ func (s *chatService) Chat(ctx context.Context, userID string, messages []domain
 			if messages[i].Role == "user" {
 				llmMessages = append(llmMessages, llm.Message{
 					Role: "user",
-					Content: "Use the following document excerpts to answer the question. " +
-						"Answer based on the excerpts — do not use outside knowledge.\n\n" +
+					Content: "Use the following document excerpts to inform your answer. " +
+						"Cite relevant excerpts, then elaborate with a complete and thorough explanation.\n\n" +
 						"EXCERPTS:\n" + contextBlock.String() +
 						"QUESTION: " + messages[i].Content,
 				})

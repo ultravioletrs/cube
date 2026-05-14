@@ -22,7 +22,10 @@ import (
 
 type contextKey string
 
-const userIDKey contextKey = "user_id"
+const (
+	userIDKey   contextKey = "user_id"
+	domainIDKey contextKey = "domain_id"
+)
 
 // Authenticator wraps the SuperMQ AuthService gRPC client.
 type Authenticator struct {
@@ -93,6 +96,9 @@ func Middleware(auth *Authenticator) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			if domainID := r.Header.Get("X-Domain-Id"); domainID != "" {
+				ctx = context.WithValue(ctx, domainIDKey, domainID)
+			}
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -101,6 +107,12 @@ func Middleware(auth *Authenticator) func(http.Handler) http.Handler {
 // UserID extracts the authenticated user ID from a request context.
 func UserID(ctx context.Context) string {
 	v, _ := ctx.Value(userIDKey).(string)
+	return v
+}
+
+// DomainID extracts the domain ID from a request context (set from X-Domain-ID header).
+func DomainID(ctx context.Context) string {
+	v, _ := ctx.Value(domainIDKey).(string)
 	return v
 }
 

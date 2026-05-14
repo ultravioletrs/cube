@@ -14,7 +14,7 @@ import (
 
 func (r *ChunksRepository) KeywordSearchChunks(
 	ctx context.Context,
-	userID string,
+	domainID string,
 	q domain.RetrievalQuery,
 ) ([]domain.ChunkMatch, error) {
 	terms := searchTerms(q.Query)
@@ -22,11 +22,11 @@ func (r *ChunksRepository) KeywordSearchChunks(
 		return []domain.ChunkMatch{}, nil
 	}
 
-	args := []any{userID}
+	args := []any{domainID}
 	next := 2
 
 	var where []string
-	where = append(where, "c.user_id = $1", "r.user_id = $1", "r.status = 'indexed'")
+	where = append(where, "c.domain_id = $1", "r.domain_id = $1", "r.status = 'indexed'")
 
 	if len(q.RecordIDs) > 0 {
 		placeholders := make([]string, 0, len(q.RecordIDs))
@@ -140,7 +140,7 @@ func (r *ChunksRepository) KeywordSearchChunks(
 //	FROM vector_ranked v
 func (r *ChunksRepository) HybridSearchChunks(
 	ctx context.Context,
-	userID string,
+	domainID string,
 	queryVec []float32,
 	q domain.RetrievalQuery,
 ) ([]ChunkSearchResult, error) {
@@ -156,8 +156,8 @@ func (r *ChunksRepository) HybridSearchChunks(
 	terms := searchTerms(q.Query)
 	vec := float32SliceToPGVector(queryVec)
 
-	// $1=userID  $2=queryVec  $3=innerLimit
-	args := []any{userID, vec, innerLimit}
+	// $1=domainID  $2=queryVec  $3=innerLimit
+	args := []any{domainID, vec, innerLimit}
 	next := 4
 
 	// Optional record-ID filter shared by both CTEs.
@@ -184,7 +184,7 @@ func (r *ChunksRepository) HybridSearchChunks(
     SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.embedding <-> $2::vector) AS rank
     FROM chunks c
     JOIN records rec ON rec.id = c.record_id
-    WHERE c.user_id = $1 AND c.embedding IS NOT NULL AND rec.status = 'indexed'`)
+    WHERE c.domain_id = $1 AND c.embedding IS NOT NULL AND rec.status = 'indexed'`)
 	sb.WriteString(recordIDFilter)
 	sb.WriteString(` LIMIT $3
 )`)
@@ -215,7 +215,7 @@ keyword_ranked AS (
                           websearch_to_tsquery('english', ` + queryPH + `)) AS fts_rank
         FROM chunks c
         JOIN records rec ON rec.id = c.record_id
-        WHERE c.user_id = $1
+        WHERE c.domain_id = $1
           AND rec.status = 'indexed'
           AND to_tsvector('english', c.content) @@ websearch_to_tsquery('english', ` + queryPH + `)`)
 		sb.WriteString(recordIDFilter)

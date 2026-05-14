@@ -36,7 +36,9 @@ const (
 // so that vectorized content can be traced back to its origin at any time.
 type Record struct {
 	ID string
-	// UserID scopes this record to a single authenticated user.
+	// DomainID scopes this record to a domain (workspace); all domain members share it.
+	DomainID string
+	// UserID records the creating user for audit purposes.
 	UserID string
 	// SourceID links back to the Source this record was ingested from.
 	SourceID string
@@ -117,12 +119,12 @@ type RecordUpsertResult struct {
 // RecordRepository defines the persistence contract for records.
 type RecordRepository interface {
 	Create(ctx context.Context, r Record) (Record, error)
-	GetByID(ctx context.Context, id, userID string) (Record, error)
-	List(ctx context.Context, userID string, f RecordFilter, p Page) (RecordPage, error)
-	Delete(ctx context.Context, id, userID string) error
-	DeleteBySourceExternalIDs(ctx context.Context, userID, sourceID string, externalIDs []string) (int, error)
+	GetByID(ctx context.Context, id, domainID string) (Record, error)
+	List(ctx context.Context, domainID string, f RecordFilter, p Page) (RecordPage, error)
+	Delete(ctx context.Context, id, domainID string) error
+	DeleteBySourceExternalIDs(ctx context.Context, domainID, sourceID string, externalIDs []string) (int, error)
 	UpsertFromSource(ctx context.Context, r Record) (RecordUpsertResult, error)
-	// ListQueued returns up to limit records in "queued" status, across all users.
+	// ListQueued returns up to limit records in "queued" status, across all domains.
 	ListQueued(ctx context.Context, limit int) ([]Record, error)
 	// UpdateStatus transitions a record to the given status (and clears/sets error).
 	UpdateStatus(ctx context.Context, id string, s RecordStatus, errMsg string) error
@@ -133,8 +135,8 @@ type RecordRepository interface {
 // RecordService defines the business-logic contract for records.
 type RecordService interface {
 	Create(ctx context.Context, r Record) (Record, error)
-	GetByID(ctx context.Context, id, userID string) (Record, error)
-	List(ctx context.Context, userID string, f RecordFilter, p Page) (RecordPage, error)
-	Delete(ctx context.Context, id, userID string) error
-	RetryIngest(ctx context.Context, id, userID string) error
+	GetByID(ctx context.Context, id, domainID string) (Record, error)
+	List(ctx context.Context, domainID string, f RecordFilter, p Page) (RecordPage, error)
+	Delete(ctx context.Context, id, domainID string) error
+	RetryIngest(ctx context.Context, id, domainID string) error
 }

@@ -29,7 +29,7 @@ type retrieveResponse struct {
 
 func retrieveHandler(svc domain.VectorRetrieveService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
 		var req retrieveRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -41,7 +41,7 @@ func retrieveHandler(svc domain.VectorRetrieveService) http.HandlerFunc {
 			return
 		}
 
-		chunks, err := svc.Retrieve(r.Context(), userID, req.Query, req.RecordIDs, req.TopK)
+		chunks, err := svc.Retrieve(r.Context(), domainID, req.Query, req.RecordIDs, req.TopK)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("retrieve failed"))
 			return

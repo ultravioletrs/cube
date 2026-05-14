@@ -32,14 +32,14 @@ func (r *sourcesRepo) Create(ctx context.Context, s domain.Source) (domain.Sourc
 	}
 
 	const q = `
-		INSERT INTO sources (user_id, source_type, name, config, status, sync_enabled, auto_sync_interval)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO sources (domain_id, user_id, source_type, name, config, status, sync_enabled, auto_sync_interval)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id, created_at, updated_at`
 
 	var id string
 	var createdAt, updatedAt time.Time
 	err := r.pool.QueryRow(ctx, q,
-		s.UserID, string(s.Type), s.Name, []byte(cfg),
+		s.DomainID, s.UserID, string(s.Type), s.Name, []byte(cfg),
 		string(s.Status), s.SyncEnabled, s.AutoSyncInterval,
 	).Scan(&id, &createdAt, &updatedAt)
 	if err != nil {
@@ -55,16 +55,16 @@ func (r *sourcesRepo) Create(ctx context.Context, s domain.Source) (domain.Sourc
 	return s, nil
 }
 
-func (r *sourcesRepo) GetByID(ctx context.Context, id, userID string) (domain.Source, error) {
+func (r *sourcesRepo) GetByID(ctx context.Context, id, domainID string) (domain.Source, error) {
 	const q = `
-		SELECT id, user_id, source_type, name, config, status,
+		SELECT id, domain_id, user_id, source_type, name, config, status,
 		       sync_enabled, auto_sync_interval,
 		       last_sync_at, last_sync_error, next_sync_at,
 		       created_at, updated_at
 		FROM sources
-		WHERE id = $1 AND user_id = $2`
+		WHERE id = $1 AND domain_id = $2`
 
-	row := r.pool.QueryRow(ctx, q, id, userID)
+	row := r.pool.QueryRow(ctx, q, id, domainID)
 	s, err := scanSource(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -75,14 +75,17 @@ func (r *sourcesRepo) GetByID(ctx context.Context, id, userID string) (domain.So
 	return s, nil
 }
 
-func (r *sourcesRepo) List(ctx context.Context, userID string, p domain.Page) (domain.SourcePage, error) {
+func (r *sourcesRepo) List(ctx context.Context, domainID string, p domain.Page) (domain.SourcePage, error) {
+	if domainID == "" {
+		return domain.SourcePage{}, nil
+	}
 	const q = `
-		SELECT id, user_id, source_type, name, config, status,
+		SELECT id, domain_id, user_id, source_type, name, config, status,
 		       sync_enabled, auto_sync_interval,
 		       last_sync_at, last_sync_error, next_sync_at,
 		       created_at, updated_at
 		FROM sources
-		WHERE user_id = $1
+		WHERE domain_id = $1
 		ORDER BY created_at DESC
 		LIMIT $2 OFFSET $3`
 
@@ -91,7 +94,7 @@ func (r *sourcesRepo) List(ctx context.Context, userID string, p domain.Page) (d
 		limit = 20
 	}
 
-	rows, err := r.pool.Query(ctx, q, userID, limit, p.Offset)
+	rows, err := r.pool.Query(ctx, q, domainID, limit, p.Offset)
 	if err != nil {
 		return domain.SourcePage{}, fmt.Errorf("list sources: %w", err)
 	}
@@ -111,7 +114,7 @@ func (r *sourcesRepo) List(ctx context.Context, userID string, p domain.Page) (d
 
 	var total uint64
 	if err := r.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM sources WHERE user_id = $1`, userID,
+		`SELECT COUNT(*) FROM sources WHERE domain_id = $1`, domainID,
 	).Scan(&total); err != nil {
 		return domain.SourcePage{}, fmt.Errorf("count sources: %w", err)
 	}
@@ -119,9 +122,9 @@ func (r *sourcesRepo) List(ctx context.Context, userID string, p domain.Page) (d
 	return domain.SourcePage{Sources: sources, Total: total}, nil
 }
 
-func (r *sourcesRepo) Delete(ctx context.Context, id, userID string) error {
+func (r *sourcesRepo) Delete(ctx context.Context, id, domainID string) error {
 	tag, err := r.pool.Exec(ctx,
-		`DELETE FROM sources WHERE id = $1 AND user_id = $2`, id, userID)
+		`DELETE FROM sources WHERE id = $1 AND domain_id = $2`, id, domainID)
 	if err != nil {
 		return fmt.Errorf("delete source: %w", err)
 	}
@@ -133,7 +136,7 @@ func (r *sourcesRepo) Delete(ctx context.Context, id, userID string) error {
 
 func (r *sourcesRepo) UpdateSyncResult(
 	ctx context.Context,
-	id, userID string,
+	id, domainID string,
 	status domain.SourceStatus,
 	lastSyncAt time.Time,
 	lastSyncError *string,
@@ -144,8 +147,8 @@ func (r *sourcesRepo) UpdateSyncResult(
 		    last_sync_at = $2,
 		    last_sync_error = $3,
 		    updated_at = now()
-		WHERE id = $4 AND user_id = $5
-		RETURNING id, user_id, source_type, name, config, status,
+		WHERE id = $4 AND domain_id = $5
+		RETURNING id, domain_id, user_id, source_type, name, config, status,
 		          sync_enabled, auto_sync_interval,
 		          last_sync_at, last_sync_error, next_sync_at,
 		          created_at, updated_at`
@@ -155,7 +158,7 @@ func (r *sourcesRepo) UpdateSyncResult(
 		errMsg = pgtype.Text{String: *lastSyncError, Valid: true}
 	}
 
-	row := r.pool.QueryRow(ctx, q, string(status), lastSyncAt, errMsg, id, userID)
+	row := r.pool.QueryRow(ctx, q, string(status), lastSyncAt, errMsg, id, domainID)
 	src, err := scanSource(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -168,7 +171,7 @@ func (r *sourcesRepo) UpdateSyncResult(
 
 func (r *sourcesRepo) UpdateConfig(
 	ctx context.Context,
-	id, userID string,
+	id, domainID string,
 	config json.RawMessage,
 ) (domain.Source, error) {
 	const q = `
@@ -177,13 +180,13 @@ func (r *sourcesRepo) UpdateConfig(
 		    status = $2,
 		    last_sync_error = NULL,
 		    updated_at = now()
-		WHERE id = $3 AND user_id = $4
-		RETURNING id, user_id, source_type, name, config, status,
+		WHERE id = $3 AND domain_id = $4
+		RETURNING id, domain_id, user_id, source_type, name, config, status,
 		          sync_enabled, auto_sync_interval,
 		          last_sync_at, last_sync_error, next_sync_at,
 		          created_at, updated_at`
 
-	row := r.pool.QueryRow(ctx, q, []byte(config), string(domain.SourceStatusActive), id, userID)
+	row := r.pool.QueryRow(ctx, q, []byte(config), string(domain.SourceStatusActive), id, domainID)
 	src, err := scanSource(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -209,7 +212,7 @@ func scanSource(row interface {
 		nextSyncAt    pgtype.Timestamptz
 	)
 	if err := row.Scan(
-		&s.ID, &s.UserID, &sourceType, &s.Name, &config, &status,
+		&s.ID, &s.DomainID, &s.UserID, &sourceType, &s.Name, &config, &status,
 		&s.SyncEnabled, &s.AutoSyncInterval,
 		&lastSyncAt, &lastSyncError, &nextSyncAt,
 		&s.CreatedAt, &s.UpdatedAt,

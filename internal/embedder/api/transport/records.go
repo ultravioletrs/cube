@@ -103,9 +103,9 @@ type recordListResponse struct {
 func getRecord(svc domain.RecordService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		rec, err := svc.GetByID(r.Context(), id, userID)
+		rec, err := svc.GetByID(r.Context(), id, domainID)
 		if err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("record not found"))
@@ -120,11 +120,11 @@ func getRecord(svc domain.RecordService) http.HandlerFunc {
 
 func listRecords(svc domain.RecordService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 		p := parsePage(r)
 		f := parseRecordFilter(r)
 
-		page, err := svc.List(r.Context(), userID, f, p)
+		page, err := svc.List(r.Context(), domainID, f, p)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
 			return
@@ -135,13 +135,13 @@ func listRecords(svc domain.RecordService) http.HandlerFunc {
 
 func listRecordsBySource(svc domain.RecordService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 		sourceID := chi.URLParam(r, "source_id")
 		p := parsePage(r)
 		f := parseRecordFilter(r)
 		f.SourceID = &sourceID
 
-		page, err := svc.List(r.Context(), userID, f, p)
+		page, err := svc.List(r.Context(), domainID, f, p)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
 			return
@@ -153,9 +153,9 @@ func listRecordsBySource(svc domain.RecordService) http.HandlerFunc {
 func deleteRecord(svc domain.RecordService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		if err := svc.Delete(r.Context(), id, userID); err != nil {
+		if err := svc.Delete(r.Context(), id, domainID); err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("record not found"))
 				return
@@ -170,9 +170,9 @@ func deleteRecord(svc domain.RecordService) http.HandlerFunc {
 func retryRecord(svc domain.RecordService, trigger func()) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 
-		if err := svc.RetryIngest(r.Context(), id, userID); err != nil {
+		if err := svc.RetryIngest(r.Context(), id, domainID); err != nil {
 			if errors.Is(err, domain.ErrNotFound) {
 				writeJSON(w, http.StatusNotFound, errBody("record not found"))
 				return

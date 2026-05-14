@@ -5,7 +5,7 @@ package domain
 
 import "context"
 
-// RetrievalQuery defines a user-scoped chunk retrieval request.
+// RetrievalQuery defines a domain-scoped chunk retrieval request.
 type RetrievalQuery struct {
 	Query     string
 	RecordIDs []string
@@ -35,10 +35,10 @@ type RetrievalResult struct {
 
 // RetrievalRepository provides low-level retrieval over stored chunks.
 type RetrievalRepository interface {
-	KeywordSearchChunks(ctx context.Context, userID string, q RetrievalQuery) ([]ChunkMatch, error)
+	KeywordSearchChunks(ctx context.Context, domainID string, q RetrievalQuery) ([]ChunkMatch, error)
 }
 
-// RetrievalService provides user-scoped retrieval business logic.
+// RetrievalService provides domain-scoped retrieval business logic.
 type RetrievalService interface {
-	Retrieve(ctx context.Context, userID string, q RetrievalQuery) (RetrievalResult, error)
+	Retrieve(ctx context.Context, domainID string, q RetrievalQuery) (RetrievalResult, error)
 }

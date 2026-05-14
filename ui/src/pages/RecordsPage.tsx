@@ -203,7 +203,7 @@ function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRec
 export default function RecordsPage() {
   const navigate = useNavigate()
   const { tokens } = useAuth()
-  const { records, setRecords } = useOutletContext<AppContext>()
+  const { records, setRecords, activeDomain } = useOutletContext<AppContext>()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = records.find(r => r.id === selectedId) ?? null
   const [showAddRecord, setShowAddRecord] = useState(false)
@@ -213,17 +213,18 @@ export default function RecordsPage() {
   const [refreshTick, setRefreshTick] = useState(0)
 
   const accessToken = tokens?.accessToken ?? ''
+  const domainID = activeDomain?.id ?? ''
 
   const refreshRecords = useCallback(() => { setRefreshTick(t => t + 1) }, [])
 
   useEffect(() => {
     if (!accessToken) return
     let active = true
-    listRecords(accessToken)
+    listRecords(accessToken, domainID)
       .then(data => { if (active) { setRecords(data); setError(''); setHasLoaded(true) } })
       .catch(err => { if (active) { setError(err instanceof Error ? err.message : 'Failed to load records'); setHasLoaded(true) } })
     return () => { active = false }
-  }, [accessToken, setRecords, refreshTick])
+  }, [accessToken, domainID, setRecords, refreshTick])
 
   const filtered = records.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -232,14 +233,14 @@ export default function RecordsPage() {
 
   async function handleUploadRecord(file: File) {
     if (!accessToken) throw new Error('Authentication token is missing')
-    await uploadRecordFile(accessToken, file)
+    await uploadRecordFile(accessToken, domainID, file)
     refreshRecords()
   }
 
   async function handleRetryRecord(id: string) {
     if (!accessToken) return
     try {
-      await retryRecordIngest(accessToken, id)
+      await retryRecordIngest(accessToken, domainID, id)
       refreshRecords()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to retry ingest')
@@ -250,7 +251,7 @@ export default function RecordsPage() {
     e.stopPropagation()
     if (!accessToken) return
     try {
-      await deleteRecord(accessToken, id)
+      await deleteRecord(accessToken, domainID, id)
       if (selectedId === id) setSelectedId(null)
       refreshRecords()
     } catch (err) {

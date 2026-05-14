@@ -161,12 +161,12 @@ endif
 .PHONY: up-ollama
 up-ollama: config-ollama
 	@echo "Starting Cube with Ollama backend..."
-	docker compose -f docker/compose.yaml --profile default up -d
+	docker compose -f docker/compose.yaml -f docker/cube-compose.yaml --env-file docker/.env --profile default up -d
 
 .PHONY: up-vllm
 up-vllm: config-vllm
 	@echo "Starting Cube with vLLM backend..."
-	docker compose -f docker/compose.yaml --profile vllm up -d
+	docker compose -f docker/compose.yaml -f docker/cube-compose.yaml --env-file docker/.env --profile vllm up -d
 
 GUARDRAILS_CONFIG_FILE = ./guardrails/rails/config.yml
 

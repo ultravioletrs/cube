@@ -46,16 +46,34 @@ export default function AppLayout() {
     localStorage.removeItem(CONV_KEY)
   }, [])
 
+  const domainID = activeDomain?.id ?? ''
+
   useEffect(() => {
-    if (!tokens?.accessToken) return
+    // Clear stale data from the previous domain immediately so pages never
+    // briefly show records that belong to a different domain.
+    setRecords([])
+    setDriveSources([])
+    setConversations([])
+
+    if (!tokens?.accessToken || !domainID) return
+
+    let cancelled = false
     const token = tokens.accessToken
-    Promise.all([listRecords(token), listSources(token)])
-      .then(([recs, srcs]) => { setRecords(recs); setDriveSources(srcs) })
+
+    Promise.all([listRecords(token, domainID), listSources(token, domainID)])
+      .then(([recs, srcs]) => {
+        if (cancelled) return
+        setRecords(recs)
+        setDriveSources(srcs)
+      })
       .catch((err: unknown) => console.error('failed to load records/sources:', err))
-    listConversations(token)
-      .then(convs => setConversations(convs))
+
+    listConversations(token, domainID)
+      .then(convs => { if (!cancelled) setConversations(convs) })
       .catch((err: unknown) => console.error('failed to load conversations:', err))
-  }, [tokens?.accessToken])
+
+    return () => { cancelled = true }
+  }, [tokens?.accessToken, domainID])
 
   useEffect(() => {
     if (persistTimer.current !== null) clearTimeout(persistTimer.current)

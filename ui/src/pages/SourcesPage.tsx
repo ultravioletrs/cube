@@ -148,7 +148,7 @@ function SourceRow(
 export default function SourcesPage() {
   const navigate = useNavigate()
   const { tokens } = useAuth()
-  const { driveSources, setDriveSources } = useOutletContext<AppContext>()
+  const { driveSources, setDriveSources, activeDomain } = useOutletContext<AppContext>()
   const [showAddSource, setShowAddSource] = useState(false)
   const [editingSource, setEditingSource] = useState<DriveSource | null>(null)
   const [hasLoaded, setHasLoaded] = useState(false)
@@ -156,6 +156,7 @@ export default function SourcesPage() {
   const [syncing, setSyncing] = useState<Record<string, boolean>>({})
 
   const accessToken = tokens?.accessToken ?? ''
+  const domainID = activeDomain?.id ?? ''
 
   const [refreshTick, setRefreshTick] = useState(0)
   const refreshSources = useCallback(() => { setRefreshTick(t => t + 1) }, [])
@@ -164,18 +165,18 @@ export default function SourcesPage() {
   useEffect(() => {
     if (!accessToken) return
     let active = true
-    listSources(accessToken)
+    listSources(accessToken, domainID)
       .then(data => { if (active) { setDriveSources(data); setError(''); setHasLoaded(true) } })
       .catch(err => { if (active) { setError(err instanceof Error ? err.message : 'Failed to load sources'); setHasLoaded(true) } })
     return () => { active = false }
-  }, [accessToken, setDriveSources, refreshTick])
+  }, [accessToken, domainID, setDriveSources, refreshTick])
 
   async function handleAddSource(source: DriveSourceDraft) {
     if (!accessToken) throw new Error('Authentication token is missing')
-    const created = await createSource(accessToken, source)
+    const created = await createSource(accessToken, domainID, source)
     refreshSources()
     setSyncing(prev => ({ ...prev, [created.id]: true }))
-    void syncSource(accessToken, created.id)
+    void syncSource(accessToken, domainID, created.id)
       .then(() => {
         refreshSources()
       })
@@ -191,7 +192,7 @@ export default function SourcesPage() {
     if (!accessToken || syncing[id]) return
     setSyncing(prev => ({ ...prev, [id]: true }))
     try {
-      await syncSource(accessToken, id)
+      await syncSource(accessToken, domainID, id)
       refreshSources()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sync failed')
@@ -204,7 +205,7 @@ export default function SourcesPage() {
     if (!accessToken) return
     if (!window.confirm('Delete this source?')) return
     try {
-      await deleteSource(accessToken, id)
+      await deleteSource(accessToken, domainID, id)
       refreshSources()
       setError('')
     } catch (err) {
@@ -215,7 +216,7 @@ export default function SourcesPage() {
   async function handleSaveSourceSelection(source: DriveSource, selectedFileIDs: string[]) {
     if (!accessToken) return
     try {
-      await updateGoogleSourceSelection(accessToken, source.id, selectedFileIDs, source.selectedFolderIDs ?? [])
+      await updateGoogleSourceSelection(accessToken, domainID, source.id, selectedFileIDs, source.selectedFolderIDs ?? [])
       await handleSync(source.id)
       refreshSources()
       setError('')

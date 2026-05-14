@@ -195,7 +195,7 @@ function DetailPanel({ record, onClose, onStartChat }: { record: AppRecord; onCl
 export default function HomePage() {
   const navigate = useNavigate()
   const { tokens } = useAuth()
-  const { records, setRecords, driveSources, setDriveSources } = useOutletContext<AppContext>()
+  const { records, setRecords, driveSources, setDriveSources, activeDomain } = useOutletContext<AppContext>()
   const [selected, setSelected] = useState<AppRecord | null>(null)
   const [showAddRecord, setShowAddRecord] = useState(false)
   const [showAddSource, setShowAddSource] = useState(false)
@@ -208,6 +208,7 @@ export default function HomePage() {
   const [editingSource, setEditingSource] = useState<DriveSource | null>(null)
 
   const accessToken = tokens?.accessToken ?? ''
+  const domainID = activeDomain?.id ?? ''
   const cachedGoogleSource = driveSources.find(source => source.sourceType === 'google_drive' && !!source.accessToken)
 
   const refreshData = useCallback(async () => {
@@ -220,8 +221,8 @@ export default function HomePage() {
     setIsLoading(true)
     try {
       const [nextSources, nextRecords] = await Promise.all([
-        listSources(accessToken),
-        listRecords(accessToken),
+        listSources(accessToken, domainID),
+        listRecords(accessToken, domainID),
       ])
       setDriveSources(nextSources)
       setRecords(nextRecords)
@@ -232,7 +233,7 @@ export default function HomePage() {
     } finally {
       setIsLoading(false)
     }
-  }, [accessToken, setDriveSources, setRecords])
+  }, [accessToken, domainID, setDriveSources, setRecords])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -256,9 +257,9 @@ export default function HomePage() {
       throw new Error('Authentication token is missing')
     }
 
-    const created = await createSource(accessToken, source)
+    const created = await createSource(accessToken, domainID, source)
     try {
-      await syncSource(accessToken, created.id)
+      await syncSource(accessToken, domainID, created.id)
     } catch (err) {
       console.error('source sync failed', err)
       setLoadError(
@@ -276,14 +277,14 @@ export default function HomePage() {
       throw new Error('Authentication token is missing')
     }
 
-    await uploadRecordFile(accessToken, file)
+    await uploadRecordFile(accessToken, domainID, file)
     await refreshData()
   }
 
   async function handleDeleteRecord(e: React.MouseEvent, id: string) {
     e.stopPropagation()
     if (!accessToken) return
-    await deleteRecord(accessToken, id)
+    await deleteRecord(accessToken, domainID, id)
     if (selected?.id === id) setSelected(null)
     await refreshData()
   }
@@ -291,7 +292,7 @@ export default function HomePage() {
   async function handleRetryRecordIngest(record: AppRecord) {
     if (!accessToken) return
     try {
-      await retryRecordIngest(accessToken, record.id)
+      await retryRecordIngest(accessToken, domainID, record.id)
       setLoadError('')
       await refreshData()
     } catch (err) {
@@ -307,7 +308,7 @@ export default function HomePage() {
       [sourceID]: { kind: 'info', text: 'Sync in progress...' },
     }))
     try {
-      const res = await syncSource(accessToken, sourceID)
+      const res = await syncSource(accessToken, domainID, sourceID)
       setLoadError('')
       setSourceSyncNotice(prev => ({
         ...prev,
@@ -332,7 +333,7 @@ export default function HomePage() {
     if (!accessToken) return
     if (!window.confirm('Delete this source?')) return
     try {
-      await deleteSource(accessToken, sourceID)
+      await deleteSource(accessToken, domainID, sourceID)
       setLoadError('')
       await refreshData()
     } catch (err) {
@@ -343,7 +344,7 @@ export default function HomePage() {
   async function handleSaveSourceSelection(source: DriveSource, selectedFileIDs: string[]) {
     if (!accessToken) return
     try {
-      await updateGoogleSourceSelection(accessToken, source.id, selectedFileIDs, source.selectedFolderIDs ?? [])
+      await updateGoogleSourceSelection(accessToken, domainID, source.id, selectedFileIDs, source.selectedFolderIDs ?? [])
       await handleRetrySourceSync(source.id)
       setLoadError('')
       await refreshData()

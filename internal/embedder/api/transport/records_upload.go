@@ -66,6 +66,7 @@ func uploadRecord(
 		defer src.Close()
 
 		userID := auth.UserID(r.Context())
+		domainID := auth.DomainID(r.Context())
 		recordName := strings.TrimSpace(r.FormValue("name"))
 		sourceID := strings.TrimSpace(r.FormValue("source_id"))
 		if recordName == "" {
@@ -90,7 +91,7 @@ func uploadRecord(
 			return
 		}
 
-		source, err := resolveUploadSource(r.Context(), sourcesSvc, userID, sourceID)
+		source, err := resolveUploadSource(r.Context(), sourcesSvc, domainID, userID, sourceID)
 		if err != nil {
 			switch {
 			case errors.Is(err, domain.ErrNotFound):
@@ -118,6 +119,7 @@ func uploadRecord(
 		}
 
 		rec, err := recordsSvc.Create(r.Context(), domain.Record{
+			DomainID:   domainID,
 			UserID:     userID,
 			SourceID:   source.ID,
 			Name:       recordName,
@@ -184,10 +186,10 @@ func prepareUploadObjectKey(prefix, userID, originalName string) (string, error)
 func resolveUploadSource(
 	ctx context.Context,
 	sourcesSvc domain.SourceService,
-	userID, sourceID string,
+	domainID, userID, sourceID string,
 ) (domain.Source, error) {
 	if sourceID != "" {
-		src, err := sourcesSvc.GetByID(ctx, sourceID, userID)
+		src, err := sourcesSvc.GetByID(ctx, sourceID, domainID)
 		if err != nil {
 			return domain.Source{}, err
 		}
@@ -196,19 +198,19 @@ func resolveUploadSource(
 		}
 		return src, nil
 	}
-	return ensureDirectUploadSource(ctx, sourcesSvc, userID)
+	return ensureDirectUploadSource(ctx, sourcesSvc, domainID, userID)
 }
 
 func ensureDirectUploadSource(
 	ctx context.Context,
 	sourcesSvc domain.SourceService,
-	userID string,
+	domainID, userID string,
 ) (domain.Source, error) {
 	const pageLimit uint64 = 100
 	var offset uint64
 
 	for {
-		page, err := sourcesSvc.List(ctx, userID, domain.Page{Limit: pageLimit, Offset: offset})
+		page, err := sourcesSvc.List(ctx, domainID, domain.Page{Limit: pageLimit, Offset: offset})
 		if err != nil {
 			return domain.Source{}, err
 		}
@@ -231,6 +233,7 @@ func ensureDirectUploadSource(
 	}
 
 	created, err := sourcesSvc.Create(ctx, domain.Source{
+		DomainID:         domainID,
 		UserID:           userID,
 		Type:             domain.SourceTypeLocalFS,
 		Name:             directUploadSourceName,
@@ -246,7 +249,7 @@ func ensureDirectUploadSource(
 		return domain.Source{}, err
 	}
 
-	page, listErr := sourcesSvc.List(ctx, userID, domain.Page{Limit: pageLimit, Offset: 0})
+	page, listErr := sourcesSvc.List(ctx, domainID, domain.Page{Limit: pageLimit, Offset: 0})
 	if listErr != nil {
 		return domain.Source{}, listErr
 	}

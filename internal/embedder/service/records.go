@@ -29,25 +29,25 @@ func (s *recordsService) Create(ctx context.Context, r domain.Record) (domain.Re
 	return s.repo.Create(ctx, r)
 }
 
-func (s *recordsService) GetByID(ctx context.Context, id, userID string) (domain.Record, error) {
-	return s.repo.GetByID(ctx, id, userID)
+func (s *recordsService) GetByID(ctx context.Context, id, domainID string) (domain.Record, error) {
+	return s.repo.GetByID(ctx, id, domainID)
 }
 
 func (s *recordsService) List(
 	ctx context.Context,
-	userID string,
+	domainID string,
 	f domain.RecordFilter,
 	p domain.Page,
 ) (domain.RecordPage, error) {
-	return s.repo.List(ctx, userID, f, p)
+	return s.repo.List(ctx, domainID, f, p)
 }
 
-func (s *recordsService) Delete(ctx context.Context, id, userID string) error {
-	return s.repo.Delete(ctx, id, userID)
+func (s *recordsService) Delete(ctx context.Context, id, domainID string) error {
+	return s.repo.Delete(ctx, id, domainID)
 }
 
-func (s *recordsService) RetryIngest(ctx context.Context, id, userID string) error {
-	if _, err := s.repo.GetByID(ctx, id, userID); err != nil {
+func (s *recordsService) RetryIngest(ctx context.Context, id, domainID string) error {
+	if _, err := s.repo.GetByID(ctx, id, domainID); err != nil {
 		return err
 	}
 	return s.repo.UpdateStatus(ctx, id, domain.RecordStatusQueued, "")
