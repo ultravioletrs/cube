@@ -14,7 +14,9 @@ import MembersPage from '@/pages/MembersPage'
 import InvitationsPage from '@/pages/InvitationsPage'
 import AuditLogsPage from '@/pages/AuditLogsPage'
 import OAuthGoogleCallbackPage from '@/pages/OAuthGoogleCallbackPage'
+import AttestationPage from '@/pages/AttestationPage'
 import { useAuth } from '@/hooks/useAuth'
+import { ATTESTATION_ENABLED } from '@/lib/features'
 
 function LandingPage() {
   const { isAuthenticated } = useAuth()
@@ -90,6 +92,9 @@ export default function App() {
         <Route path="/members" element={<MembersPage />} />
         <Route path="/invitations" element={<InvitationsPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
+        {ATTESTATION_ENABLED && (
+          <Route path="/attestation" element={<AttestationPage />} />
+        )}
       </Route>
     </Routes>
   )

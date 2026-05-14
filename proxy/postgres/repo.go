@@ -5,7 +5,9 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 
 	"github.com/absmach/supermq/pkg/postgres"
 	"github.com/ultravioletrs/cube/proxy"
@@ -30,6 +32,10 @@ func (r *repository) GetAttestationPolicy(ctx context.Context) ([]byte, error) {
 
 	row := r.db.QueryRowxContext(ctx, q)
 	if err := row.Scan(&policy); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+
 		return nil, err
 	}
 
