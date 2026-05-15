@@ -16,9 +16,11 @@ import (
 
 // Client streams chat completions from an Ollama server.
 type Client struct {
-	baseURL string
-	model   string
-	http    *http.Client
+	baseURL     string
+	model       string
+	temperature float64
+	maxTokens   int
+	http        *http.Client
 }
 
 // New returns an Ollama chat streaming client.
@@ -30,6 +32,17 @@ func New(baseURL, model string) *Client {
 	}
 }
 
+// NewFromConfig returns an Ollama client configured from an llm.Config.
+func NewFromConfig(cfg llm.Config) *Client {
+	return &Client{
+		baseURL:     cfg.BaseURL,
+		model:       cfg.Model,
+		temperature: cfg.Temperature,
+		maxTokens:   cfg.MaxTokens,
+		http:        &http.Client{Timeout: 0},
+	}
+}
+
 type ollamaMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
@@ -37,6 +50,7 @@ type ollamaMessage struct {
 
 type chatOptions struct {
 	Temperature float64 `json:"temperature"`
+	NumPredict  int     `json:"num_predict,omitempty"`
 }
 
 type chatRequest struct {
@@ -66,7 +80,7 @@ func (c *Client) StreamChat(ctx context.Context, messages []llm.Message, out cha
 		Model:    c.model,
 		Messages: msgs,
 		Stream:   true,
-		Options:  chatOptions{Temperature: 0},
+		Options:  chatOptions{Temperature: c.temperature, NumPredict: c.maxTokens},
 	})
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/chat", bytes.NewReader(body))
