@@ -28,6 +28,7 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/rclone"
 	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
 	"github.com/ultravioletrs/cube/internal/embedder/llm"
+	"github.com/ultravioletrs/cube/internal/embedder/llm/guardrails"
 	"github.com/ultravioletrs/cube/internal/embedder/llm/ollama"
 	llmopenai "github.com/ultravioletrs/cube/internal/embedder/llm/openai"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
@@ -50,6 +51,7 @@ type config struct {
 	embeddingConfig         embedding.Config
 	llmConfig               llm.Config
 	chatTopK                int
+	guardrailsURL           string
 	rerankerModel           string
 	rerankerBaseURL         string
 	storageConfig           objstore.Config
@@ -124,6 +126,7 @@ func loadConfig() config {
 			APIKey:   env("EMBEDDER_LLM_API_KEY", ""),
 		},
 		chatTopK:             envInt("EMBEDDER_CHAT_TOP_K", 15),
+		guardrailsURL:        env("EMBEDDER_GUARDRAILS_URL", ""),
 		rerankerModel:        env("EMBEDDER_RERANKER_MODEL", ""),
 		rerankerBaseURL:      env("EMBEDDER_RERANKER_BASE_URL", ""),
 		chunkSize:            envInt("EMBEDDER_CHUNK_SIZE", 512),
@@ -257,6 +260,13 @@ func main() {
 		llmClient = ollama.New(cfg.llmConfig.BaseURL, cfg.llmConfig.Model)
 	}
 
+	var guardrailsCtrl *guardrails.GuardedClient
+	if cfg.guardrailsURL != "" {
+		guardrailsCtrl = guardrails.NewGuardedClient(llmClient, guardrails.New(cfg.guardrailsURL))
+		llmClient = guardrailsCtrl
+		slog.Info("guardrails enabled", "url", cfg.guardrailsURL)
+	}
+
 	var reranker llm.Reranker
 	if cfg.rerankerModel != "" {
 		rerankerBase := cfg.rerankerBaseURL
@@ -284,6 +294,7 @@ func main() {
 		worker.Trigger,
 		cfg.googleOAuthClientID,
 		cfg.googleOAuthClientSecret,
+		guardrailsCtrl,
 	)
 	srv := &http.Server{
 		Addr:        cfg.httpAddr,

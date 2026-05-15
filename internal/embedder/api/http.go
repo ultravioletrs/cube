@@ -29,6 +29,7 @@ func NewRouter(
 	trigger func(),
 	googleOAuthClientID string,
 	googleOAuthClientSecret string,
+	guardrailsCtrl transport.GuardrailsController,
 ) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.Recoverer)
@@ -46,6 +47,7 @@ func NewRouter(
 		transport.MountRetrieve(r, retrieveSvc)
 		transport.MountChat(r, chatSvc, conversationsRepo)
 		transport.MountConversations(r, conversationsRepo)
+		transport.MountGuardrails(r, guardrailsCtrl)
 	})
 
 	return r

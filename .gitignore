@@ -23,7 +23,7 @@ docker/data/
 *.backup
 
 # Compiled binaries
-embedder
+/embedder
 
 # Vite cache
 ui/.vite/
