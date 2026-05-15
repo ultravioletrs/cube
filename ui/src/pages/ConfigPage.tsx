@@ -5,7 +5,7 @@ import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
 import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG } from '@/lib/modelConfig'
 import type { LLMProvider } from '@/lib/modelConfig'
-import { listOllamaModels } from '@/lib/api'
+import { getGuardrailsStatus, listOllamaModels, setGuardrailsEnabled } from '@/lib/api'
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -107,6 +107,27 @@ export default function ConfigPage() {
   const [saved, setSaved] = useState(false)
   const [ollamaModels, setOllamaModels] = useState<string[]>([])
   const [ollamaLoading, setOllamaLoading] = useState(false)
+  const [guardrailsEnabled, setGuardrailsEnabledState] = useState(false)
+  const [guardrailsConfigured, setGuardrailsConfigured] = useState(false)
+  const [guardrailsLoading, setGuardrailsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!tokens?.accessToken) return
+    getGuardrailsStatus(tokens.accessToken)
+      .then(s => { setGuardrailsEnabledState(s.enabled); setGuardrailsConfigured(s.configured) })
+      .catch(() => {})
+  }, [tokens?.accessToken])
+
+  const handleGuardrailsToggle = async (v: boolean) => {
+    if (!tokens?.accessToken || !guardrailsConfigured || guardrailsLoading) return
+    setGuardrailsLoading(true)
+    try {
+      const s = await setGuardrailsEnabled(tokens.accessToken, v)
+      setGuardrailsEnabledState(s.enabled)
+    } catch { /* ignore */ } finally {
+      setGuardrailsLoading(false)
+    }
+  }
 
   useEffect(() => {
     const cfg = loadModelConfig()
@@ -213,6 +234,22 @@ export default function ConfigPage() {
             <Field label="Chunk size (tokens)" hint="Larger chunks preserve context; smaller chunks improve retrieval precision."><Slider value={chunkSize} onChange={setChunkSize} min={128} max={2048} step={64} label="tokens" /></Field>
             <Field label="Chunk overlap (tokens)" hint="Overlap between adjacent chunks to avoid cutting context boundaries."><Slider value={chunkOverlap} onChange={setChunkOverlap} min={0} max={256} step={16} label="tokens" /></Field>
             <Field label="Top-K retrieval" hint="Number of chunks retrieved per query. Higher values increase recall but may dilute relevance."><Slider value={topK} onChange={setTopK} min={1} max={20} step={1} label="chunks" /></Field>
+          </Section>
+
+          <div style={{ height: '1px', background: 'var(--border)', margin: '8px 0 32px' }} />
+
+          <Section title="Safety" subtitle="Control content guardrails applied to all chat queries before they reach the language model.">
+            <Field
+              label="Content guardrails"
+              hint={guardrailsConfigured ? 'Filters harmful, manipulative, or sensitive content in real-time before queries are processed.' : 'Guardrails service is not configured. Set EMBEDDER_GUARDRAILS_URL to enable.'}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', opacity: guardrailsConfigured ? 1 : 0.45, pointerEvents: guardrailsConfigured ? 'auto' : 'none' }}>
+                <Toggle value={guardrailsEnabled} onChange={handleGuardrailsToggle} />
+                <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  {guardrailsLoading ? 'Updating…' : guardrailsEnabled ? 'Enabled — harmful queries blocked before reaching the model' : 'Disabled — all queries pass through unfiltered'}
+                </span>
+              </div>
+            </Field>
           </Section>
 
           <div style={{ height: '1px', background: 'var(--border)', margin: '8px 0 32px' }} />

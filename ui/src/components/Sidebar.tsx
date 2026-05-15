@@ -78,6 +78,17 @@ const aiItems: NavItem[] = [
       </svg>
     ),
   },
+  {
+    id: 'guardrails',
+    label: 'Guardrails',
+    path: '/guardrails',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <path d="M10 2L3 5.5v4.5c0 3.8 2.9 7.4 7 8.5 4.1-1.1 7-4.7 7-8.5V5.5L10 2z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M7 10l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
 ]
 
 const platformItems: NavItem[] = [

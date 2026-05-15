@@ -152,3 +152,26 @@ export async function listOllamaModels(token: string, domainID: string): Promise
   const data = await res.json() as { models: string[] }
   return data.models ?? []
 }
+
+export interface GuardrailsStatus {
+  enabled: boolean
+  configured: boolean
+}
+
+export async function getGuardrailsStatus(token: string): Promise<GuardrailsStatus> {
+  const res = await fetch('/api/v1/guardrails', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`guardrails status: ${res.status}`)
+  return res.json() as Promise<GuardrailsStatus>
+}
+
+export async function setGuardrailsEnabled(token: string, enabled: boolean): Promise<GuardrailsStatus> {
+  const res = await fetch('/api/v1/guardrails', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ enabled }),
+  })
+  if (!res.ok) throw new Error(`guardrails update: ${res.status}`)
+  return res.json() as Promise<GuardrailsStatus>
+}
