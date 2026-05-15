@@ -634,6 +634,48 @@ def extract_guardrails_detections(res: Any, response_content: str, original_mess
     return detections
 
 
+@router.post("/validate", tags=["validation"])
+async def validate_input(req: ChatRequest) -> Dict[str, Any]:
+    """Fast input validation without LLM generation.
+
+    Runs only the Python pre-filter (substring pattern matching) — no NeMo,
+    no LLM call.  Returns in <1 ms.  Used by the embedder to enforce input
+    guardrails before starting a streaming Ollama response.
+    """
+    start_time = time.time()
+
+    user_text = ""
+    for m in reversed(req.messages):
+        if m.role == "user":
+            user_text = (m.content or "").strip()
+            break
+
+    if not user_text:
+        return {
+            "decision": "BLOCK",
+            "refusal": "I didn't receive a valid message. Please try again.",
+            "violation_type": "invalid_input",
+            "latency_ms": 0.0,
+        }
+
+    violation = _check_input(user_text)
+    if violation:
+        vtype, refusal = violation
+        return {
+            "decision": "BLOCK",
+            "refusal": refusal,
+            "violation_type": vtype,
+            "latency_ms": (time.time() - start_time) * 1000,
+        }
+
+    return {
+        "decision": "ALLOW",
+        "refusal": "",
+        "violation_type": "",
+        "latency_ms": (time.time() - start_time) * 1000,
+    }
+
+
 @router.post("/messages", tags=["chat"])
 async def chat_completion(request: Request, req: ChatRequest, authorization: str = Header(None)) -> Dict[str, Any]:
     start_time = time.time()

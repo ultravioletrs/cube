@@ -13,6 +13,7 @@ import DomainsPage from '@/pages/DomainsPage'
 import MembersPage from '@/pages/MembersPage'
 import InvitationsPage from '@/pages/InvitationsPage'
 import AuditLogsPage from '@/pages/AuditLogsPage'
+import GuardrailsPage from '@/pages/GuardrailsPage'
 import OAuthGoogleCallbackPage from '@/pages/OAuthGoogleCallbackPage'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -90,6 +91,7 @@ export default function App() {
         <Route path="/members" element={<MembersPage />} />
         <Route path="/invitations" element={<InvitationsPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />
+        <Route path="/guardrails" element={<GuardrailsPage />} />
       </Route>
     </Routes>
   )
