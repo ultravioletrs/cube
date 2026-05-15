@@ -32,6 +32,15 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_RCLONE_CONFIG_DIR` | rclone config base directory | `/etc/cube/rclone` |
 | `EMBEDDER_RCLONE_TIMEOUT` | Timeout for rclone list/read operations | `2m` |
 | `EMBEDDER_RCLONE_PREFLIGHT` | Run startup check (`rclone version` + config dir) and fail fast on errors | `true` |
+| `EMBEDDER_OCR_ENABLED` | Enable OCR preprocessing | `false` |
+| `EMBEDDER_OCR_IMAGE_ENABLED` | Run OCR on `image/*` records | `true` |
+| `EMBEDDER_OCR_PDF_FALLBACK_ENABLED` | Run OCR for PDFs when `pdftotext` output is too small | `true` |
+| `EMBEDDER_OCR_LANG` | Tesseract language(s), e.g. `eng` or `eng+srp` | `eng` |
+| `EMBEDDER_OCR_BINARY` | OCR binary path/name | `tesseract` |
+| `EMBEDDER_OCR_PDF_RENDER_BINARY` | PDF renderer binary for OCR fallback | `pdftoppm` |
+| `EMBEDDER_OCR_TIMEOUT` | Per OCR command timeout | `2m` |
+| `EMBEDDER_OCR_MIN_TEXT_CHARS` | Min extracted PDF chars before OCR fallback kicks in | `40` |
+| `EMBEDDER_OCR_MAX_PDF_PAGES` | Max PDF pages rendered for OCR fallback | `20` |
 | `EMBEDDER_GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID | optional |
 | `EMBEDDER_GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret | optional |
 
@@ -73,5 +82,6 @@ The compose definition is in `docker/cube-compose.yaml`.
 For an end-to-end upload and retrieval flow, see:
 
 - [workflows/ingest-retrieve.md](workflows/ingest-retrieve.md)
+- [workflows/ollama-vs-openai-eval.md](workflows/ollama-vs-openai-eval.md)
 - [workflows/provider-rollout.md](workflows/provider-rollout.md)
 - [monitoring/alerts/provider-alerts.yaml](monitoring/alerts/provider-alerts.yaml)

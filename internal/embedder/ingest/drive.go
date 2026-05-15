@@ -453,7 +453,7 @@ func ExtractText(f DriveFile, content []byte) (ExtractedDocument, error) {
 	case mime == "image/svg+xml":
 		return ExtractedDocument{Text: string(content)}, nil
 	case strings.HasPrefix(mime, "image/"):
-		return extractImageText(f), nil
+		return extractImageText(f, content), nil
 	case isPlainTextLike(f.Name, mime):
 		return ExtractedDocument{Text: string(content)}, nil
 	default:
@@ -461,7 +461,11 @@ func ExtractText(f DriveFile, content []byte) (ExtractedDocument, error) {
 	}
 }
 
-func extractImageText(f DriveFile) ExtractedDocument {
+func extractImageText(f DriveFile, content []byte) ExtractedDocument {
+	if text, ok := maybeImageOCR(f, content); ok {
+		return ExtractedDocument{Text: text}
+	}
+
 	name := strings.TrimSpace(f.Name)
 	if name == "" {
 		name = "unnamed-image"
@@ -472,7 +476,7 @@ func extractImageText(f DriveFile) ExtractedDocument {
 	}
 
 	// Image records are routed to the image embedding profile. For now we embed
-	// a stable descriptor instead of OCR output so ingestion stays provider-driven.
+	// a stable descriptor when OCR is unavailable or disabled.
 	text := fmt.Sprintf("image file: %s; mime_type: %s", name, mime)
 	return ExtractedDocument{Text: text}
 }
@@ -481,6 +485,9 @@ func extractPDF(content []byte) (ExtractedDocument, error) {
 	text, err := pdfToText(content)
 	if err != nil {
 		return ExtractedDocument{}, fmt.Errorf("extract pdf text: %w", err)
+	}
+	if fallbackText, ok := maybePDFFallbackOCR(content, text); ok {
+		text = fallbackText
 	}
 	return ExtractedDocument{
 		Text:      text,
