@@ -29,6 +29,7 @@ func NewRouter(
 	trigger func(),
 	googleOAuthClientID string,
 	googleOAuthClientSecret string,
+	ollamaBaseURL string,
 ) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.Recoverer)
@@ -38,6 +39,8 @@ func NewRouter(
 
 	r.Get("/health", healthHandler)
 	r.Handle("/metrics", promhttp.Handler())
+
+	transport.MountModels(r, ollamaBaseURL)
 
 	r.Group(func(r chi.Router) {
 		r.Use(auth.Middleware(authenticator))

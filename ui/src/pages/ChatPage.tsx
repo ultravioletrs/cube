@@ -7,6 +7,7 @@ import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
 import { streamChat } from '@/lib/api'
 import type { Citation } from '@/lib/api'
+import { loadModelConfig, toBackendModelConfig } from '@/lib/modelConfig'
 import { deleteConversation, getConversation, listRecordsBySource, syncSource } from '@/lib/embedder/service'
 
 interface ChatRouteState {
@@ -538,6 +539,7 @@ export default function ChatPage() {
       },
       controller.signal,
       conversationId,
+      toBackendModelConfig(loadModelConfig()),
     ).catch((err) => {
       if (err.name !== 'AbortError') {
         setChatMessages(prev => prev.map(m =>

@@ -35,6 +35,16 @@ export async function listRecords(token: string, domainID: string): Promise<AppR
   return (data.records ?? []).map(toAppRecord)
 }
 
+// BackendModelConfig is the model override shape accepted by POST /api/v1/chat.
+export interface BackendModelConfig {
+  provider: string
+  base_url: string
+  model: string
+  api_key: string
+  temperature: number
+  max_tokens: number
+}
+
 // streamChat opens an SSE connection to the chat endpoint and calls onEvent
 // for each parsed event.  Returns a cleanup function that aborts the stream.
 export function streamChat(
@@ -45,6 +55,7 @@ export function streamChat(
   onEvent: (event: ChatEvent) => void,
   signal?: AbortSignal,
   conversationId?: string | null,
+  modelConfig?: BackendModelConfig | null,
 ): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -54,7 +65,12 @@ export function streamChat(
   return fetch('/api/v1/chat', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ messages, record_ids: recordIDs, conversation_id: conversationId ?? undefined }),
+    body: JSON.stringify({
+      messages,
+      record_ids: recordIDs,
+      conversation_id: conversationId ?? undefined,
+      model: modelConfig ?? undefined,
+    }),
     signal,
   }).then(async (res) => {
     if (!res.ok) {
@@ -125,4 +141,14 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+// listOllamaModels fetches the locally available Ollama models from the embedder proxy.
+export async function listOllamaModels(token: string, domainID: string): Promise<string[]> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
+  if (domainID) headers['X-Domain-Id'] = domainID
+  const res = await fetch('/api/v1/models/ollama', { headers })
+  if (!res.ok) throw new Error(`listOllamaModels: ${res.status}`)
+  const data = await res.json() as { models: string[] }
+  return data.models ?? []
 }
