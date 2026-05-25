@@ -257,6 +257,14 @@ func main() {
 		llmClient = ollama.New(cfg.llmConfig.BaseURL, cfg.llmConfig.Model)
 	}
 
+	// clientFactory builds a per-request LLM client when the caller overrides the model.
+	clientFactory := llm.ClientFactory(func(cfg llm.Config) llm.Client {
+		if cfg.Provider == "openai" {
+			return llmopenai.NewFromConfig(cfg)
+		}
+		return ollama.NewFromConfig(cfg)
+	})
+
 	var reranker llm.Reranker
 	if cfg.rerankerModel != "" {
 		rerankerBase := cfg.rerankerBaseURL
@@ -267,7 +275,7 @@ func main() {
 		slog.Info("reranker enabled", "model", cfg.rerankerModel, "base_url", rerankerBase)
 	}
 
-	chatSvc := service.NewChatService(retrieveSvc, llmClient, reranker, cfg.chatTopK)
+	chatSvc := service.NewChatService(retrieveSvc, llmClient, reranker, cfg.chatTopK, cfg.llmConfig, clientFactory)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
 
@@ -284,6 +292,7 @@ func main() {
 		worker.Trigger,
 		cfg.googleOAuthClientID,
 		cfg.googleOAuthClientSecret,
+		cfg.llmConfig.BaseURL,
 	)
 	srv := &http.Server{
 		Addr:        cfg.httpAddr,

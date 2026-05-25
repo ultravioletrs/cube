@@ -1,7 +1,11 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import UserMenu from '@/components/UserMenu'
+import { useAuth } from '@/hooks/useAuth'
+import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG } from '@/lib/modelConfig'
+import type { LLMProvider } from '@/lib/modelConfig'
+import { listOllamaModels } from '@/lib/api'
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -29,8 +33,8 @@ function Slider({ value, onChange, min, max, step, label }: { value: number; onC
 
 function SelectInput({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   return (
-    <select value={value} onChange={e => onChange(e.target.value)} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', width: '100%', outline: 'none', cursor: 'pointer' }}>
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    <select value={value} onChange={e => onChange(e.target.value)} style={{ background: '#111827', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', width: '100%', outline: 'none', cursor: 'pointer' }}>
+      {options.map(o => <option key={o.value} value={o.value} style={{ background: '#111827', color: '#e2e8f0' }}>{o.label}</option>)}
     </select>
   )
 }
@@ -71,12 +75,11 @@ function ProviderButtons({ providers, active, onSelect, labelMap }: { providers:
   )
 }
 
-const providerLabel: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', local: 'Local / Open-source', cohere: 'Cohere' }
+const providerLabel: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', local: 'Local / Ollama', cohere: 'Cohere' }
 
 const llmModels: Record<string, { value: string; label: string }[]> = {
   openai: [{ value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }, { value: 'o3', label: 'o3 (reasoning)' }],
-  anthropic: [{ value: 'claude-opus-4', label: 'Claude Opus 4' }, { value: 'claude-sonnet-4', label: 'Claude Sonnet 4' }, { value: 'claude-haiku-4', label: 'Claude Haiku 4' }],
-  local: [{ value: 'llama-3.3-70b', label: 'Llama 3.3 70B' }, { value: 'mistral-7b', label: 'Mistral 7B' }, { value: 'phi-4', label: 'Phi-4 (14B)' }],
+  anthropic: [{ value: 'claude-opus-4-5', label: 'Claude Opus 4.5' }, { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' }, { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }],
 }
 
 const embModels: Record<string, { value: string; label: string }[]> = {
@@ -86,20 +89,68 @@ const embModels: Record<string, { value: string; label: string }[]> = {
 }
 
 export default function ConfigPage() {
-  const [llmProvider, setLlmProvider] = useState('openai')
-  const [llmModel, setLlmModel] = useState('gpt-4o')
-  const [temperature, setTemperature] = useState(0.2)
-  const [maxTokens, setMaxTokens] = useState(1024)
-  const [streamResponses, setStreamResponses] = useState(true)
-  const [systemPrompt, setSystemPrompt] = useState('You are a document intelligence assistant. Answer only from retrieved document context. If you cannot find the answer in the documents, say so clearly.')
+  const { tokens } = useAuth()
+  const accessToken = tokens?.accessToken ?? ''
+
+  const [llmProvider, setLlmProvider] = useState<LLMProvider>(DEFAULT_MODEL_CONFIG.provider)
+  const [llmModel, setLlmModel] = useState(DEFAULT_MODEL_CONFIG.model)
+  const [apiKey, setApiKey] = useState(DEFAULT_MODEL_CONFIG.apiKey)
+  const [temperature, setTemperature] = useState(DEFAULT_MODEL_CONFIG.temperature)
+  const [maxTokens, setMaxTokens] = useState(DEFAULT_MODEL_CONFIG.maxTokens)
+  const [streamResponses, setStreamResponses] = useState(DEFAULT_MODEL_CONFIG.streamResponses)
+  const [systemPrompt, setSystemPrompt] = useState(DEFAULT_MODEL_CONFIG.systemPrompt)
   const [embProvider, setEmbProvider] = useState('openai')
   const [embModel, setEmbModel] = useState('text-embedding-3-large')
   const [chunkSize, setChunkSize] = useState(512)
   const [chunkOverlap, setChunkOverlap] = useState(64)
   const [topK, setTopK] = useState(5)
   const [saved, setSaved] = useState(false)
+  const [ollamaModels, setOllamaModels] = useState<string[]>([])
+  const [ollamaLoading, setOllamaLoading] = useState(false)
 
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000) }
+  useEffect(() => {
+    const cfg = loadModelConfig()
+    setLlmProvider(cfg.provider)
+    setLlmModel(cfg.model)
+    setApiKey(cfg.apiKey)
+    setTemperature(cfg.temperature)
+    setMaxTokens(cfg.maxTokens)
+    setStreamResponses(cfg.streamResponses)
+    setSystemPrompt(cfg.systemPrompt)
+  }, [])
+
+  useEffect(() => {
+    if (llmProvider !== 'local') return
+    setOllamaLoading(true)
+    listOllamaModels(accessToken, '')
+      .then(models => {
+        setOllamaModels(models)
+        // Auto-select the first model if none is currently set
+        setLlmModel(prev => prev || (models[0] ?? ''))
+      })
+      .catch(() => { setOllamaModels([]) })
+      .finally(() => { setOllamaLoading(false) })
+  }, [llmProvider, accessToken])
+
+  const handleProviderChange = (p: string) => {
+    const provider = p as LLMProvider
+    setLlmProvider(provider)
+    if (provider === 'local') {
+      setLlmModel(ollamaModels[0] ?? '')
+    } else {
+      setLlmModel(llmModels[provider]?.[0]?.value ?? '')
+    }
+  }
+
+  const currentModelOptions = llmProvider === 'local'
+    ? ollamaModels.map(m => ({ value: m, label: m }))
+    : llmModels[llmProvider] ?? []
+
+  const handleSave = () => {
+    saveModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
@@ -120,8 +171,21 @@ export default function ConfigPage() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px' }}>
         <div style={{ maxWidth: '760px', width: '100%', margin: '0 auto', display: 'flex', flexDirection: 'column', paddingBottom: '40px' }}>
           <Section title="Language Model" subtitle="Select the LLM used to generate responses from retrieved context.">
-            <Field label="Provider"><ProviderButtons providers={['openai', 'anthropic', 'local']} active={llmProvider} onSelect={p => { setLlmProvider(p); setLlmModel(llmModels[p][0].value) }} labelMap={providerLabel} /></Field>
-            <Field label="Model" hint="The selected model must support function calling for optimal RAG performance."><SelectInput value={llmModel} onChange={setLlmModel} options={llmModels[llmProvider] ?? []} /></Field>
+            <Field label="Provider"><ProviderButtons providers={['openai', 'anthropic', 'local']} active={llmProvider} onSelect={handleProviderChange} labelMap={providerLabel} /></Field>
+            {llmProvider !== 'local' && (
+              <Field label="API Key" hint={`Your ${providerLabel[llmProvider]} API key. Stored locally in your browser only.`}>
+                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+              </Field>
+            )}
+            <Field label="Model" hint={llmProvider === 'local' ? 'Models fetched live from your Ollama instance.' : 'The selected model must support function calling for optimal RAG performance.'}>
+              {llmProvider === 'local' && ollamaLoading
+                ? <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)', padding: '9px 0' }}>Loading models from Ollama…</div>
+                : <SelectInput value={llmModel} onChange={setLlmModel} options={currentModelOptions} />
+              }
+              {llmProvider === 'local' && !ollamaLoading && ollamaModels.length === 0 && (
+                <div style={{ marginTop: '8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ffb400' }}>No local models found — make sure Ollama is running.</div>
+              )}
+            </Field>
             <Field label="Temperature" hint="Lower values produce more deterministic, grounded responses."><Slider value={temperature} onChange={setTemperature} min={0} max={1} step={0.05} label="temperature" /></Field>
             <Field label="Max Output Tokens"><Slider value={maxTokens} onChange={setMaxTokens} min={256} max={4096} step={128} label="tokens" /></Field>
             <Field label="Stream responses">

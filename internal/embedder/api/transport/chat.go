@@ -23,6 +23,7 @@ type chatRequest struct {
 	Messages       []domain.ChatMessage `json:"messages"`
 	RecordIDs      []string             `json:"record_ids,omitempty"`
 	ConversationID string               `json:"conversation_id,omitempty"`
+	Model          *domain.ModelConfig  `json:"model,omitempty"`
 }
 
 func chatHandler(svc domain.ChatService, conversations domain.ConversationRepository) http.HandlerFunc {
@@ -58,7 +59,7 @@ func chatHandler(svc domain.ChatService, conversations domain.ConversationReposi
 			_ = conversations.AppendMessages(r.Context(), convID, toDomainMessages(req.Messages))
 		}
 
-		events, err := svc.Chat(r.Context(), domainID, req.Messages, req.RecordIDs)
+		events, err := svc.Chat(r.Context(), domainID, req.Messages, req.RecordIDs, req.Model)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("chat failed: "+err.Error()))
 			return

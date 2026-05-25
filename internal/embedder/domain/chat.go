@@ -43,10 +43,31 @@ type ChatEvent struct {
 	ConversationID string        `json:"conversation_id,omitempty"`
 }
 
+// ModelConfig carries per-request LLM overrides sent by the client.
+// Zero/empty values mean "use the server default".
+type ModelConfig struct {
+	// Provider selects the LLM backend: "ollama" or "openai".
+	// Use "openai" for any OpenAI-compatible API (OpenAI, Anthropic, etc.).
+	Provider string `json:"provider"`
+	// BaseURL overrides the server-configured endpoint.
+	// Leave empty to use the server default.
+	BaseURL string `json:"base_url,omitempty"`
+	// Model is the model identifier (e.g. "llama3.1:8b", "gpt-4o").
+	Model string `json:"model"`
+	// APIKey is required for OpenAI-compatible providers.
+	// Never logged or persisted on the server.
+	APIKey string `json:"api_key,omitempty"`
+	// Temperature controls response randomness (0–1).
+	Temperature float64 `json:"temperature"`
+	// MaxTokens caps the response length (0 = provider default).
+	MaxTokens int `json:"max_tokens,omitempty"`
+}
+
 // ChatService orchestrates the full RAG pipeline for a query.
 type ChatService interface {
 	// Chat embeds the query, retrieves relevant chunks, calls the LLM, and
 	// streams events to the returned channel.  The channel is closed when the
 	// stream ends (either successfully or after an error event).
-	Chat(ctx context.Context, domainID string, messages []ChatMessage, recordIDs []string) (<-chan ChatEvent, error)
+	// modelCfg is optional; nil means use the server-configured default.
+	Chat(ctx context.Context, domainID string, messages []ChatMessage, recordIDs []string, modelCfg *ModelConfig) (<-chan ChatEvent, error)
 }

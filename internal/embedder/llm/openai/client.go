@@ -17,10 +17,12 @@ import (
 
 // Client streams chat completions from the OpenAI API.
 type Client struct {
-	baseURL string
-	model   string
-	apiKey  string
-	http    *http.Client
+	baseURL     string
+	model       string
+	apiKey      string
+	temperature float64
+	maxTokens   int
+	http        *http.Client
 }
 
 // New returns an OpenAI chat streaming client.
@@ -33,15 +35,29 @@ func New(baseURL, model, apiKey string) *Client {
 	}
 }
 
+// NewFromConfig returns an OpenAI client configured from an llm.Config.
+func NewFromConfig(cfg llm.Config) *Client {
+	return &Client{
+		baseURL:     cfg.BaseURL,
+		model:       cfg.Model,
+		apiKey:      cfg.APIKey,
+		temperature: cfg.Temperature,
+		maxTokens:   cfg.MaxTokens,
+		http:        &http.Client{Timeout: 0},
+	}
+}
+
 type openAIMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
 }
 
 type streamRequest struct {
-	Model    string          `json:"model"`
-	Messages []openAIMessage `json:"messages"`
-	Stream   bool            `json:"stream"`
+	Model       string          `json:"model"`
+	Messages    []openAIMessage `json:"messages"`
+	Stream      bool            `json:"stream"`
+	Temperature float64         `json:"temperature,omitempty"`
+	MaxTokens   int             `json:"max_tokens,omitempty"`
 }
 
 type streamChunk struct {
@@ -63,9 +79,11 @@ func (c *Client) StreamChat(ctx context.Context, messages []llm.Message, out cha
 	}
 
 	body, err := json.Marshal(streamRequest{
-		Model:    c.model,
-		Messages: msgs,
-		Stream:   true,
+		Model:       c.model,
+		Messages:    msgs,
+		Stream:      true,
+		Temperature: c.temperature,
+		MaxTokens:   c.maxTokens,
 	})
 	if err != nil {
 		return fmt.Errorf("openai chat marshal request: %w", err)
