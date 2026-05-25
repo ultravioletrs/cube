@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { ATTESTATION_ENABLED } from '@/lib/features'
 import type { ActiveDomain } from '@/types'
 
 const CubeAILogo = () => (
@@ -127,6 +128,17 @@ const platformItems: NavItem[] = [
       </svg>
     ),
   },
+  ...(ATTESTATION_ENABLED ? [{
+    id: 'attestation',
+    label: 'Attestation',
+    path: '/attestation',
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <path d="M10 2L3 5v5c0 4.418 3.134 8.547 7 9.5C13.866 18.547 17 14.418 17 10V5l-7-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M7 10l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  }] : []),
 ]
 
 const bottomItems: NavItem[] = [
