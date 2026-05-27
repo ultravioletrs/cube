@@ -20,31 +20,6 @@ import {
 import type { AppContext } from '@/types'
 import UserMenu from '@/components/UserMenu'
 
-// ── tiny SVG sparkline ─────────────────────────────────────────────────────
-
-function Sparkline({ data, color, height = 40 }: { data: number[]; color: string; height?: number }) {
-  if (data.length < 2) return <div style={{ height }} />
-  const max = Math.max(...data, 1)
-  const w = 200
-  const pts = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w
-    const y = height - (v / max) * height
-    return `${x},${y}`
-  })
-  return (
-    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height} preserveAspectRatio="none" style={{ display: 'block' }}>
-      <polyline
-        points={pts.join(' ')}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
 // ── stat card ──────────────────────────────────────────────────────────────
 
 function StatCard({ title, value, sub, accent = false }: { title: string; value: string; sub?: string; accent?: boolean }) {

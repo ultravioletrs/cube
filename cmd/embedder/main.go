@@ -28,6 +28,7 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/rclone"
 	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
 	"github.com/ultravioletrs/cube/internal/embedder/llm"
+	"github.com/ultravioletrs/cube/internal/embedder/llm/guardrails"
 	"github.com/ultravioletrs/cube/internal/embedder/llm/ollama"
 	llmopenai "github.com/ultravioletrs/cube/internal/embedder/llm/openai"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
@@ -51,6 +52,7 @@ type config struct {
 	embeddingConfig         embedding.Config
 	llmConfig               llm.Config
 	chatTopK                int
+	guardrailsURL           string
 	rerankerModel           string
 	rerankerBaseURL         string
 	storageConfig           objstore.Config
@@ -138,6 +140,7 @@ func loadConfig() config {
 			APIKey:   env("EMBEDDER_LLM_API_KEY", ""),
 		},
 		chatTopK:             envInt("EMBEDDER_CHAT_TOP_K", 15),
+		guardrailsURL:        env("EMBEDDER_GUARDRAILS_URL", ""),
 		rerankerModel:        env("EMBEDDER_RERANKER_MODEL", ""),
 		rerankerBaseURL:      env("EMBEDDER_RERANKER_BASE_URL", ""),
 		chunkSize:            envInt("EMBEDDER_CHUNK_SIZE", 512),
@@ -276,12 +279,25 @@ func main() {
 		llmClient = ollama.New(cfg.llmConfig.BaseURL, cfg.llmConfig.Model)
 	}
 
+	var guardrailsCtrl *guardrails.Controller
+	if cfg.guardrailsURL != "" {
+		guardrailsCtrl = guardrails.NewController(guardrails.New(cfg.guardrailsURL))
+		llmClient = guardrailsCtrl.Wrap(llmClient)
+		slog.Info("guardrails enabled", "url", cfg.guardrailsURL)
+	}
+
 	// clientFactory builds a per-request LLM client when the caller overrides the model.
 	clientFactory := llm.ClientFactory(func(cfg llm.Config) llm.Client {
+		var client llm.Client
 		if cfg.Provider == "openai" {
-			return llmopenai.NewFromConfig(cfg)
+			client = llmopenai.NewFromConfig(cfg)
+		} else {
+			client = ollama.NewFromConfig(cfg)
 		}
-		return ollama.NewFromConfig(cfg)
+		if guardrailsCtrl != nil {
+			return guardrailsCtrl.Wrap(client)
+		}
+		return client
 	})
 
 	var reranker llm.Reranker
@@ -312,6 +328,7 @@ func main() {
 		cfg.googleOAuthClientID,
 		cfg.googleOAuthClientSecret,
 		cfg.llmConfig.BaseURL,
+		guardrailsCtrl,
 	)
 	srv := &http.Server{
 		Addr:        cfg.httpAddr,
