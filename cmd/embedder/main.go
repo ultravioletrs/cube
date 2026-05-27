@@ -47,6 +47,7 @@ type config struct {
 	rcloneConfigDir         string
 	rcloneTimeout           time.Duration
 	rclonePreflight         bool
+	extractionConfig        ingest.ExtractionConfig
 	embeddingConfig         embedding.Config
 	llmConfig               llm.Config
 	chatTopK                int
@@ -104,7 +105,20 @@ func loadConfig() config {
 		rcloneConfigDir:         env("EMBEDDER_RCLONE_CONFIG_DIR", "/etc/cube/rclone"),
 		rcloneTimeout:           envDuration("EMBEDDER_RCLONE_TIMEOUT", 2*time.Minute),
 		rclonePreflight:         envBool("EMBEDDER_RCLONE_PREFLIGHT", true),
-		embeddingConfig:         embeddingConfig,
+		extractionConfig: ingest.ExtractionConfig{
+			OCR: ingest.OCRConfig{
+				Enabled:            envBool("EMBEDDER_OCR_ENABLED", false),
+				ImageEnabled:       envBool("EMBEDDER_OCR_IMAGE_ENABLED", true),
+				PDFFallbackEnabled: envBool("EMBEDDER_OCR_PDF_FALLBACK_ENABLED", true),
+				Language:           env("EMBEDDER_OCR_LANG", "eng"),
+				Binary:             env("EMBEDDER_OCR_BINARY", "tesseract"),
+				PDFRenderBinary:    env("EMBEDDER_OCR_PDF_RENDER_BINARY", "pdftoppm"),
+				Timeout:            envDuration("EMBEDDER_OCR_TIMEOUT", 2*time.Minute),
+				MinTextChars:       envInt("EMBEDDER_OCR_MIN_TEXT_CHARS", 40),
+				MaxPDFPages:        envInt("EMBEDDER_OCR_MAX_PDF_PAGES", 20),
+			},
+		},
+		embeddingConfig: embeddingConfig,
 		storageConfig: objstore.Config{
 			Provider:          env("EMBEDDER_OBJECT_STORAGE_PROVIDER", objstore.ProviderLocal),
 			LocalDir:          env("EMBEDDER_UPLOAD_DIR", "/tmp/embedder/uploads"),
@@ -152,6 +166,7 @@ func loadProfileFromEnv(name string, fallback embedding.ProfileConfig) embedding
 
 func main() {
 	cfg := loadConfig()
+	ingest.SetExtractionConfig(cfg.extractionConfig)
 
 	level := slog.LevelInfo
 	if cfg.logLevel == "debug" {
@@ -165,6 +180,10 @@ func main() {
 
 	if err := runRclonePreflight(ctx, cfg); err != nil {
 		slog.Error("rclone preflight failed", "err", err)
+		os.Exit(1)
+	}
+	if err := runOCRPreflight(ctx, cfg.extractionConfig); err != nil {
+		slog.Error("ocr preflight failed", "err", err)
 		os.Exit(1)
 	}
 
@@ -421,6 +440,46 @@ func runRclonePreflight(ctx context.Context, cfg config) error {
 		versionLine = strings.TrimSpace(lines[0])
 	}
 	slog.Info("rclone preflight passed", "binary", binary, "config_dir", configDir, "version", versionLine)
+	return nil
+}
+
+func runOCRPreflight(ctx context.Context, cfg ingest.ExtractionConfig) error {
+	if !cfg.OCR.Enabled {
+		slog.Info("ocr preflight skipped")
+		return nil
+	}
+
+	timeout := cfg.OCR.Timeout
+	if timeout <= 0 || timeout > 15*time.Second {
+		timeout = 15 * time.Second
+	}
+	runCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	tesseractBinary := strings.TrimSpace(cfg.OCR.Binary)
+	if tesseractBinary == "" {
+		tesseractBinary = "tesseract"
+	}
+	out, err := exec.CommandContext(runCtx, tesseractBinary, "--version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("exec %q --version: %w (%s)", tesseractBinary, err, strings.TrimSpace(string(out)))
+	}
+
+	pdfRenderBinary := strings.TrimSpace(cfg.OCR.PDFRenderBinary)
+	if pdfRenderBinary == "" {
+		pdfRenderBinary = "pdftoppm"
+	}
+	out, err = exec.CommandContext(runCtx, pdfRenderBinary, "-v").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("exec %q -v: %w (%s)", pdfRenderBinary, err, strings.TrimSpace(string(out)))
+	}
+
+	slog.Info(
+		"ocr preflight passed",
+		"ocr_binary", tesseractBinary,
+		"pdf_render_binary", pdfRenderBinary,
+		"lang", cfg.OCR.Language,
+	)
 	return nil
 }
 

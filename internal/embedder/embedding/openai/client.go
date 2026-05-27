@@ -38,8 +38,9 @@ func (c *Client) Dimensions() int { return c.dims }
 // Embed sends a batch embedding request to OpenAI.
 func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error) {
 	type request struct {
-		Model string   `json:"model"`
-		Input []string `json:"input"`
+		Model      string   `json:"model"`
+		Input      []string `json:"input"`
+		Dimensions *int     `json:"dimensions,omitempty"`
 	}
 	type embeddingObject struct {
 		Embedding []float32 `json:"embedding"`
@@ -49,7 +50,15 @@ func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error)
 		Data []embeddingObject `json:"data"`
 	}
 
-	body, _ := json.Marshal(request{Model: c.model, Input: texts})
+	reqBody := request{
+		Model: c.model,
+		Input: texts,
+	}
+	if c.dims > 0 {
+		reqBody.Dimensions = &c.dims
+	}
+
+	body, _ := json.Marshal(reqBody)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/embeddings", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -78,6 +87,9 @@ func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error)
 	vecs := make([][]float32, len(texts))
 	for _, item := range res.Data {
 		if item.Index < len(vecs) {
+			if c.dims > 0 && len(item.Embedding) != c.dims {
+				return nil, fmt.Errorf("openai embed: expected %d dimensions, got %d", c.dims, len(item.Embedding))
+			}
 			vecs[item.Index] = item.Embedding
 		}
 	}

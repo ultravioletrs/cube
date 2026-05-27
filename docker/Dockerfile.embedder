@@ -9,10 +9,12 @@ RUN apk add --no-cache git && \
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags "-s -w" -o /exe ./cmd/embedder/main.go
 
-# Runtime image with poppler-utils (pdftotext) support.
+# Runtime image with poppler-utils + tesseract OCR support.
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-eng \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
