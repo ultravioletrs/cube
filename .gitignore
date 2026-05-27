@@ -21,6 +21,8 @@ docker/data/
 # Filesystem
 *.ext4
 *.backup
+__pycache__/
+*.pyc
 
 # Compiled binaries
 /embedder

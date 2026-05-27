@@ -194,6 +194,24 @@ services:
     volumes:
       - cube-embedder-db-volume:/var/lib/postgresql/data
 
+  cube-image-embedder:
+    container_name: cube-image-embedder
+    image: cube-image-embedder-local:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.image-embedder
+    restart: on-failure
+    networks:
+      - cube-network
+    environment:
+      IMAGE_EMBEDDER_MODEL: ${IMAGE_EMBEDDER_MODEL}
+      IMAGE_EMBEDDER_DIMENSIONS: ${IMAGE_EMBEDDER_DIMENSIONS}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=2)"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
   cube-embedder:
     container_name: cube-embedder
     image: cube-embedder-local:latest
@@ -203,6 +221,7 @@ services:
     depends_on:
       - auth
       - cube-embedder-db
+      - cube-image-embedder
       - magistrala-seaweedfs-s3
     environment:
       EMBEDDER_HTTP_ADDR: ${EMBEDDER_HTTP_ADDR}
@@ -260,6 +279,10 @@ services:
       EMBEDDER_OCR_TIMEOUT: ${EMBEDDER_OCR_TIMEOUT}
       EMBEDDER_OCR_MIN_TEXT_CHARS: ${EMBEDDER_OCR_MIN_TEXT_CHARS}
       EMBEDDER_OCR_MAX_PDF_PAGES: ${EMBEDDER_OCR_MAX_PDF_PAGES}
+      EMBEDDER_IMAGE_EMBEDDING_URL: ${EMBEDDER_IMAGE_EMBEDDING_URL}
+      EMBEDDER_IMAGE_EMBEDDING_MODEL: ${EMBEDDER_IMAGE_EMBEDDING_MODEL}
+      EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS: ${EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS}
+      EMBEDDER_IMAGE_EMBEDDING_TIMEOUT: ${EMBEDDER_IMAGE_EMBEDDING_TIMEOUT}
       EMBEDDER_LOG_LEVEL: ${EMBEDDER_LOG_LEVEL}
       EMBEDDER_LLM_PROVIDER: ${EMBEDDER_LLM_PROVIDER}
       EMBEDDER_LLM_BASE_URL: ${EMBEDDER_LLM_BASE_URL}
@@ -267,7 +290,6 @@ services:
       EMBEDDER_LLM_API_KEY: ${EMBEDDER_LLM_API_KEY}
       EMBEDDER_CHAT_TOP_K: ${EMBEDDER_CHAT_TOP_K}
       EMBEDDER_GUARDRAILS_URL: ${EMBEDDER_GUARDRAILS_URL:-http://guardrails:8001}
-      EMBEDDER_RCLONE_PREFLIGHT: "false"
       EMBEDDER_RERANKER_MODEL: ${EMBEDDER_RERANKER_MODEL}
       EMBEDDER_RERANKER_BASE_URL: ${EMBEDDER_RERANKER_BASE_URL}
     volumes:
@@ -656,3 +678,7 @@ services:
       AWS_SECRET_ACCESS_KEY: ${MG_BACKEND_OBJECT_STORAGE_SECRET_KEY}
       AWS_DEFAULT_REGION: ${MG_BACKEND_OBJECT_STORAGE_REGION}
       AWS_EC2_METADATA_DISABLED: "true"
+
+networks:
+  cube-network:
+    driver: bridge

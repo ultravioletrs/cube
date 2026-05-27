@@ -22,6 +22,7 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
+	"github.com/ultravioletrs/cube/internal/embedder/imageembedding"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/google"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
@@ -49,6 +50,7 @@ type config struct {
 	rcloneTimeout           time.Duration
 	rclonePreflight         bool
 	extractionConfig        ingest.ExtractionConfig
+	imageEmbeddingConfig    imageEmbeddingConfig
 	embeddingConfig         embedding.Config
 	llmConfig               llm.Config
 	chatTopK                int
@@ -62,6 +64,13 @@ type config struct {
 	ingestMaxConcurrency    int
 	ingestPollInterval      time.Duration
 	ingestEmbedBatchSize    int
+}
+
+type imageEmbeddingConfig struct {
+	URL        string
+	Model      string
+	Dimensions int
+	Timeout    time.Duration
 }
 
 func loadConfig() config {
@@ -119,6 +128,12 @@ func loadConfig() config {
 				MinTextChars:       envInt("EMBEDDER_OCR_MIN_TEXT_CHARS", 40),
 				MaxPDFPages:        envInt("EMBEDDER_OCR_MAX_PDF_PAGES", 20),
 			},
+		},
+		imageEmbeddingConfig: imageEmbeddingConfig{
+			URL:        env("EMBEDDER_IMAGE_EMBEDDING_URL", ""),
+			Model:      env("EMBEDDER_IMAGE_EMBEDDING_MODEL", "deterministic-image-test"),
+			Dimensions: envInt("EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS", 512),
+			Timeout:    envDuration("EMBEDDER_IMAGE_EMBEDDING_TIMEOUT", 30*time.Second),
 		},
 		embeddingConfig: embeddingConfig,
 		storageConfig: objstore.Config{
@@ -225,6 +240,7 @@ func main() {
 	sourcesRepo := postgres.NewSourcesRepository(pool)
 	recordsRepo := postgres.NewRecordsRepository(pool)
 	chunksRepo := postgres.NewChunksRepository(pool)
+	imageEmbeddingsRepo := postgres.NewImageEmbeddingsRepository(pool)
 	conversationsRepo := postgres.NewConversationsRepository(pool)
 	rcloneClient := ingest.NewCommandRcloneClient(cfg.rcloneBinary, cfg.rcloneConfigDir, cfg.rcloneTimeout)
 	sourceProviders := ingest.NewSourceProviderRegistry(
@@ -265,6 +281,23 @@ func main() {
 	worker.SetMaxConcurrent(cfg.ingestMaxConcurrency)
 	worker.SetPollInterval(cfg.ingestPollInterval)
 	worker.SetEmbedBatchSize(cfg.ingestEmbedBatchSize)
+	if strings.TrimSpace(cfg.imageEmbeddingConfig.URL) != "" {
+		worker.SetImageEmbedding(
+			imageEmbeddingsRepo,
+			imageembedding.New(
+				cfg.imageEmbeddingConfig.URL,
+				cfg.imageEmbeddingConfig.Model,
+				cfg.imageEmbeddingConfig.Dimensions,
+				cfg.imageEmbeddingConfig.Timeout,
+			),
+		)
+		slog.Info(
+			"image embeddings enabled",
+			"url", cfg.imageEmbeddingConfig.URL,
+			"model", cfg.imageEmbeddingConfig.Model,
+			"dimensions", cfg.imageEmbeddingConfig.Dimensions,
+		)
+	}
 	go worker.Run(ctx)
 
 	retrieveSvc := service.NewVectorRetrieveService(chunksRepo, embeddingRegistry)
