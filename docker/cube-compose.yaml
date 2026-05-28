@@ -206,6 +206,9 @@ services:
     environment:
       IMAGE_EMBEDDER_MODEL: ${IMAGE_EMBEDDER_MODEL}
       IMAGE_EMBEDDER_DIMENSIONS: ${IMAGE_EMBEDDER_DIMENSIONS}
+      IMAGE_EMBEDDER_OPENCLIP_BACKBONE: ${IMAGE_EMBEDDER_OPENCLIP_BACKBONE}
+      IMAGE_EMBEDDER_OPENCLIP_PRETRAINED: ${IMAGE_EMBEDDER_OPENCLIP_PRETRAINED}
+      IMAGE_EMBEDDER_DEVICE: ${IMAGE_EMBEDDER_DEVICE}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health', timeout=2)"]
       interval: 10s

@@ -131,7 +131,7 @@ func loadConfig() config {
 		},
 		imageEmbeddingConfig: imageEmbeddingConfig{
 			URL:        env("EMBEDDER_IMAGE_EMBEDDING_URL", ""),
-			Model:      env("EMBEDDER_IMAGE_EMBEDDING_MODEL", "deterministic-image-test"),
+			Model:      env("EMBEDDER_IMAGE_EMBEDDING_MODEL", "openclip-vit-b-32"),
 			Dimensions: envInt("EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS", 512),
 			Timeout:    envDuration("EMBEDDER_IMAGE_EMBEDDING_TIMEOUT", 30*time.Second),
 		},

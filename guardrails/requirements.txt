@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 nemoguardrails[tracing,sdd]==0.19.0
+dataclasses-json==0.6.7
 fastapi==0.125.0
 uvicorn[standard]==0.38.0
 #python-multipart==0.0.21

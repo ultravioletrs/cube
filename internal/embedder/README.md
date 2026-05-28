@@ -42,7 +42,7 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_OCR_MIN_TEXT_CHARS` | Min extracted PDF chars before OCR fallback kicks in | `40` |
 | `EMBEDDER_OCR_MAX_PDF_PAGES` | Max PDF pages rendered for OCR fallback | `20` |
 | `EMBEDDER_IMAGE_EMBEDDING_URL` | Optional visual image embedding sidecar URL | optional |
-| `EMBEDDER_IMAGE_EMBEDDING_MODEL` | Visual embedding model label sent to the sidecar | `deterministic-image-test` |
+| `EMBEDDER_IMAGE_EMBEDDING_MODEL` | Visual embedding model label sent to the sidecar | `openclip-vit-b-32` |
 | `EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS` | Expected visual embedding dimensions | `512` |
 | `EMBEDDER_IMAGE_EMBEDDING_TIMEOUT` | Image embedding request timeout | `30s` |
 | `EMBEDDER_GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID | optional |
