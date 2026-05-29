@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { createSource, deleteRecord, deleteSource, listRecords, listSources, retryRecordIngest, syncSource, updateGoogleSourceSelection, uploadRecordFile } from '@/lib/embedder/service'
+import { imageIngestLabel, imageIngestStatusText, imageRecordSubtext } from '@/lib/embedder/image-ingest'
 import type { AppContext, AppRecord, DriveSource, DriveSourceDraft } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import AddRecordModal from '@/components/AddRecordModal'
@@ -87,7 +88,7 @@ function RecordIcon({ record }: { record: AppRecord }) {
 function recordSubtext(record: AppRecord): string {
   if (record.format === 'link') return record.url ?? ''
   if (record.format === 'image') {
-    return record.chunks != null ? `${record.chunks} image vectors` : 'image embedding…'
+    return imageRecordSubtext(record)
   }
   if (record.chunks != null) {
     return record.pages != null ? `${record.chunks} chunks · ${record.pages} pages` : `${record.chunks} chunks`
@@ -134,6 +135,7 @@ function DetailPanel({ record, onClose, onStartChat }: { record: AppRecord; onCl
   meta.push({ label: 'ADDED', value: record.createdAt })
   if (record.format !== 'link' && record.format !== 'image' && record.pages != null)
     meta.push({ label: 'PAGES', value: String(record.pages) })
+  if (record.format === 'image') meta.push({ label: 'MODE', value: imageIngestLabel(record) })
   meta.push({ label: 'CHUNKS', value: record.chunks != null ? `${record.chunks} vectors` : 'pending' })
 
   return (
@@ -178,7 +180,9 @@ function DetailPanel({ record, onClose, onStartChat }: { record: AppRecord; onCl
             <circle cx="7" cy="7" r="6" stroke="var(--accent)" strokeWidth="1.2"/>
             <path d="M5 7l1.5 1.5L9 5" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>Fully indexed · available for retrieval</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            {record.format === 'image' ? imageIngestStatusText(record) : 'Fully indexed · available for retrieval'}
+          </span>
         </div>
       )}
 
