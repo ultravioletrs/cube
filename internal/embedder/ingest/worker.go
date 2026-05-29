@@ -167,6 +167,11 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
+	if rec.Format == domain.RecordFormatImage {
+		w.processImageRecord(ctx, rec, logger)
+		return
+	}
+
 	text, pageCount, err := w.downloadContent(ctx, rec)
 	if err != nil {
 		logger.Warn("ingest: download failed", "err", err)
@@ -205,21 +210,99 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
-	if rec.Format == domain.RecordFormatImage && w.imageEmbeddings != nil && w.imageEmbedder != nil {
-		if err := w.imageEmbeddings.DeleteByRecord(ctx, rec.ID); err != nil {
-			logger.Warn("ingest: delete previous image embedding failed", "err", err)
-		}
-		if err := w.storeImageEmbedding(ctx, rec, logger); err != nil {
-			logger.Warn("ingest: image embedding skipped", "err", err)
-		}
-	}
-
 	_ = w.records.UpdateAfterIngest(ctx, rec.ID, domain.IngestResult{
 		ChunkCount: len(chunks),
 		SizeBytes:  int64(len(text)),
 		PageCount:  pageCount,
 	})
 	logger.Info("ingest: indexed", "chunks", len(chunks))
+}
+
+func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logger *slog.Logger) {
+	content, err := w.downloadRawContent(ctx, rec)
+	if err != nil {
+		logger.Warn("ingest: image download failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	doc, err := ExtractText(DriveFile{
+		Name:     rec.Name,
+		MimeType: rec.MimeType,
+	}, content)
+	if err != nil {
+		logger.Warn("ingest: image extraction failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+	if doc.ImageMode == ImageIngestModeNone {
+		doc.ImageMode = ImageIngestModeImage
+	}
+
+	chunks := chunk(doc.Text, w.chunkSize, w.overlap)
+	if len(chunks) == 0 {
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, "image produced zero chunks")
+		return
+	}
+
+	// Text chunks from images are always embedded with the text profile. The
+	// visual signal is stored separately in image_embeddings when selected below.
+	embedder, err := w.embeddings.ForRecord(domain.Record{Format: domain.RecordFormatText})
+	if err != nil {
+		logger.Warn("ingest: select text embedding model failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	embeddings, err := embedBatched(ctx, embedder, chunks, w.embedBatchSize)
+	if err != nil {
+		logger.Warn("ingest: embed image text failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	chunkObjs := make([]postgres.Chunk, len(chunks))
+	for i, c := range chunks {
+		chunkObjs[i] = postgres.Chunk{Content: c, Embedding: embeddings[i]}
+	}
+
+	if err := w.chunks.StoreChunks(ctx, rec.DomainID, rec.UserID, rec.ID, chunkObjs); err != nil {
+		logger.Error("ingest: store image text chunks", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	if w.imageEmbeddings != nil {
+		if err := w.imageEmbeddings.DeleteByRecord(ctx, rec.ID); err != nil {
+			logger.Warn("ingest: delete previous image embedding failed", "err", err)
+		}
+	}
+	if doc.ImageMode != ImageIngestModeOCR && w.imageEmbeddings != nil && w.imageEmbedder != nil {
+		if err := w.storeImageEmbeddingContent(ctx, rec, content, logger); err != nil {
+			logger.Warn("ingest: visual image embedding skipped", "err", err)
+		}
+	}
+
+	_ = w.records.UpdateAfterIngest(ctx, rec.ID, domain.IngestResult{
+		ChunkCount:  len(chunks),
+		SizeBytes:   int64(len(content)),
+		PageCount:   doc.PageCount,
+		Description: imageIngestDescription(doc),
+	})
+	logger.Info("ingest: image indexed", "chunks", len(chunks), "mode", doc.ImageMode, "ocr_chars", doc.OCRTextCharCount)
+}
+
+func imageIngestDescription(doc ExtractedDocument) string {
+	switch doc.ImageMode {
+	case ImageIngestModeOCR:
+		return "Image ingest mode: OCR only"
+	case ImageIngestModeHybrid:
+		return "Image ingest mode: hybrid OCR + visual embedding"
+	case ImageIngestModeImage:
+		return "Image ingest mode: visual embedding"
+	default:
+		return ""
+	}
 }
 
 // embedBatched sends chunks to the embedder in groups so a single large
@@ -248,6 +331,10 @@ func (w *Worker) storeImageEmbedding(ctx context.Context, rec domain.Record, log
 	if err != nil {
 		return err
 	}
+	return w.storeImageEmbeddingContent(ctx, rec, content, logger)
+}
+
+func (w *Worker) storeImageEmbeddingContent(ctx context.Context, rec domain.Record, content []byte, logger *slog.Logger) error {
 	result, err := w.imageEmbedder.EmbedImage(ctx, rec.Name, rec.MimeType, content)
 	if err != nil {
 		return err

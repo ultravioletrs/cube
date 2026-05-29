@@ -20,6 +20,7 @@ The deterministic provider is still available for local plumbing tests. It retur
 
 - `GET /health`
 - `POST /embed-image`
+- `POST /embed-text`
 
 ```json
 {
@@ -29,6 +30,18 @@ The deterministic provider is still available for local plumbing tests. It retur
   "dimensions": 512
 }
 ```
+
+`/embed-text` accepts:
+
+```json
+{
+  "text": "red product photo",
+  "model": "openclip-vit-b-32",
+  "dimensions": 512
+}
+```
+
+It returns a text-query vector in the same CLIP space as `/embed-image`, so text queries can retrieve visual image embeddings.
 
 The response is:
 

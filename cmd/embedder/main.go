@@ -118,15 +118,16 @@ func loadConfig() config {
 		rclonePreflight:         envBool("EMBEDDER_RCLONE_PREFLIGHT", true),
 		extractionConfig: ingest.ExtractionConfig{
 			OCR: ingest.OCRConfig{
-				Enabled:            envBool("EMBEDDER_OCR_ENABLED", false),
-				ImageEnabled:       envBool("EMBEDDER_OCR_IMAGE_ENABLED", true),
-				PDFFallbackEnabled: envBool("EMBEDDER_OCR_PDF_FALLBACK_ENABLED", true),
-				Language:           env("EMBEDDER_OCR_LANG", "eng"),
-				Binary:             env("EMBEDDER_OCR_BINARY", "tesseract"),
-				PDFRenderBinary:    env("EMBEDDER_OCR_PDF_RENDER_BINARY", "pdftoppm"),
-				Timeout:            envDuration("EMBEDDER_OCR_TIMEOUT", 2*time.Minute),
-				MinTextChars:       envInt("EMBEDDER_OCR_MIN_TEXT_CHARS", 40),
-				MaxPDFPages:        envInt("EMBEDDER_OCR_MAX_PDF_PAGES", 20),
+				Enabled:                  envBool("EMBEDDER_OCR_ENABLED", false),
+				ImageEnabled:             envBool("EMBEDDER_OCR_IMAGE_ENABLED", true),
+				PDFFallbackEnabled:       envBool("EMBEDDER_OCR_PDF_FALLBACK_ENABLED", true),
+				Language:                 env("EMBEDDER_OCR_LANG", "eng"),
+				Binary:                   env("EMBEDDER_OCR_BINARY", "tesseract"),
+				PDFRenderBinary:          env("EMBEDDER_OCR_PDF_RENDER_BINARY", "pdftoppm"),
+				Timeout:                  envDuration("EMBEDDER_OCR_TIMEOUT", 2*time.Minute),
+				MinTextChars:             envInt("EMBEDDER_OCR_MIN_TEXT_CHARS", 40),
+				ImageOCROnlyMinTextChars: envInt("EMBEDDER_OCR_IMAGE_OCR_ONLY_MIN_TEXT_CHARS", 1200),
+				MaxPDFPages:              envInt("EMBEDDER_OCR_MAX_PDF_PAGES", 20),
 			},
 		},
 		imageEmbeddingConfig: imageEmbeddingConfig{
@@ -281,15 +282,17 @@ func main() {
 	worker.SetMaxConcurrent(cfg.ingestMaxConcurrency)
 	worker.SetPollInterval(cfg.ingestPollInterval)
 	worker.SetEmbedBatchSize(cfg.ingestEmbedBatchSize)
+	var imageEmbeddingClient *imageembedding.Client
 	if strings.TrimSpace(cfg.imageEmbeddingConfig.URL) != "" {
+		imageEmbeddingClient = imageembedding.New(
+			cfg.imageEmbeddingConfig.URL,
+			cfg.imageEmbeddingConfig.Model,
+			cfg.imageEmbeddingConfig.Dimensions,
+			cfg.imageEmbeddingConfig.Timeout,
+		)
 		worker.SetImageEmbedding(
 			imageEmbeddingsRepo,
-			imageembedding.New(
-				cfg.imageEmbeddingConfig.URL,
-				cfg.imageEmbeddingConfig.Model,
-				cfg.imageEmbeddingConfig.Dimensions,
-				cfg.imageEmbeddingConfig.Timeout,
-			),
+			imageEmbeddingClient,
 		)
 		slog.Info(
 			"image embeddings enabled",
@@ -300,7 +303,7 @@ func main() {
 	}
 	go worker.Run(ctx)
 
-	retrieveSvc := service.NewVectorRetrieveService(chunksRepo, embeddingRegistry)
+	retrieveSvc := service.NewMultimodalRetrieveService(chunksRepo, imageEmbeddingsRepo, embeddingRegistry, imageEmbeddingClient)
 
 	// ── LLM client & chat service ─────────────────────────────────────────────
 

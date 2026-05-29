@@ -6,7 +6,9 @@ package postgres
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -27,6 +29,7 @@ type ImageEmbeddingsRepository struct {
 
 type dbExecutor interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // NewImageEmbeddingsRepository creates an image embeddings repository.
@@ -66,4 +69,76 @@ func (r *ImageEmbeddingsRepository) DeleteByRecord(ctx context.Context, recordID
 		return fmt.Errorf("delete image embedding: %w", err)
 	}
 	return nil
+}
+
+// Search returns records whose visual image vector is closest to queryVec.
+func (r *ImageEmbeddingsRepository) Search(
+	ctx context.Context,
+	domainID string,
+	queryVec []float32,
+	limit int,
+	recordIDs []string,
+) ([]ChunkSearchResult, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	vec := float32SliceToPGVector(queryVec)
+	args := []any{domainID, vec}
+	next := 3
+
+	var recordIDFilter string
+	if len(recordIDs) > 0 {
+		phs := make([]string, 0, len(recordIDs))
+		for _, id := range recordIDs {
+			if id = strings.TrimSpace(id); id == "" {
+				continue
+			}
+			phs = append(phs, fmt.Sprintf("$%d", next))
+			args = append(args, id)
+			next++
+		}
+		if len(phs) > 0 {
+			recordIDFilter = " AND rec.id IN (" + strings.Join(phs, ",") + ")"
+		}
+	}
+
+	args = append(args, limit)
+	limitPH := fmt.Sprintf("$%d", next)
+
+	query := `
+		SELECT rec.id,
+		       rec.name,
+		       COALESCE(rec.external_url, ''),
+		       COALESCE(rec.description, '')
+		FROM image_embeddings ie
+		JOIN records rec ON rec.id = ie.record_id
+		WHERE ie.domain_id = $1 AND rec.status = 'indexed'` + recordIDFilter + `
+		ORDER BY ie.embedding <-> $2::vector
+		LIMIT ` + limitPH
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("search image embeddings: %w", err)
+	}
+	defer rows.Close()
+
+	results := make([]ChunkSearchResult, 0, limit)
+	for rows.Next() {
+		var res ChunkSearchResult
+		var description string
+		if err := rows.Scan(&res.RecordID, &res.RecordName, &res.ExternalURL, &description); err != nil {
+			return nil, fmt.Errorf("scan image embedding result: %w", err)
+		}
+		res.ChunkIndex = -1
+		res.Content = "Visual image match: " + res.RecordName
+		if strings.TrimSpace(description) != "" {
+			res.Content += ". " + description
+		}
+		results = append(results, res)
+	}
+	return results, rows.Err()
 }

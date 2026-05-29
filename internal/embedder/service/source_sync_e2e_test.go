@@ -39,12 +39,13 @@ func TestSourceSyncService_NativeProvidersE2E(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			source := domain.Source{
-				ID:     "src-1",
-				UserID: "user-1",
-				Type:   tc.sourceType,
-				Name:   "Docs",
-				Config: tc.config,
-				Status: domain.SourceStatusActive,
+				ID:       "src-1",
+				DomainID: "domain-1",
+				UserID:   "user-1",
+				Type:     tc.sourceType,
+				Name:     "Docs",
+				Config:   tc.config,
+				Status:   domain.SourceStatusActive,
 			}
 			sources := &sourceRepoSyncStub{source: source}
 			records := &recordRepoSyncStub{}
@@ -62,7 +63,7 @@ func TestSourceSyncService_NativeProvidersE2E(t *testing.T) {
 			providers := ingest.NewSourceProviderRegistry(provider)
 
 			svc := NewSourceSyncService(sources, records, providers)
-			res, err := svc.Sync(context.Background(), source.ID, source.UserID)
+			res, err := svc.Sync(context.Background(), source.ID, source.DomainID)
 			if err != nil {
 				t.Fatalf("sync failed: %v", err)
 			}
@@ -85,12 +86,13 @@ func TestSourceSyncService_NativeProvidersE2E(t *testing.T) {
 
 func TestSourceSyncService_AliasProviderE2E(t *testing.T) {
 	source := domain.Source{
-		ID:     "src-od",
-		UserID: "user-1",
-		Type:   domain.SourceTypeOneDrive,
-		Name:   "OneDrive Docs",
-		Config: json.RawMessage(`{"access_token":"token","drive_id":"drive-1","root_path":"team/docs"}`),
-		Status: domain.SourceStatusActive,
+		ID:       "src-od",
+		DomainID: "domain-1",
+		UserID:   "user-1",
+		Type:     domain.SourceTypeOneDrive,
+		Name:     "OneDrive Docs",
+		Config:   json.RawMessage(`{"access_token":"token","drive_id":"drive-1","root_path":"team/docs"}`),
+		Status:   domain.SourceStatusActive,
 	}
 	sources := &sourceRepoSyncStub{source: source}
 	records := &recordRepoSyncStub{}
@@ -110,7 +112,7 @@ func TestSourceSyncService_AliasProviderE2E(t *testing.T) {
 	}
 
 	svc := NewSourceSyncService(sources, records, providers)
-	res, err := svc.Sync(context.Background(), source.ID, source.UserID)
+	res, err := svc.Sync(context.Background(), source.ID, source.DomainID)
 	if err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
@@ -158,15 +160,15 @@ func (s *sourceRepoSyncStub) Create(_ context.Context, src domain.Source) (domai
 	return src, nil
 }
 
-func (s *sourceRepoSyncStub) GetByID(_ context.Context, id, userID string) (domain.Source, error) {
-	if s.source.ID != id || s.source.UserID != userID {
+func (s *sourceRepoSyncStub) GetByID(_ context.Context, id, domainID string) (domain.Source, error) {
+	if s.source.ID != id || s.source.DomainID != domainID {
 		return domain.Source{}, domain.ErrNotFound
 	}
 	return s.source, nil
 }
 
-func (s *sourceRepoSyncStub) List(_ context.Context, userID string, _ domain.Page) (domain.SourcePage, error) {
-	if s.source.UserID != userID {
+func (s *sourceRepoSyncStub) List(_ context.Context, domainID string, _ domain.Page) (domain.SourcePage, error) {
+	if s.source.DomainID != domainID {
 		return domain.SourcePage{Sources: []domain.Source{}, Total: 0}, nil
 	}
 	return domain.SourcePage{Sources: []domain.Source{s.source}, Total: 1}, nil
@@ -178,12 +180,12 @@ func (s *sourceRepoSyncStub) Delete(_ context.Context, _, _ string) error {
 
 func (s *sourceRepoSyncStub) UpdateSyncResult(
 	_ context.Context,
-	id, userID string,
+	id, domainID string,
 	status domain.SourceStatus,
 	lastSyncAt time.Time,
 	lastSyncError *string,
 ) (domain.Source, error) {
-	if s.source.ID != id || s.source.UserID != userID {
+	if s.source.ID != id || s.source.DomainID != domainID {
 		return domain.Source{}, domain.ErrNotFound
 	}
 	s.source.Status = status
@@ -193,8 +195,8 @@ func (s *sourceRepoSyncStub) UpdateSyncResult(
 	return s.source, nil
 }
 
-func (s *sourceRepoSyncStub) UpdateConfig(_ context.Context, id, userID string, config json.RawMessage) (domain.Source, error) {
-	if s.source.ID != id || s.source.UserID != userID {
+func (s *sourceRepoSyncStub) UpdateConfig(_ context.Context, id, domainID string, config json.RawMessage) (domain.Source, error) {
+	if s.source.ID != id || s.source.DomainID != domainID {
 		return domain.Source{}, domain.ErrNotFound
 	}
 	s.source.Config = config

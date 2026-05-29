@@ -56,3 +56,33 @@ func TestEmbedImageDimensionMismatch(t *testing.T) {
 		t.Fatalf("expected dimension mismatch error")
 	}
 }
+
+func TestEmbedTextSendsRequestAndValidatesDimensions(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/embed-text" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(Result{
+			Embedding:  []float32{0.1, 0.2, 0.3},
+			Model:      "test",
+			Dimensions: 3,
+		})
+	}))
+	defer srv.Close()
+
+	client := New(srv.URL, "test", 3, time.Second)
+	result, err := client.EmbedText(context.Background(), "red product photo")
+	if err != nil {
+		t.Fatalf("EmbedText returned error: %v", err)
+	}
+	if len(result.Embedding) != 3 {
+		t.Fatalf("expected 3 dimensions, got %d", len(result.Embedding))
+	}
+	if got["text"] != "red product photo" {
+		t.Fatalf("expected text request field, got %v", got["text"])
+	}
+}

@@ -96,9 +96,10 @@ type RecordFilter struct {
 
 // IngestResult holds post-ingestion metadata written back to the record.
 type IngestResult struct {
-	ChunkCount int
-	SizeBytes  int64
-	PageCount  *int
+	ChunkCount  int
+	SizeBytes   int64
+	PageCount   *int
+	Description string
 }
 
 // RecordUpsertState describes what a sync operation changed.

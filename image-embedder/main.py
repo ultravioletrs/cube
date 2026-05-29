@@ -33,7 +33,13 @@ class EmbedImageRequest(BaseModel):
     dimensions: Optional[int] = Field(default=None, ge=1, le=4096)
 
 
-class EmbedImageResponse(BaseModel):
+class EmbedTextRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+    model: Optional[str] = None
+    dimensions: Optional[int] = Field(default=None, ge=1, le=4096)
+
+
+class EmbedResponse(BaseModel):
     embedding: List[float]
     model: str
     dimensions: int
@@ -50,8 +56,8 @@ def health() -> dict:
     }
 
 
-@app.post("/embed-image", response_model=EmbedImageResponse)
-def embed_image(req: EmbedImageRequest) -> EmbedImageResponse:
+@app.post("/embed-image", response_model=EmbedResponse)
+def embed_image(req: EmbedImageRequest) -> EmbedResponse:
     try:
         image = base64.b64decode(req.image_base64, validate=True)
     except Exception as exc:
@@ -61,15 +67,35 @@ def embed_image(req: EmbedImageRequest) -> EmbedImageResponse:
 
     dims = req.dimensions or DEFAULT_DIMENSIONS
     model = req.model or DEFAULT_MODEL
-    vector = embed(model, image, dims)
-    return EmbedImageResponse(embedding=vector, model=model, dimensions=dims)
+    vector = embed_image_bytes(model, image, dims)
+    return EmbedResponse(embedding=vector, model=model, dimensions=dims)
 
 
-def embed(model: str, image: bytes, dims: int) -> List[float]:
+@app.post("/embed-text", response_model=EmbedResponse)
+def embed_text(req: EmbedTextRequest) -> EmbedResponse:
+    text = req.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="empty text")
+
+    dims = req.dimensions or DEFAULT_DIMENSIONS
+    model = req.model or DEFAULT_MODEL
+    vector = embed_text_value(model, text, dims)
+    return EmbedResponse(embedding=vector, model=model, dimensions=dims)
+
+
+def embed_image_bytes(model: str, image: bytes, dims: int) -> List[float]:
     if model == DETERMINISTIC_MODEL:
         return deterministic_embedding(image, dims)
     if model == OPENCLIP_MODEL:
-        return openclip_provider().embed(image, dims)
+        return openclip_provider().embed_image(image, dims)
+    raise HTTPException(status_code=400, detail=f"unsupported model: {model}")
+
+
+def embed_text_value(model: str, text: str, dims: int) -> List[float]:
+    if model == DETERMINISTIC_MODEL:
+        return deterministic_embedding(text.encode("utf-8"), dims)
+    if model == OPENCLIP_MODEL:
+        return openclip_provider().embed_text(text, dims)
     raise HTTPException(status_code=400, detail=f"unsupported model: {model}")
 
 
@@ -101,8 +127,9 @@ class OpenCLIPProvider:
     _lock: threading.Lock = field(default_factory=threading.Lock)
     model: Any = None
     preprocess: Any = None
+    tokenizer: Any = None
 
-    def embed(self, image: bytes, dims: int) -> List[float]:
+    def embed_image(self, image: bytes, dims: int) -> List[float]:
         if dims != self.dimensions:
             raise HTTPException(
                 status_code=400,
@@ -116,6 +143,22 @@ class OpenCLIPProvider:
         with torch.no_grad():
             tensor = self.preprocess(pil_image).unsqueeze(0).to(self.device)
             features = self.model.encode_image(tensor)
+            features = features / features.norm(dim=-1, keepdim=True)
+        return features.squeeze(0).detach().cpu().tolist()
+
+    def embed_text(self, text: str, dims: int) -> List[float]:
+        if dims != self.dimensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{OPENCLIP_MODEL} supports {self.dimensions} dimensions, got {dims}",
+            )
+        self._load()
+
+        import torch
+
+        with torch.no_grad():
+            tokens = self.tokenizer([text]).to(self.device)
+            features = self.model.encode_text(tokens)
             features = features / features.norm(dim=-1, keepdim=True)
         return features.squeeze(0).detach().cpu().tolist()
 
@@ -137,6 +180,7 @@ class OpenCLIPProvider:
             model.eval()
             self.model = model
             self.preprocess = preprocess
+            self.tokenizer = open_clip.get_tokenizer(self.model_name)
             self._loaded = True
 
 

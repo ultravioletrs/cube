@@ -11,15 +11,16 @@ import (
 
 // OCRConfig controls OCR preprocessing behavior during extraction.
 type OCRConfig struct {
-	Enabled            bool
-	ImageEnabled       bool
-	PDFFallbackEnabled bool
-	Language           string
-	Binary             string
-	PDFRenderBinary    string
-	Timeout            time.Duration
-	MinTextChars       int
-	MaxPDFPages        int
+	Enabled                  bool
+	ImageEnabled             bool
+	PDFFallbackEnabled       bool
+	Language                 string
+	Binary                   string
+	PDFRenderBinary          string
+	Timeout                  time.Duration
+	MinTextChars             int
+	ImageOCROnlyMinTextChars int
+	MaxPDFPages              int
 }
 
 // ExtractionConfig controls extraction-level behavior shared by all providers.
@@ -36,15 +37,16 @@ func init() {
 func defaultExtractionConfig() ExtractionConfig {
 	return ExtractionConfig{
 		OCR: OCRConfig{
-			Enabled:            false,
-			ImageEnabled:       true,
-			PDFFallbackEnabled: true,
-			Language:           "eng",
-			Binary:             "tesseract",
-			PDFRenderBinary:    "pdftoppm",
-			Timeout:            2 * time.Minute,
-			MinTextChars:       40,
-			MaxPDFPages:        20,
+			Enabled:                  false,
+			ImageEnabled:             true,
+			PDFFallbackEnabled:       true,
+			Language:                 "eng",
+			Binary:                   "tesseract",
+			PDFRenderBinary:          "pdftoppm",
+			Timeout:                  2 * time.Minute,
+			MinTextChars:             40,
+			ImageOCROnlyMinTextChars: 1200,
+			MaxPDFPages:              20,
 		},
 	}
 }
@@ -80,6 +82,9 @@ func normalizeExtractionConfig(cfg ExtractionConfig) ExtractionConfig {
 	}
 	if ocr.MinTextChars <= 0 {
 		ocr.MinTextChars = def.OCR.MinTextChars
+	}
+	if ocr.ImageOCROnlyMinTextChars <= 0 {
+		ocr.ImageOCROnlyMinTextChars = def.OCR.ImageOCROnlyMinTextChars
 	}
 	if ocr.MaxPDFPages <= 0 {
 		ocr.MaxPDFPages = def.OCR.MaxPDFPages

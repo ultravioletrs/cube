@@ -50,6 +50,12 @@ type embedRequest struct {
 	Dimensions  int    `json:"dimensions,omitempty"`
 }
 
+type embedTextRequest struct {
+	Text       string `json:"text"`
+	Model      string `json:"model,omitempty"`
+	Dimensions int    `json:"dimensions,omitempty"`
+}
+
 // EmbedImage sends image bytes to the sidecar and validates the returned dimensions.
 func (c *Client) EmbedImage(ctx context.Context, name, mimeType string, image []byte) (Result, error) {
 	if len(image) == 0 {
@@ -94,6 +100,58 @@ func (c *Client) EmbedImage(ctx context.Context, name, mimeType string, image []
 	}
 	if c.dims > 0 && len(result.Embedding) != c.dims {
 		return Result{}, fmt.Errorf("image embedding: expected %d dimensions, got %d", c.dims, len(result.Embedding))
+	}
+	if result.Dimensions == 0 {
+		result.Dimensions = len(result.Embedding)
+	}
+	if strings.TrimSpace(result.Model) == "" {
+		result.Model = c.model
+	}
+	return result, nil
+}
+
+// EmbedText sends a text query to the sidecar and returns a vector in the same
+// space as visual image embeddings.
+func (c *Client) EmbedText(ctx context.Context, text string) (Result, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return Result{}, fmt.Errorf("image embedding text query is required")
+	}
+
+	body, err := json.Marshal(embedTextRequest{
+		Text:       text,
+		Model:      c.model,
+		Dimensions: c.dims,
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("image text embedding marshal: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/embed-text", bytes.NewReader(body))
+	if err != nil {
+		return Result{}, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return Result{}, fmt.Errorf("image text embedding request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return Result{}, fmt.Errorf("image text embedding status %d", resp.StatusCode)
+	}
+
+	var result Result
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return Result{}, fmt.Errorf("image text embedding decode: %w", err)
+	}
+	if len(result.Embedding) == 0 {
+		return Result{}, fmt.Errorf("image text embedding: empty vector")
+	}
+	if c.dims > 0 && len(result.Embedding) != c.dims {
+		return Result{}, fmt.Errorf("image text embedding: expected %d dimensions, got %d", c.dims, len(result.Embedding))
 	}
 	if result.Dimensions == 0 {
 		result.Dimensions = len(result.Embedding)
