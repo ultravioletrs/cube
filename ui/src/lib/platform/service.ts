@@ -44,15 +44,26 @@ const sdk = new SDK({
 export async function listDomains(token: string): Promise<Domain[]> {
   try {
     const page: DomainsPage = await sdk.Domains.Domains({ limit: 100, offset: 0 } as PageMetadata, token)
-    return page.domains ?? []
+    return uniqueDomains(page.domains ?? [])
   } catch (e) { throw sdkError(e) }
 }
 
 export async function listUserDomains(userID: string, token: string): Promise<Domain[]> {
   try {
     const page: DomainsPage = await sdk.Domains.ListUserDomains(userID, { limit: 100, offset: 0 } as PageMetadata, token)
-    return page.domains ?? []
+    return uniqueDomains(page.domains ?? [])
   } catch (e) { throw sdkError(e) }
+}
+
+function uniqueDomains(domains: Domain[]): Domain[] {
+  const seen = new Set<string>()
+  return domains.filter(domain => {
+    const key = domain.id || domain.route || domain.name
+    if (!key) return true
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 export function toRoute(name: string): string {
@@ -186,13 +197,15 @@ export interface JournalsResult {
   total: number
 }
 
+type JournalPageWithTotal = JournalsPage & { total?: number }
+
 export const JOURNAL_PAGE_SIZE = 10
 
 export async function listUserJournals(userID: string, token: string, page = 0): Promise<JournalsResult> {
   try {
     const meta: JournalsPageMetadata = { limit: JOURNAL_PAGE_SIZE, offset: page * JOURNAL_PAGE_SIZE }
-    const res: JournalsPage = await sdk.Journal.UserJournals(userID, meta, token)
-    return { journals: res.journals ?? [], total: (res as any).total ?? 0 }
+    const res: JournalPageWithTotal = await sdk.Journal.UserJournals(userID, meta, token)
+    return { journals: res.journals ?? [], total: res.total ?? 0 }
   } catch (e) { throw sdkError(e) }
 }
 
@@ -205,7 +218,7 @@ export async function listEntityJournals(
 ): Promise<JournalsResult> {
   try {
     const meta: JournalsPageMetadata = { limit: JOURNAL_PAGE_SIZE, offset: page * JOURNAL_PAGE_SIZE }
-    const res: JournalsPage = await sdk.Journal.EntityJournals(entityType, entityId, domainId, meta, token)
-    return { journals: res.journals ?? [], total: (res as any).total ?? 0 }
+    const res: JournalPageWithTotal = await sdk.Journal.EntityJournals(entityType, entityId, domainId, meta, token)
+    return { journals: res.journals ?? [], total: res.total ?? 0 }
   } catch (e) { throw sdkError(e) }
 }

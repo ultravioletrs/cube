@@ -1,6 +1,6 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { listDomains, createDomain, deleteDomain, toRoute } from '@/lib/platform/service'
@@ -35,40 +35,46 @@ function DomainIcon({ name }: { name: string }) {
   )
 }
 
-function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCreated: (d: Domain) => void }) {
+function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCreated: (d: Domain) => Promise<void> }) {
   const { tokens } = useAuth()
   const [name, setName] = useState('')
   const [route, setRoute] = useState('')
-  const [routeEdited, setRouteEdited] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<{ name?: string; route?: string }>({})
+  const submitting = useRef(false)
 
   function handleNameChange(value: string) {
     setName(value)
-    if (!routeEdited) setRoute(toRoute(value))
+    if (fieldErrors.name) setFieldErrors(prev => ({ ...prev, name: undefined }))
   }
 
   function handleRouteChange(value: string) {
-    setRouteEdited(true)
-    setRoute(value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+    setRoute(toRoute(value))
+    if (fieldErrors.route) setFieldErrors(prev => ({ ...prev, route: undefined }))
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!tokens?.accessToken || !name.trim() || !route.trim()) return
+    const nextErrors: { name?: string; route?: string } = {}
+    if (!name.trim()) nextErrors.name = 'Domain name is required.'
+    if (!route.trim()) nextErrors.route = 'Route is required.'
+    setFieldErrors(nextErrors)
+    if (Object.keys(nextErrors).length > 0 || submitting.current || !tokens?.accessToken) return
+
+    submitting.current = true
     setLoading(true)
     setError(null)
     try {
       const domain = await createDomain(name.trim(), route.trim(), tokens.accessToken)
-      onCreated(domain)
+      await onCreated(domain)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create domain')
     } finally {
+      submitting.current = false
       setLoading(false)
     }
   }
-
-  const canSubmit = !loading && !!name.trim() && !!route.trim()
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
@@ -83,7 +89,7 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
             <label style={{ display: 'block', fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', marginBottom: '5px' }}>
-              Domain name
+              Domain name *
             </label>
             <input
               type="text"
@@ -91,21 +97,31 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
               value={name}
               onChange={e => handleNameChange(e.target.value)}
               autoFocus
-              style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${fieldErrors.name ? 'rgba(255,107,107,0.5)' : 'var(--border)'}`, borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
             />
+            {fieldErrors.name && (
+              <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ff6b6b', margin: '5px 0 0' }}>{fieldErrors.name}</p>
+            )}
           </div>
 
           <div>
             <label style={{ display: 'block', fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', marginBottom: '5px' }}>
-              Route <span style={{ fontWeight: '400', color: 'var(--text-muted)' }}>(must be unique)</span>
+              Route * <span style={{ fontWeight: '400', color: 'var(--text-muted)' }}>(must be unique)</span>
             </label>
             <input
               type="text"
               placeholder="e.g. my-workspace"
               value={route}
               onChange={e => handleRouteChange(e.target.value)}
-              style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${fieldErrors.route ? 'rgba(255,107,107,0.5)' : 'var(--border)'}`, borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
             />
+            {fieldErrors.route ? (
+              <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ff6b6b', margin: '5px 0 0' }}>{fieldErrors.route}</p>
+            ) : (
+              <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', margin: '5px 0 0' }}>
+                Use lowercase letters, numbers, and hyphens only.
+              </p>
+            )}
           </div>
 
           {error && (
@@ -124,8 +140,8 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
             </button>
             <button
               type="submit"
-              disabled={!canSubmit}
-              style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: !canSubmit ? 'rgba(0,212,180,0.4)' : 'var(--accent)', color: '#070c16', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', fontWeight: '700', cursor: !canSubmit ? 'not-allowed' : 'pointer' }}
+              disabled={loading}
+              style={{ padding: '8px 18px', borderRadius: '8px', border: 'none', background: loading ? 'rgba(0,212,180,0.4)' : 'var(--accent)', color: '#070c16', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', fontWeight: '700', cursor: loading ? 'not-allowed' : 'pointer' }}
             >
               {loading ? 'Creating…' : 'Create'}
             </button>
@@ -186,8 +202,8 @@ export default function DomainsPage() {
     }
   }
 
-  function handleCreated(domain: Domain) {
-    setDomains(prev => [domain, ...prev])
+  async function handleCreated(domain: Domain) {
+    await load()
     setShowCreate(false)
     handleSelect(domain)
   }

@@ -120,11 +120,11 @@ async function parseResponse(response: Response): Promise<ParsedResponse> {
 function responseErrorMessage(response: Response, parsed: ParsedResponse): string {
   const data = asObject(parsed.data)
   const message = data?.['message']
-  if (typeof message === 'string' && message.trim()) return message
+  if (typeof message === 'string' && message.trim()) return friendlyAuthError(message)
 
   if (!parsed.parseFailed) {
     const text = parsed.text.trim()
-    if (text) return text
+    if (text) return friendlyAuthError(text)
   }
 
   if (response.status >= 500) {
@@ -132,6 +132,19 @@ function responseErrorMessage(response: Response, parsed: ParsedResponse): strin
   }
 
   return `Authentication request failed (${response.status}).`
+}
+
+function friendlyAuthError(message: string): string {
+  const normalized = message.toLowerCase()
+  if (
+    normalized.includes('compare hash and password failed') ||
+    normalized.includes('invalid credentials') ||
+    normalized.includes('invalid username') ||
+    normalized.includes('invalid password')
+  ) {
+    return 'Invalid username or password.'
+  }
+  return message
 }
 
 async function requestUsers<T>(

@@ -11,9 +11,12 @@ type RecordType = 'document' | 'image' | 'link'
 
 const RECORD_TYPES: { value: RecordType; label: string; description: string; accept: string }[] = [
   { value: 'document', label: 'Document', description: 'PDF, TXT, Markdown, or DOCX', accept: '.pdf,.txt,.md,.docx' },
-  { value: 'image',    label: 'Image',    description: 'PNG, JPG, WEBP, or GIF',  accept: '.png,.jpg,.jpeg,.webp,.gif' },
+  { value: 'image',    label: 'Image',    description: 'PNG, JPG, WEBP, GIF, or SVG',  accept: 'image/*,.svg' },
   { value: 'link',     label: 'Link',     description: 'Index any web page by URL', accept: '' },
 ]
+
+const DOCUMENT_EXTENSIONS = ['pdf', 'txt', 'md', 'docx']
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg']
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
@@ -92,6 +95,34 @@ function iconBg(t: RecordType) {
   return { bg: 'rgba(0,212,180,0.15)', border: 'rgba(0,212,180,0.25)' }
 }
 
+function fileExtension(file: File): string {
+  const idx = file.name.lastIndexOf('.')
+  if (idx < 0 || idx === file.name.length - 1) return ''
+  return file.name.slice(idx + 1).toLowerCase()
+}
+
+function isImageFile(file: File): boolean {
+  return file.type.startsWith('image/') || IMAGE_EXTENSIONS.includes(fileExtension(file))
+}
+
+function isDocumentFile(file: File): boolean {
+  return DOCUMENT_EXTENSIONS.includes(fileExtension(file))
+}
+
+function acceptsFile(recordType: RecordType, file: File): boolean {
+  if (recordType === 'image') return isImageFile(file)
+  if (recordType === 'document') return isDocumentFile(file)
+  return false
+}
+
+function rejectedFileMessage(recordType: RecordType, rejected: File[]): string {
+  if (rejected.length === 0) return ''
+  const names = rejected.slice(0, 3).map(file => file.name).join(', ')
+  const suffix = rejected.length > 3 ? ` and ${rejected.length - 3} more` : ''
+  const allowed = recordType === 'image' ? 'PNG, JPG, WEBP, GIF, or SVG images' : 'PDF, TXT, Markdown, or DOCX documents'
+  return `Skipped unsupported file${rejected.length > 1 ? 's' : ''}: ${names}${suffix}. Allowed: ${allowed}.`
+}
+
 export default function AddRecordModal({ onClose, onUploadFile }: Props) {
   const [step, setStep] = useState<'select-type' | 'configure'>('select-type')
   const [recordType, setRecordType] = useState<RecordType>('document')
@@ -110,16 +141,29 @@ export default function AddRecordModal({ onClose, onUploadFile }: Props) {
 
   const selectedType = RECORD_TYPES.find(t => t.value === recordType)!
 
+  function addFiles(nextFiles: File[]) {
+    const accepted = nextFiles.filter(file => acceptsFile(recordType, file))
+    const rejected = nextFiles.filter(file => !acceptsFile(recordType, file))
+
+    if (accepted.length > 0) {
+      setFiles(prev => [...prev, ...accepted])
+      setFormError('')
+    }
+    if (rejected.length > 0) {
+      setFormError(rejectedFileMessage(recordType, rejected))
+    }
+  }
+
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setDragging(false)
     const dropped = Array.from(e.dataTransfer.files)
-    if (dropped.length > 0) setFiles(prev => [...prev, ...dropped])
+    if (dropped.length > 0) addFiles(dropped)
   }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? [])
-    if (selected.length > 0) setFiles(prev => [...prev, ...selected])
+    if (selected.length > 0) addFiles(selected)
     e.target.value = ''
   }
 
@@ -172,7 +216,7 @@ export default function AddRecordModal({ onClose, onUploadFile }: Props) {
         {/* Header */}
         <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
           {step === 'configure' && (
-            <button onClick={() => { setStep('select-type'); setFiles([]) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', alignItems: 'center', borderRadius: '6px' }}>
+            <button onClick={() => { setStep('select-type'); setFiles([]); setFormError('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px', display: 'flex', alignItems: 'center', borderRadius: '6px' }}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
             </button>
           )}
@@ -262,16 +306,25 @@ export default function AddRecordModal({ onClose, onUploadFile }: Props) {
                   </svg>
                   <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)', fontWeight: '500' }}>Drop files or click to browse</div>
                   <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', marginTop: '5px' }}>{selectedType.description}</div>
+                  {recordType === 'image' && (
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--accent)', marginTop: '8px' }}>
+                      Images are uploaded as image records and indexed by the backend image embedding profile.
+                    </div>
+                  )}
                 </div>
               </div>
               {files.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
                   {files.map((f, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '7px 10px' }}>
-                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0, opacity: 0.5 }}>
-                        <rect x="3" y="1.5" width="11" height="15" rx="1.5" stroke="var(--text)" strokeWidth="1.4"/>
-                        <path d="M6 8h6M6 11h4" stroke="var(--text)" strokeWidth="1.3" strokeLinecap="round"/>
-                      </svg>
+                      {recordType === 'image'
+                        ? <ImageIcon />
+                        : (
+                            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" style={{ flexShrink: 0, opacity: 0.5 }}>
+                              <rect x="3" y="1.5" width="11" height="15" rx="1.5" stroke="var(--text)" strokeWidth="1.4"/>
+                              <path d="M6 8h6M6 11h4" stroke="var(--text)" strokeWidth="1.3" strokeLinecap="round"/>
+                            </svg>
+                          )}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
                         <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>{(f.size / 1024 / 1024).toFixed(2)} MB</div>

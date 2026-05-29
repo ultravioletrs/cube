@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { createSource, deleteRecord, deleteSource, listRecords, listSources, retryRecordIngest, syncSource, updateGoogleSourceSelection, uploadRecordFile } from '@/lib/embedder/service'
+import { imageIngestLabel, imageIngestStatusText, imageRecordSubtext } from '@/lib/embedder/image-ingest'
 import type { AppContext, AppRecord, DriveSource, DriveSourceDraft } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import AddRecordModal from '@/components/AddRecordModal'
@@ -22,6 +23,8 @@ const driveStatusColors = {
   error:        { bg: 'rgba(255,80,80,0.1)',   color: '#ff5050', dot: '#ff5050' },
   disconnected: { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
 }
+
+const RECORD_POLL_INTERVAL_MS = 2500
 
 function StatusBadge({ status }: { status: AppRecord['status'] }) {
   const c = statusColors[status] ?? statusColors.indexed
@@ -87,7 +90,7 @@ function RecordIcon({ record }: { record: AppRecord }) {
 function recordSubtext(record: AppRecord): string {
   if (record.format === 'link') return record.url ?? ''
   if (record.format === 'image') {
-    return record.chunks != null ? `${record.chunks} chunks` : 'indexing…'
+    return imageRecordSubtext(record)
   }
   if (record.chunks != null) {
     return record.pages != null ? `${record.chunks} chunks · ${record.pages} pages` : `${record.chunks} chunks`
@@ -134,6 +137,7 @@ function DetailPanel({ record, onClose, onStartChat }: { record: AppRecord; onCl
   meta.push({ label: 'ADDED', value: record.createdAt })
   if (record.format !== 'link' && record.format !== 'image' && record.pages != null)
     meta.push({ label: 'PAGES', value: String(record.pages) })
+  if (record.format === 'image') meta.push({ label: 'MODE', value: imageIngestLabel(record) })
   meta.push({ label: 'CHUNKS', value: record.chunks != null ? `${record.chunks} vectors` : 'pending' })
 
   return (
@@ -178,7 +182,9 @@ function DetailPanel({ record, onClose, onStartChat }: { record: AppRecord; onCl
             <circle cx="7" cy="7" r="6" stroke="var(--accent)" strokeWidth="1.2"/>
             <path d="M5 7l1.5 1.5L9 5" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>Fully indexed · available for retrieval</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            {record.format === 'image' ? imageIngestStatusText(record) : 'Fully indexed · available for retrieval'}
+          </span>
         </div>
       )}
 
@@ -211,14 +217,14 @@ export default function HomePage() {
   const domainID = activeDomain?.id ?? ''
   const cachedGoogleSource = driveSources.find(source => source.sourceType === 'google_drive' && !!source.accessToken)
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (options?: { silent?: boolean }) => {
     if (!accessToken) {
       setRecords([])
       setDriveSources([])
       return
     }
 
-    setIsLoading(true)
+    if (!options?.silent) setIsLoading(true)
     try {
       const [nextSources, nextRecords] = await Promise.all([
         listSources(accessToken, domainID),
@@ -231,7 +237,7 @@ export default function HomePage() {
       console.error('failed loading records/sources', err)
       setLoadError(err instanceof Error ? err.message : 'Failed to load records and sources')
     } finally {
-      setIsLoading(false)
+      if (!options?.silent) setIsLoading(false)
     }
   }, [accessToken, domainID, setDriveSources, setRecords])
 
@@ -239,6 +245,12 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshData()
   }, [refreshData])
+
+  useEffect(() => {
+    if (!accessToken || !records.some(record => record.status === 'processing')) return
+    const timer = window.setInterval(() => { void refreshData({ silent: true }) }, RECORD_POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [accessToken, records, refreshData])
 
   useEffect(() => {
     if (selected && !records.some(record => record.id === selected.id)) {
@@ -293,6 +305,9 @@ export default function HomePage() {
     if (!accessToken) return
     try {
       await retryRecordIngest(accessToken, domainID, record.id)
+      setRecords(prev => prev.map(item => (
+        item.id === record.id ? { ...item, status: 'processing', error: undefined } : item
+      )))
       setLoadError('')
       await refreshData()
     } catch (err) {

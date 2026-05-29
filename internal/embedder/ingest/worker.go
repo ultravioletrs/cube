@@ -44,6 +44,11 @@ type Worker struct {
 	trigger         chan struct{}
 }
 
+const (
+	imageEmbeddingMaxAttempts = 3
+	imageEmbeddingRetryDelay  = 2 * time.Second
+)
+
 // NewWorker creates an ingestion worker. chunkSize and overlap are in words.
 func NewWorker(
 	records domain.RecordRepository,
@@ -277,9 +282,17 @@ func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logg
 			logger.Warn("ingest: delete previous image embedding failed", "err", err)
 		}
 	}
-	if doc.ImageMode != ImageIngestModeOCR && w.imageEmbeddings != nil && w.imageEmbedder != nil {
-		if err := w.storeImageEmbeddingContent(ctx, rec, content, logger); err != nil {
-			logger.Warn("ingest: visual image embedding skipped", "err", err)
+	if doc.ImageMode != ImageIngestModeOCR {
+		if w.imageEmbeddings == nil || w.imageEmbedder == nil {
+			err := fmt.Errorf("visual image embedding is required for image ingest mode %q but is not configured", doc.ImageMode)
+			logger.Warn("ingest: visual image embedding failed", "err", err)
+			_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+			return
+		}
+		if err := w.storeImageEmbeddingContentWithRetry(ctx, rec, content, logger); err != nil {
+			logger.Warn("ingest: visual image embedding failed", "err", err)
+			_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+			return
 		}
 	}
 
@@ -331,7 +344,30 @@ func (w *Worker) storeImageEmbedding(ctx context.Context, rec domain.Record, log
 	if err != nil {
 		return err
 	}
-	return w.storeImageEmbeddingContent(ctx, rec, content, logger)
+	return w.storeImageEmbeddingContentWithRetry(ctx, rec, content, logger)
+}
+
+func (w *Worker) storeImageEmbeddingContentWithRetry(ctx context.Context, rec domain.Record, content []byte, logger *slog.Logger) error {
+	var lastErr error
+	for attempt := 1; attempt <= imageEmbeddingMaxAttempts; attempt++ {
+		if err := w.storeImageEmbeddingContent(ctx, rec, content, logger); err != nil {
+			lastErr = err
+			if attempt == imageEmbeddingMaxAttempts {
+				break
+			}
+			logger.Warn("ingest: visual image embedding retrying", "attempt", attempt, "max_attempts", imageEmbeddingMaxAttempts, "err", err)
+			timer := time.NewTimer(imageEmbeddingRetryDelay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return fmt.Errorf("visual image embedding cancelled: %w", ctx.Err())
+			case <-timer.C:
+			}
+			continue
+		}
+		return nil
+	}
+	return fmt.Errorf("visual image embedding failed after %d attempts: %w", imageEmbeddingMaxAttempts, lastErr)
 }
 
 func (w *Worker) storeImageEmbeddingContent(ctx context.Context, rec domain.Record, content []byte, logger *slog.Logger) error {

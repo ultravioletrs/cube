@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { deleteRecord, listRecords, retryRecordIngest, uploadRecordFile } from '@/lib/embedder/service'
+import { imageIngestLabel, imageIngestStatusText, imageRecordSubtext } from '@/lib/embedder/image-ingest'
 import type { AppContext, AppRecord } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import AddRecordModal from '@/components/AddRecordModal'
@@ -13,6 +14,8 @@ const statusColors = {
   processing: { bg: 'rgba(255,180,0,0.1)',  color: '#ffb400', dot: '#ffb400' },
   error:      { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
 }
+
+const RECORD_POLL_INTERVAL_MS = 2500
 
 function StatusBadge({ status }: { status: AppRecord['status'] }) {
   const c = statusColors[status] ?? statusColors.indexed
@@ -66,7 +69,7 @@ function RecordIcon({ record }: { record: AppRecord }) {
 function recordSubtext(record: AppRecord): string {
   if (record.format === 'link') return record.url ?? ''
   if (record.format === 'image') {
-    return record.chunks != null ? `${record.chunks} chunks` : 'indexing…'
+    return imageRecordSubtext(record)
   }
   if (record.chunks != null) {
     return record.pages != null ? `${record.chunks} chunks · ${record.pages} pages` : `${record.chunks} chunks`
@@ -120,6 +123,7 @@ function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRec
   meta.push({ label: 'ADDED', value: record.createdAt })
   if (record.format !== 'link' && record.format !== 'image' && record.pages != null)
     meta.push({ label: 'PAGES', value: String(record.pages) })
+  if (record.format === 'image') meta.push({ label: 'MODE', value: imageIngestLabel(record) })
   meta.push({ label: 'CHUNKS', value: record.chunks != null ? `${record.chunks} vectors` : 'pending' })
 
   return (
@@ -164,7 +168,9 @@ function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRec
             <circle cx="7" cy="7" r="6" stroke="var(--accent)" strokeWidth="1.2"/>
             <path d="M5 7l1.5 1.5L9 5" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>Fully indexed · available for retrieval</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            {record.format === 'image' ? imageIngestStatusText(record) : 'Fully indexed · available for retrieval'}
+          </span>
         </div>
       )}
 
@@ -226,6 +232,12 @@ export default function RecordsPage() {
     return () => { active = false }
   }, [accessToken, domainID, setRecords, refreshTick])
 
+  useEffect(() => {
+    if (!accessToken || !records.some(record => record.status === 'processing')) return
+    const timer = window.setInterval(refreshRecords, RECORD_POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [accessToken, records, refreshRecords])
+
   const filtered = records.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||
     (r.url ?? '').toLowerCase().includes(search.toLowerCase())
@@ -241,6 +253,9 @@ export default function RecordsPage() {
     if (!accessToken) return
     try {
       await retryRecordIngest(accessToken, domainID, id)
+      setRecords(prev => prev.map(record => (
+        record.id === id ? { ...record, status: 'processing', error: undefined } : record
+      )))
       refreshRecords()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to retry ingest')

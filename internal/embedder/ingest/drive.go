@@ -479,9 +479,7 @@ func extractImageText(f DriveFile, content []byte) ExtractedDocument {
 		cfg := GetExtractionConfig().OCR
 		charCount := len([]rune(condensedText(text)))
 		mode := ImageIngestModeHybrid
-		if charCount >= cfg.ImageOCROnlyMinTextChars {
-			mode = ImageIngestModeOCR
-		} else if charCount < cfg.MinTextChars {
+		if charCount < cfg.MinTextChars {
 			mode = ImageIngestModeImage
 		}
 		return ExtractedDocument{

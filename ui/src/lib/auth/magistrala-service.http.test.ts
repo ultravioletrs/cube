@@ -74,7 +74,7 @@ describe('magistralaAuthService HTTP handling', () => {
     ).rejects.toThrow('Authentication service is unavailable. Please try again.')
   })
 
-  it('surfaces backend JSON error message', async () => {
+  it('maps backend password mismatch to a user-friendly error', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ message: 'compare hash and password failed' }, 422),
     )
@@ -84,7 +84,7 @@ describe('magistralaAuthService HTTP handling', () => {
         identity: 'admin',
         password: 'wrongpass',
       }),
-    ).rejects.toThrow('compare hash and password failed')
+    ).rejects.toThrow('Invalid username or password.')
   })
 
   it('does not crash on malformed JSON error payloads', async () => {

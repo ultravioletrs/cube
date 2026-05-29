@@ -18,9 +18,28 @@ html, body, #root {
   background: var(--bg);
 }
 
+* {
+  caret-color: transparent;
+}
+
 body, #root {
   height: 100%;
   overflow: hidden;
+}
+
+button,
+[role="button"],
+a {
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable="true"],
+[contenteditable="plaintext-only"] {
+  caret-color: auto;
+  user-select: text;
 }
 
 @keyframes pulse {
