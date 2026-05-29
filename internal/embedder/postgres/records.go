@@ -303,9 +303,15 @@ func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res doma
 
 	_, err := r.pool.Exec(ctx,
 		`UPDATE records
-		 SET status='indexed', chunk_count=$1, size_bytes=$2, page_count=$3, error=NULL, updated_at=now()
-		 WHERE id=$4`,
-		res.ChunkCount, res.SizeBytes, pageCount, id,
+		 SET status='indexed',
+		     chunk_count=$1,
+		     size_bytes=$2,
+		     page_count=$3,
+		     description=COALESCE(NULLIF($4, ''), description),
+		     error=NULL,
+		     updated_at=now()
+		 WHERE id=$5`,
+		res.ChunkCount, res.SizeBytes, pageCount, res.Description, id,
 	)
 	return err
 }

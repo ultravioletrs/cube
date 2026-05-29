@@ -82,24 +82,7 @@ func (p *sourceProvider) DownloadRecord(
 	rec domain.Record,
 	src domain.Source,
 ) (string, *int, error) {
-	if rec.ExternalID == "" {
-		return "", nil, fmt.Errorf("record %s is missing external_id", rec.ID)
-	}
-
-	var cfg domain.GoogleDriveConfig
-	if err := json.Unmarshal(src.Config, &cfg); err != nil {
-		return "", nil, err
-	}
-
-	reader, err := ingest.NewDriveReaderFromConfig(ctx, cfg)
-	if err != nil {
-		return "", nil, err
-	}
-
-	body, err := reader.DownloadFile(ctx, ingest.DriveFile{
-		ID:       rec.ExternalID,
-		MimeType: rec.MimeType,
-	})
+	body, err := p.DownloadRecordContent(ctx, rec, src)
 	if err != nil {
 		return "", nil, err
 	}
@@ -113,6 +96,35 @@ func (p *sourceProvider) DownloadRecord(
 		return "", nil, err
 	}
 	return doc.Text, doc.PageCount, nil
+}
+
+func (p *sourceProvider) DownloadRecordContent(
+	ctx context.Context,
+	rec domain.Record,
+	src domain.Source,
+) ([]byte, error) {
+	if rec.ExternalID == "" {
+		return nil, fmt.Errorf("record %s is missing external_id", rec.ID)
+	}
+
+	var cfg domain.GoogleDriveConfig
+	if err := json.Unmarshal(src.Config, &cfg); err != nil {
+		return nil, err
+	}
+
+	reader, err := ingest.NewDriveReaderFromConfig(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := reader.DownloadFile(ctx, ingest.DriveFile{
+		ID:       rec.ExternalID,
+		MimeType: rec.MimeType,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }
 
 func parseRFC3339Ptr(value string) *time.Time {

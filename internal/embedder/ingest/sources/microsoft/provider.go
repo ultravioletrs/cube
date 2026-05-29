@@ -79,21 +79,7 @@ func (p *sourceProvider) DownloadRecord(
 	rec domain.Record,
 	src domain.Source,
 ) (string, *int, error) {
-	if strings.TrimSpace(rec.ExternalID) == "" {
-		return "", nil, fmt.Errorf("record %s is missing external_id", rec.ID)
-	}
-
-	var cfg domain.MicrosoftConfig
-	if err := json.Unmarshal(src.Config, &cfg); err != nil {
-		return "", nil, fmt.Errorf("decode microsoft config: %w", err)
-	}
-
-	graph, err := newMicrosoftGraphClient(ctx, p.httpClient, cfg)
-	if err != nil {
-		return "", nil, err
-	}
-
-	body, err := graph.DownloadContent(ctx, strings.TrimSpace(rec.ExternalID))
+	body, err := p.DownloadRecordContent(ctx, rec, src)
 	if err != nil {
 		return "", nil, err
 	}
@@ -107,6 +93,32 @@ func (p *sourceProvider) DownloadRecord(
 		return "", nil, err
 	}
 	return doc.Text, doc.PageCount, nil
+}
+
+func (p *sourceProvider) DownloadRecordContent(
+	ctx context.Context,
+	rec domain.Record,
+	src domain.Source,
+) ([]byte, error) {
+	if strings.TrimSpace(rec.ExternalID) == "" {
+		return nil, fmt.Errorf("record %s is missing external_id", rec.ID)
+	}
+
+	var cfg domain.MicrosoftConfig
+	if err := json.Unmarshal(src.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("decode microsoft config: %w", err)
+	}
+
+	graph, err := newMicrosoftGraphClient(ctx, p.httpClient, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := graph.DownloadContent(ctx, strings.TrimSpace(rec.ExternalID))
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }
 
 // MicrosoftBrowseEntry is a normalized folder/file entry returned by browse previews.

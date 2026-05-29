@@ -5,6 +5,7 @@ CUBE_PROXY_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/proxy
 CUBE_AGENT_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/agent
 CUBE_EMBEDDER_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/embedder
 CUBE_GUARDRAILS_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/guardrails
+CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/image-embedder
 CGO_ENABLED ?= 0
 GOOS ?= linux
 GOARCH ?= amd64
@@ -85,7 +86,7 @@ build-embedder:
 	$(call compile_service,embedder)
 
 .PHONY: docker
-docker: docker-proxy docker-agent docker-embedder docker-guardrails
+docker: docker-proxy docker-agent docker-embedder docker-guardrails docker-image-embedder
 
 .PHONY: docker-proxy
 docker-proxy:
@@ -113,6 +114,13 @@ docker-guardrails-dev:
 		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):$(VERSION) \
 		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):latest \
 		-f guardrails/Dockerfile.dev .
+
+.PHONY: docker-image-embedder
+docker-image-embedder:
+	docker build \
+		--tag=$(CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME):$(VERSION) \
+		--tag=$(CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME):latest \
+		-f docker/Dockerfile.image-embedder .
 
 .PHONY: guardrails-venv
 guardrails-venv:
@@ -324,6 +332,7 @@ help:
 	@echo "  build-agent        Build agent service"
 	@echo "  docker             Build Docker images"
 	@echo "  docker-guardrails  Build Nemo Guardrails Docker image"
+	@echo "  docker-image-embedder Build image embedding sidecar Docker image"
 	@echo "  docker-dev         Build development Docker images"
 	@echo ""
 	@echo "Configuration Commands:"
@@ -380,7 +389,7 @@ lint:
 latest: docker docker-push
 
 .PHONY: docker-push
-docker-push: docker-push-proxy docker-push-agent docker-push-guardrails
+docker-push: docker-push-proxy docker-push-agent docker-push-guardrails docker-push-image-embedder
 
 .PHONY: docker-push-proxy
 docker-push-proxy:
@@ -397,5 +406,9 @@ mocks:
 .PHONY: docker-push-guardrails
 docker-push-guardrails:
 	$(call docker_push,$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME))
+
+.PHONY: docker-push-image-embedder
+docker-push-image-embedder:
+	$(call docker_push,$(CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME))
 
 .DEFAULT_GOAL := help

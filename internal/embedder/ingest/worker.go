@@ -19,6 +19,7 @@ import (
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
+	"github.com/ultravioletrs/cube/internal/embedder/imageembedding"
 	embedmetrics "github.com/ultravioletrs/cube/internal/embedder/metrics"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
 	objstore "github.com/ultravioletrs/cube/internal/embedder/storage"
@@ -30,6 +31,8 @@ type Worker struct {
 	sources         domain.SourceRepository
 	chunks          *postgres.ChunksRepository
 	embeddings      *embedding.Registry
+	imageEmbeddings *postgres.ImageEmbeddingsRepository
+	imageEmbedder   *imageembedding.Client
 	store           objstore.Store
 	sourceProviders *SourceProviderRegistry
 	chunkSize       int
@@ -96,6 +99,12 @@ func (w *Worker) SetPollInterval(d time.Duration) {
 	}
 }
 
+// SetImageEmbedding enables optional visual embeddings for image records.
+func (w *Worker) SetImageEmbedding(repo *postgres.ImageEmbeddingsRepository, client *imageembedding.Client) {
+	w.imageEmbeddings = repo
+	w.imageEmbedder = client
+}
+
 // Run starts the worker poll loop. It blocks until ctx is cancelled.
 func (w *Worker) Run(ctx context.Context) {
 	ticker := time.NewTicker(w.pollInterval)
@@ -158,6 +167,11 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
+	if rec.Format == domain.RecordFormatImage {
+		w.processImageRecord(ctx, rec, logger)
+		return
+	}
+
 	text, pageCount, err := w.downloadContent(ctx, rec)
 	if err != nil {
 		logger.Warn("ingest: download failed", "err", err)
@@ -204,6 +218,93 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 	logger.Info("ingest: indexed", "chunks", len(chunks))
 }
 
+func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logger *slog.Logger) {
+	content, err := w.downloadRawContent(ctx, rec)
+	if err != nil {
+		logger.Warn("ingest: image download failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	doc, err := ExtractText(DriveFile{
+		Name:     rec.Name,
+		MimeType: rec.MimeType,
+	}, content)
+	if err != nil {
+		logger.Warn("ingest: image extraction failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+	if doc.ImageMode == ImageIngestModeNone {
+		doc.ImageMode = ImageIngestModeImage
+	}
+
+	chunks := chunk(doc.Text, w.chunkSize, w.overlap)
+	if len(chunks) == 0 {
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, "image produced zero chunks")
+		return
+	}
+
+	// Text chunks from images are always embedded with the text profile. The
+	// visual signal is stored separately in image_embeddings when selected below.
+	embedder, err := w.embeddings.ForRecord(domain.Record{Format: domain.RecordFormatText})
+	if err != nil {
+		logger.Warn("ingest: select text embedding model failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	embeddings, err := embedBatched(ctx, embedder, chunks, w.embedBatchSize)
+	if err != nil {
+		logger.Warn("ingest: embed image text failed", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	chunkObjs := make([]postgres.Chunk, len(chunks))
+	for i, c := range chunks {
+		chunkObjs[i] = postgres.Chunk{Content: c, Embedding: embeddings[i]}
+	}
+
+	if err := w.chunks.StoreChunks(ctx, rec.DomainID, rec.UserID, rec.ID, chunkObjs); err != nil {
+		logger.Error("ingest: store image text chunks", "err", err)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+
+	if w.imageEmbeddings != nil {
+		if err := w.imageEmbeddings.DeleteByRecord(ctx, rec.ID); err != nil {
+			logger.Warn("ingest: delete previous image embedding failed", "err", err)
+		}
+	}
+	if doc.ImageMode != ImageIngestModeOCR && w.imageEmbeddings != nil && w.imageEmbedder != nil {
+		if err := w.storeImageEmbeddingContent(ctx, rec, content, logger); err != nil {
+			logger.Warn("ingest: visual image embedding skipped", "err", err)
+		}
+	}
+
+	_ = w.records.UpdateAfterIngest(ctx, rec.ID, domain.IngestResult{
+		ChunkCount:  len(chunks),
+		SizeBytes:   int64(len(content)),
+		PageCount:   doc.PageCount,
+		Description: imageIngestDescription(doc),
+	})
+	logger.Info("ingest: image indexed", "chunks", len(chunks), "mode", doc.ImageMode, "ocr_chars", doc.OCRTextCharCount)
+}
+
+func imageIngestDescription(doc ExtractedDocument) string {
+	switch doc.ImageMode {
+	case ImageIngestModeOCR:
+		return "Image ingest mode: OCR only"
+	case ImageIngestModeHybrid:
+		return "Image ingest mode: hybrid OCR + visual embedding"
+	case ImageIngestModeImage:
+		return "Image ingest mode: visual embedding"
+	default:
+		return ""
+	}
+}
+
 // embedBatched sends chunks to the embedder in groups so a single large
 // document does not produce one enormous HTTP request that times out.
 func embedBatched(ctx context.Context, embedder embedding.Embedder, chunks []string, batchSize int) ([][]float32, error) {
@@ -223,6 +324,33 @@ func embedBatched(ctx context.Context, embedder embedding.Embedder, chunks []str
 		all = append(all, vecs...)
 	}
 	return all, nil
+}
+
+func (w *Worker) storeImageEmbedding(ctx context.Context, rec domain.Record, logger *slog.Logger) error {
+	content, err := w.downloadRawContent(ctx, rec)
+	if err != nil {
+		return err
+	}
+	return w.storeImageEmbeddingContent(ctx, rec, content, logger)
+}
+
+func (w *Worker) storeImageEmbeddingContent(ctx context.Context, rec domain.Record, content []byte, logger *slog.Logger) error {
+	result, err := w.imageEmbedder.EmbedImage(ctx, rec.Name, rec.MimeType, content)
+	if err != nil {
+		return err
+	}
+	if err := w.imageEmbeddings.Store(ctx, postgres.ImageEmbedding{
+		DomainID:   rec.DomainID,
+		UserID:     rec.UserID,
+		RecordID:   rec.ID,
+		Model:      result.Model,
+		Dimensions: result.Dimensions,
+		Embedding:  result.Embedding,
+	}); err != nil {
+		return err
+	}
+	logger.Info("ingest: stored image embedding", "model", result.Model, "dimensions", result.Dimensions)
+	return nil
 }
 
 // downloadContent fetches the raw text for a record.
@@ -266,51 +394,38 @@ func (w *Worker) downloadContent(ctx context.Context, rec domain.Record) (string
 	}
 }
 
+func (w *Worker) downloadRawContent(ctx context.Context, rec domain.Record) ([]byte, error) {
+	if rec.SourceID == "" {
+		return nil, fmt.Errorf("record %s is missing source_id", rec.ID)
+	}
+
+	src, err := w.sources.GetByID(ctx, rec.SourceID, rec.DomainID)
+	if err != nil {
+		return nil, err
+	}
+
+	if src.Type == domain.SourceTypeLocalFS {
+		return w.downloadRawFromLocalSource(ctx, rec, src)
+	}
+
+	provider, ok := w.sourceProviders.Provider(src.Type)
+	if !ok {
+		return nil, fmt.Errorf("unsupported source type %q for raw image download", src.Type)
+	}
+	rawProvider, ok := provider.(RawContentProvider)
+	if !ok {
+		return nil, fmt.Errorf("source type %q does not support raw content download", src.Type)
+	}
+	return rawProvider.DownloadRecordContent(ctx, rec, src)
+}
+
 type localUploadConfig struct {
 	Kind      string `json:"kind,omitempty"`
 	UploadDir string `json:"upload_dir"`
 }
 
 func (w *Worker) downloadFromLocalSource(ctx context.Context, rec domain.Record, src domain.Source) (string, *int, error) {
-	if rec.ExternalID == "" {
-		return "", nil, fmt.Errorf("record %s is missing external_id", rec.ID)
-	}
-
-	// New direct uploads store external_id as an object key.
-	if strings.Contains(rec.ExternalID, "/") {
-		if w.store == nil {
-			return "", nil, fmt.Errorf("object storage is not configured")
-		}
-		body, err := w.store.Get(ctx, rec.ExternalID)
-		if err != nil {
-			return "", nil, err
-		}
-		doc, err := ExtractText(DriveFile{
-			Name:     rec.Name,
-			MimeType: rec.MimeType,
-		}, body)
-		if err != nil {
-			return "", nil, err
-		}
-		return doc.Text, doc.PageCount, nil
-	}
-
-	// Legacy local_fs records might still point to upload_dir + file name.
-	var cfg localUploadConfig
-	if err := json.Unmarshal(src.Config, &cfg); err != nil {
-		return "", nil, err
-	}
-	if strings.TrimSpace(cfg.UploadDir) == "" {
-		return "", nil, fmt.Errorf("local source %s is missing upload_dir config", src.ID)
-	}
-
-	fileName := filepath.Base(rec.ExternalID)
-	if fileName != rec.ExternalID {
-		return "", nil, fmt.Errorf("invalid local upload file id")
-	}
-
-	path := filepath.Join(cfg.UploadDir, rec.UserID, fileName)
-	body, err := os.ReadFile(path)
+	body, err := w.downloadRawFromLocalSource(ctx, rec, src)
 	if err != nil {
 		return "", nil, err
 	}
@@ -323,4 +438,43 @@ func (w *Worker) downloadFromLocalSource(ctx context.Context, rec domain.Record,
 		return "", nil, err
 	}
 	return doc.Text, doc.PageCount, nil
+}
+
+func (w *Worker) downloadRawFromLocalSource(ctx context.Context, rec domain.Record, src domain.Source) ([]byte, error) {
+	if rec.ExternalID == "" {
+		return nil, fmt.Errorf("record %s is missing external_id", rec.ID)
+	}
+
+	// New direct uploads store external_id as an object key.
+	if strings.Contains(rec.ExternalID, "/") {
+		if w.store == nil {
+			return nil, fmt.Errorf("object storage is not configured")
+		}
+		body, err := w.store.Get(ctx, rec.ExternalID)
+		if err != nil {
+			return nil, err
+		}
+		return body, nil
+	}
+
+	// Legacy local_fs records might still point to upload_dir + file name.
+	var cfg localUploadConfig
+	if err := json.Unmarshal(src.Config, &cfg); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(cfg.UploadDir) == "" {
+		return nil, fmt.Errorf("local source %s is missing upload_dir config", src.ID)
+	}
+
+	fileName := filepath.Base(rec.ExternalID)
+	if fileName != rec.ExternalID {
+		return nil, fmt.Errorf("invalid local upload file id")
+	}
+
+	path := filepath.Join(cfg.UploadDir, rec.UserID, fileName)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }
