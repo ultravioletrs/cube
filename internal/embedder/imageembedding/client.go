@@ -33,7 +33,7 @@ type Client struct {
 // New returns a sidecar client. If timeout is <= 0, a conservative default is used.
 func New(baseURL, model string, dims int, timeout time.Duration) *Client {
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = 2 * time.Minute
 	}
 	return &Client{
 		baseURL: strings.TrimRight(baseURL, "/"),

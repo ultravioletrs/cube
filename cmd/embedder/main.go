@@ -134,7 +134,7 @@ func loadConfig() config {
 			URL:        env("EMBEDDER_IMAGE_EMBEDDING_URL", ""),
 			Model:      env("EMBEDDER_IMAGE_EMBEDDING_MODEL", "openclip-vit-b-32"),
 			Dimensions: envInt("EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS", 512),
-			Timeout:    envDuration("EMBEDDER_IMAGE_EMBEDDING_TIMEOUT", 30*time.Second),
+			Timeout:    envDuration("EMBEDDER_IMAGE_EMBEDDING_TIMEOUT", 2*time.Minute),
 		},
 		embeddingConfig: embeddingConfig,
 		storageConfig: objstore.Config{

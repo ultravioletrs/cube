@@ -15,6 +15,8 @@ const statusColors = {
   error:      { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
 }
 
+const RECORD_POLL_INTERVAL_MS = 2500
+
 function StatusBadge({ status }: { status: AppRecord['status'] }) {
   const c = statusColors[status] ?? statusColors.indexed
   return (
@@ -230,6 +232,12 @@ export default function RecordsPage() {
     return () => { active = false }
   }, [accessToken, domainID, setRecords, refreshTick])
 
+  useEffect(() => {
+    if (!accessToken || !records.some(record => record.status === 'processing')) return
+    const timer = window.setInterval(refreshRecords, RECORD_POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [accessToken, records, refreshRecords])
+
   const filtered = records.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||
     (r.url ?? '').toLowerCase().includes(search.toLowerCase())
@@ -245,6 +253,9 @@ export default function RecordsPage() {
     if (!accessToken) return
     try {
       await retryRecordIngest(accessToken, domainID, id)
+      setRecords(prev => prev.map(record => (
+        record.id === id ? { ...record, status: 'processing', error: undefined } : record
+      )))
       refreshRecords()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to retry ingest')

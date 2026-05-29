@@ -24,6 +24,8 @@ const driveStatusColors = {
   disconnected: { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
 }
 
+const RECORD_POLL_INTERVAL_MS = 2500
+
 function StatusBadge({ status }: { status: AppRecord['status'] }) {
   const c = statusColors[status] ?? statusColors.indexed
   return (
@@ -215,14 +217,14 @@ export default function HomePage() {
   const domainID = activeDomain?.id ?? ''
   const cachedGoogleSource = driveSources.find(source => source.sourceType === 'google_drive' && !!source.accessToken)
 
-  const refreshData = useCallback(async () => {
+  const refreshData = useCallback(async (options?: { silent?: boolean }) => {
     if (!accessToken) {
       setRecords([])
       setDriveSources([])
       return
     }
 
-    setIsLoading(true)
+    if (!options?.silent) setIsLoading(true)
     try {
       const [nextSources, nextRecords] = await Promise.all([
         listSources(accessToken, domainID),
@@ -235,7 +237,7 @@ export default function HomePage() {
       console.error('failed loading records/sources', err)
       setLoadError(err instanceof Error ? err.message : 'Failed to load records and sources')
     } finally {
-      setIsLoading(false)
+      if (!options?.silent) setIsLoading(false)
     }
   }, [accessToken, domainID, setDriveSources, setRecords])
 
@@ -243,6 +245,12 @@ export default function HomePage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshData()
   }, [refreshData])
+
+  useEffect(() => {
+    if (!accessToken || !records.some(record => record.status === 'processing')) return
+    const timer = window.setInterval(() => { void refreshData({ silent: true }) }, RECORD_POLL_INTERVAL_MS)
+    return () => window.clearInterval(timer)
+  }, [accessToken, records, refreshData])
 
   useEffect(() => {
     if (selected && !records.some(record => record.id === selected.id)) {
@@ -297,6 +305,9 @@ export default function HomePage() {
     if (!accessToken) return
     try {
       await retryRecordIngest(accessToken, domainID, record.id)
+      setRecords(prev => prev.map(item => (
+        item.id === record.id ? { ...item, status: 'processing', error: undefined } : item
+      )))
       setLoadError('')
       await refreshData()
     } catch (err) {

@@ -47,7 +47,7 @@ func TestExtractTextImageUsesOCRWhenEnabled(t *testing.T) {
 	}
 }
 
-func TestExtractTextImageUsesOCROnlyForLargeText(t *testing.T) {
+func TestExtractTextImageUsesHybridForLargeText(t *testing.T) {
 	restoreCfg := setTestExtractionConfig(ExtractionConfig{
 		OCR: OCRConfig{
 			Enabled:                  true,
@@ -78,8 +78,8 @@ func TestExtractTextImageUsesOCROnlyForLargeText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExtractText returned error: %v", err)
 	}
-	if doc.ImageMode != ImageIngestModeOCR {
-		t.Fatalf("expected OCR-only mode, got %q", doc.ImageMode)
+	if doc.ImageMode != ImageIngestModeHybrid {
+		t.Fatalf("expected hybrid mode, got %q", doc.ImageMode)
 	}
 	if got := strings.TrimSpace(doc.Text); got != strings.TrimSpace(longText) {
 		t.Fatalf("expected OCR text, got %q", got)
