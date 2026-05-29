@@ -26,6 +26,10 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '6px',
 }
 
+function isLocalDev(): boolean {
+  return ['localhost', '127.0.0.1'].includes(window.location.hostname)
+}
+
 export default function AuthPage() {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
@@ -41,6 +45,7 @@ export default function AuthPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
+  const showLocalDevHint = mode === 'login' && isLocalDev()
 
   // Auth page should always redirect authenticated users to app.
   if (isAuthenticated) return <Navigate to={from} replace />
@@ -151,6 +156,12 @@ export default function AuthPage() {
             <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: '#ff6b6b', margin: 0, padding: '8px 12px', background: 'rgba(255,107,107,0.08)', borderRadius: '6px', border: '1px solid rgba(255,107,107,0.2)' }}>
               {error}
             </p>
+          )}
+
+          {showLocalDevHint && (
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 1.6, padding: '9px 11px', border: '1px solid var(--border)', borderRadius: '8px', background: 'rgba(255,255,255,0.03)' }}>
+              Local dev admin: <span style={{ color: 'var(--text)' }}>admin</span> / <span style={{ color: 'var(--text)' }}>m2N2Lfno</span>
+            </div>
           )}
 
           <button

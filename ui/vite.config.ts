@@ -1,9 +1,18 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import path from 'path'
+import type { IncomingMessage } from 'node:http'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
+
+function bypassSPARoute(req: IncomingMessage): string | undefined {
+  const accept = req.headers.accept ?? ''
+  if (typeof accept === 'string' && accept.includes('text/html')) {
+    return req.url
+  }
+  return undefined
+}
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -25,11 +34,13 @@ export default defineConfig({
         target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
         changeOrigin: true,
         secure: false,
+        bypass: bypassSPARoute,
       },
       '/invitations': {
         target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
         changeOrigin: true,
         secure: false,
+        bypass: bypassSPARoute,
       },
       '/journal': {
         target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',

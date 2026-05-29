@@ -23,6 +23,20 @@ body, #root {
   overflow: hidden;
 }
 
+button,
+[role="button"],
+a {
+  caret-color: transparent;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  caret-color: auto;
+  user-select: text;
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }

@@ -66,7 +66,7 @@ function RecordIcon({ record }: { record: AppRecord }) {
 function recordSubtext(record: AppRecord): string {
   if (record.format === 'link') return record.url ?? ''
   if (record.format === 'image') {
-    return record.chunks != null ? `${record.chunks} chunks` : 'indexing…'
+    return record.chunks != null ? `${record.chunks} image vectors` : 'image embedding…'
   }
   if (record.chunks != null) {
     return record.pages != null ? `${record.chunks} chunks · ${record.pages} pages` : `${record.chunks} chunks`
@@ -164,7 +164,9 @@ function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRec
             <circle cx="7" cy="7" r="6" stroke="var(--accent)" strokeWidth="1.2"/>
             <path d="M5 7l1.5 1.5L9 5" stroke="var(--accent)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>Fully indexed · available for retrieval</span>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
+            {record.format === 'image' ? 'Image embedding indexed · available for retrieval' : 'Fully indexed · available for retrieval'}
+          </span>
         </div>
       )}
 

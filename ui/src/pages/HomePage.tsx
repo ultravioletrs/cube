@@ -87,7 +87,7 @@ function RecordIcon({ record }: { record: AppRecord }) {
 function recordSubtext(record: AppRecord): string {
   if (record.format === 'link') return record.url ?? ''
   if (record.format === 'image') {
-    return record.chunks != null ? `${record.chunks} chunks` : 'indexing…'
+    return record.chunks != null ? `${record.chunks} image vectors` : 'image embedding…'
   }
   if (record.chunks != null) {
     return record.pages != null ? `${record.chunks} chunks · ${record.pages} pages` : `${record.chunks} chunks`
