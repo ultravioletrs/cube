@@ -53,6 +53,7 @@ function InviteModal({
   }, [tokens?.accessToken])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!query.trim()) { setResults([]); return }
     setSearching(true)
     const q = query.toLowerCase()
@@ -232,6 +233,7 @@ export default function MembersPage() {
   const [error, setError] = useState<string | null>(null)
   const [showInvite, setShowInvite] = useState(false)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     if (!tokens?.accessToken || !activeDomain?.id) return
     setLoading(true)
@@ -250,6 +252,7 @@ export default function MembersPage() {
     }
   }, [tokens?.accessToken, activeDomain?.id])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   return (

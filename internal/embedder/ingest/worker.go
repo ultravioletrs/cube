@@ -40,6 +40,8 @@ type Worker struct {
 	batchSize       int
 	maxConcurrent   int
 	embedBatchSize  int
+	recordTimeout   time.Duration
+	maxChunks       int
 	pollInterval    time.Duration
 	trigger         chan struct{}
 }
@@ -71,6 +73,8 @@ func NewWorker(
 		batchSize:       10,
 		maxConcurrent:   2,
 		embedBatchSize:  16,
+		recordTimeout:   15 * time.Minute,
+		maxChunks:       0,
 		pollInterval:    10 * time.Second,
 		trigger:         make(chan struct{}, 1),
 	}
@@ -94,6 +98,20 @@ func (w *Worker) SetMaxConcurrent(n int) {
 func (w *Worker) SetEmbedBatchSize(n int) {
 	if n > 0 {
 		w.embedBatchSize = n
+	}
+}
+
+// SetRecordTimeout adjusts the maximum wall-clock time for one record ingest.
+func (w *Worker) SetRecordTimeout(d time.Duration) {
+	if d > 0 {
+		w.recordTimeout = d
+	}
+}
+
+// SetMaxChunks adjusts the maximum number of chunks one record may produce.
+func (w *Worker) SetMaxChunks(n int) {
+	if n >= 0 {
+		w.maxChunks = n
 	}
 }
 
@@ -172,12 +190,19 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
+	recordCtx := ctx
+	cancel := func() {}
+	if w.recordTimeout > 0 {
+		recordCtx, cancel = context.WithTimeout(ctx, w.recordTimeout)
+	}
+	defer cancel()
+
 	if rec.Format == domain.RecordFormatImage {
-		w.processImageRecord(ctx, rec, logger)
+		w.processImageRecord(recordCtx, ctx, rec, logger)
 		return
 	}
 
-	text, pageCount, err := w.downloadContent(ctx, rec)
+	text, pageCount, err := w.downloadContent(recordCtx, rec)
 	if err != nil {
 		logger.Warn("ingest: download failed", "err", err)
 		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
@@ -189,6 +214,12 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, "document produced zero chunks")
 		return
 	}
+	if w.maxChunks > 0 && len(chunks) > w.maxChunks {
+		err := fmt.Errorf("document produced %d chunks, above limit %d", len(chunks), w.maxChunks)
+		logger.Warn("ingest: too many chunks", "chunks", len(chunks), "max_chunks", w.maxChunks)
+		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
 
 	embedder, err := w.embeddings.ForRecord(rec)
 	if err != nil {
@@ -197,20 +228,8 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
-	embeddings, err := embedBatched(ctx, embedder, chunks, w.embedBatchSize)
-	if err != nil {
+	if err := w.embedAndStoreBatched(recordCtx, ctx, rec, embedder, chunks); err != nil {
 		logger.Warn("ingest: embed failed", "err", err)
-		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
-		return
-	}
-
-	chunkObjs := make([]postgres.Chunk, len(chunks))
-	for i, c := range chunks {
-		chunkObjs[i] = postgres.Chunk{Content: c, Embedding: embeddings[i]}
-	}
-
-	if err := w.chunks.StoreChunks(ctx, rec.DomainID, rec.UserID, rec.ID, chunkObjs); err != nil {
-		logger.Error("ingest: store chunks", "err", err)
 		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
 		return
 	}
@@ -223,11 +242,11 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 	logger.Info("ingest: indexed", "chunks", len(chunks))
 }
 
-func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logger *slog.Logger) {
+func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.Record, logger *slog.Logger) {
 	content, err := w.downloadRawContent(ctx, rec)
 	if err != nil {
 		logger.Warn("ingest: image download failed", "err", err)
-		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 		return
 	}
 
@@ -237,7 +256,7 @@ func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logg
 	}, content)
 	if err != nil {
 		logger.Warn("ingest: image extraction failed", "err", err)
-		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 		return
 	}
 	if doc.ImageMode == ImageIngestModeNone {
@@ -246,7 +265,13 @@ func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logg
 
 	chunks := chunk(doc.Text, w.chunkSize, w.overlap)
 	if len(chunks) == 0 {
-		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, "image produced zero chunks")
+		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, "image produced zero chunks")
+		return
+	}
+	if w.maxChunks > 0 && len(chunks) > w.maxChunks {
+		err := fmt.Errorf("image produced %d chunks, above limit %d", len(chunks), w.maxChunks)
+		logger.Warn("ingest: image too many chunks", "chunks", len(chunks), "max_chunks", w.maxChunks)
+		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 		return
 	}
 
@@ -255,25 +280,13 @@ func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logg
 	embedder, err := w.embeddings.ForRecord(domain.Record{Format: domain.RecordFormatText})
 	if err != nil {
 		logger.Warn("ingest: select text embedding model failed", "err", err)
-		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 		return
 	}
 
-	embeddings, err := embedBatched(ctx, embedder, chunks, w.embedBatchSize)
-	if err != nil {
+	if err := w.embedAndStoreBatched(ctx, statusCtx, rec, embedder, chunks); err != nil {
 		logger.Warn("ingest: embed image text failed", "err", err)
-		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
-		return
-	}
-
-	chunkObjs := make([]postgres.Chunk, len(chunks))
-	for i, c := range chunks {
-		chunkObjs[i] = postgres.Chunk{Content: c, Embedding: embeddings[i]}
-	}
-
-	if err := w.chunks.StoreChunks(ctx, rec.DomainID, rec.UserID, rec.ID, chunkObjs); err != nil {
-		logger.Error("ingest: store image text chunks", "err", err)
-		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 		return
 	}
 
@@ -286,17 +299,17 @@ func (w *Worker) processImageRecord(ctx context.Context, rec domain.Record, logg
 		if w.imageEmbeddings == nil || w.imageEmbedder == nil {
 			err := fmt.Errorf("visual image embedding is required for image ingest mode %q but is not configured", doc.ImageMode)
 			logger.Warn("ingest: visual image embedding failed", "err", err)
-			_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+			_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 			return
 		}
 		if err := w.storeImageEmbeddingContentWithRetry(ctx, rec, content, logger); err != nil {
 			logger.Warn("ingest: visual image embedding failed", "err", err)
-			_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+			_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 			return
 		}
 	}
 
-	_ = w.records.UpdateAfterIngest(ctx, rec.ID, domain.IngestResult{
+	_ = w.records.UpdateAfterIngest(statusCtx, rec.ID, domain.IngestResult{
 		ChunkCount:  len(chunks),
 		SizeBytes:   int64(len(content)),
 		PageCount:   doc.PageCount,
@@ -316,6 +329,56 @@ func imageIngestDescription(doc ExtractedDocument) string {
 	default:
 		return ""
 	}
+}
+
+func (w *Worker) embedAndStoreBatched(
+	ctx context.Context,
+	statusCtx context.Context,
+	rec domain.Record,
+	embedder embedding.Embedder,
+	chunks []string,
+) error {
+	batchSize := w.embedBatchSize
+	if batchSize <= 0 {
+		batchSize = 16
+	}
+	if err := w.chunks.DeleteByRecord(statusCtx, rec.ID); err != nil {
+		return err
+	}
+	if err := w.records.UpdateIngestProgress(statusCtx, rec.ID, 0, len(chunks)); err != nil {
+		return err
+	}
+
+	for i := 0; i < len(chunks); i += batchSize {
+		end := i + batchSize
+		if end > len(chunks) {
+			end = len(chunks)
+		}
+
+		vecs, err := embedder.Embed(ctx, chunks[i:end])
+		if err != nil {
+			_ = w.chunks.DeleteByRecord(statusCtx, rec.ID)
+			return err
+		}
+		if len(vecs) != end-i {
+			_ = w.chunks.DeleteByRecord(statusCtx, rec.ID)
+			return fmt.Errorf("embed: got %d embeddings for %d chunks", len(vecs), end-i)
+		}
+
+		chunkObjs := make([]postgres.Chunk, len(vecs))
+		for j, vec := range vecs {
+			chunkObjs[j] = postgres.Chunk{Content: chunks[i+j], Embedding: vec}
+		}
+		if err := w.chunks.AppendChunks(ctx, rec.DomainID, rec.UserID, rec.ID, i, chunkObjs); err != nil {
+			_ = w.chunks.DeleteByRecord(statusCtx, rec.ID)
+			return err
+		}
+		if err := w.records.UpdateIngestProgress(statusCtx, rec.ID, end, len(chunks)); err != nil {
+			_ = w.chunks.DeleteByRecord(statusCtx, rec.ID)
+			return err
+		}
+	}
+	return nil
 }
 
 // embedBatched sends chunks to the embedder in groups so a single large

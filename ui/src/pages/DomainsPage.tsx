@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { listDomains, createDomain, deleteDomain, toRoute } from '@/lib/platform/service'
 import type { Domain } from '@/lib/platform/service'
@@ -154,6 +154,9 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
 
 export default function DomainsPage() {
   const { tokens } = useAuth()
+  const accessToken = tokens?.accessToken
+  const location = useLocation()
+  const navigate = useNavigate()
   const { activeDomain, setActiveDomain } = useOutletContext<AppContext>()
 
   const [domains, setDomains] = useState<Domain[]>([])
@@ -161,21 +164,27 @@ export default function DomainsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const redirectPath = (() => {
+    const state = location.state as { from?: string } | null
+    const from = state?.from
+    return from && from !== '/domains' ? from : '/dashboard'
+  })()
 
   const load = useCallback(async () => {
-    if (!tokens?.accessToken) return
+    if (!accessToken) return
     setLoading(true)
     setLoadError(null)
     try {
-      const list = await listDomains(tokens.accessToken)
+      const list = await listDomains(accessToken)
       setDomains(list)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load domains')
     } finally {
       setLoading(false)
     }
-  }, [tokens?.accessToken])
+  }, [accessToken])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   function handleSelect(domain: Domain) {
@@ -187,6 +196,7 @@ export default function DomainsPage() {
       route: domain.route,
       status: domain.status as string | undefined,
     })
+    navigate(redirectPath, { replace: true })
   }
 
   async function handleDelete(domain: Domain) {

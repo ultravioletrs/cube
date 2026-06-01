@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from '@/components/Sidebar'
 import { useAuth } from '@/hooks/useAuth'
 import { listConversations, listRecords, listSources } from '@/lib/embedder/service'
@@ -23,6 +23,7 @@ function loadChatMessages(): ChatMessage[] {
 
 export default function AppLayout() {
   const { tokens } = useAuth()
+  const location = useLocation()
   const [records, setRecords] = useState<AppRecord[]>([])
   const [driveSources, setDriveSources] = useState<DriveSource[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -51,6 +52,7 @@ export default function AppLayout() {
   useEffect(() => {
     // Clear stale data from the previous domain immediately so pages never
     // briefly show records that belong to a different domain.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecords([])
     setDriveSources([])
     setConversations([])
@@ -102,12 +104,17 @@ export default function AppLayout() {
   }, [activeDomain])
 
   const context: AppContext = { records, setRecords, driveSources, setDriveSources, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations, activeDomain, setActiveDomain }
+  const requiresDomain = !activeDomain && location.pathname !== '/domains'
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
       <Sidebar activeDomain={activeDomain} />
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Outlet context={context} />
+        {requiresDomain ? (
+          <Navigate to="/domains" replace state={{ from: location.pathname }} />
+        ) : (
+          <Outlet context={context} />
+        )}
       </main>
     </div>
   )

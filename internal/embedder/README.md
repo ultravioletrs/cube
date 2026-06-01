@@ -25,6 +25,8 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_CHUNK_SIZE` | Chunk size | `512` |
 | `EMBEDDER_CHUNK_OVERLAP` | Chunk overlap | `64` |
 | `EMBEDDER_INGEST_*` | Queue polling and concurrency tuning | optional |
+| `EMBEDDER_INGEST_RECORD_TIMEOUT` | Max wall-clock time for one record ingest | `2h` |
+| `EMBEDDER_INGEST_MAX_CHUNKS` | Optional max chunks one record may produce before failing fast (`0` disables) | `0` |
 | `EMBEDDER_OBJECT_STORAGE_PROVIDER` | Storage backend (`s3` or `local`) | `local` |
 | `EMBEDDER_S3_*` | S3/SeaweedFS credentials and endpoint | required for `s3` |
 | `EMBEDDER_UPLOAD_DIR` | Local upload path when provider is `local` | `/tmp/embedder/uploads` |
