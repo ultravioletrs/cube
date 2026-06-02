@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import Sidebar from '@/components/Sidebar'
 import { useAuth } from '@/hooks/useAuth'
 import { listConversations, listRecords, listSources } from '@/lib/embedder/service'
@@ -10,6 +10,7 @@ import type { ActiveDomain, AppContext, AppRecord, ChatMessage, Conversation, Dr
 const CHAT_KEY = 'cube_chat'
 const CONV_KEY = 'cube_conv_id'
 const DOMAIN_KEY = 'cube_active_domain'
+const DOMAIN_SESSION_KEY = 'cube_active_domain_session'
 
 function loadChatMessages(): ChatMessage[] {
   try {
@@ -23,6 +24,7 @@ function loadChatMessages(): ChatMessage[] {
 
 export default function AppLayout() {
   const { tokens } = useAuth()
+  const location = useLocation()
   const [records, setRecords] = useState<AppRecord[]>([])
   const [driveSources, setDriveSources] = useState<DriveSource[]>([])
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -30,7 +32,7 @@ export default function AppLayout() {
   const [conversationId, setConversationId] = useState<string | null>(() => localStorage.getItem(CONV_KEY))
   const [activeDomain, setActiveDomain] = useState<ActiveDomain | null>(() => {
     try {
-      const raw = localStorage.getItem(DOMAIN_KEY)
+      const raw = sessionStorage.getItem(DOMAIN_SESSION_KEY)
       return raw ? (JSON.parse(raw) as ActiveDomain) : null
 
     } catch {
@@ -47,6 +49,7 @@ export default function AppLayout() {
   }, [])
 
   const domainID = activeDomain?.id ?? ''
+  const isDomainSelection = location.pathname === '/domains'
 
   useEffect(() => {
     // Clear stale data from the previous domain immediately so pages never
@@ -96,16 +99,21 @@ export default function AppLayout() {
   useEffect(() => {
     if (activeDomain) {
       localStorage.setItem(DOMAIN_KEY, JSON.stringify(activeDomain))
+      sessionStorage.setItem(DOMAIN_SESSION_KEY, JSON.stringify(activeDomain))
     } else {
-      localStorage.removeItem(DOMAIN_KEY)
+      sessionStorage.removeItem(DOMAIN_SESSION_KEY)
     }
   }, [activeDomain])
 
   const context: AppContext = { records, setRecords, driveSources, setDriveSources, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations, activeDomain, setActiveDomain }
 
+  if (!activeDomain && !isDomainSelection) {
+    return <Navigate to="/domains" replace state={{ from: location.pathname }} />
+  }
+
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
-      <Sidebar activeDomain={activeDomain} />
+      {!isDomainSelection && <Sidebar activeDomain={activeDomain} />}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Outlet context={context} />
       </main>

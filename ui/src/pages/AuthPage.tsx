@@ -44,7 +44,7 @@ export default function AuthPage() {
   const { login, register, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
+  const from = (location.state as { from?: string } | null)?.from ?? '/domains'
   const showLocalDevHint = mode === 'login' && isLocalDev()
 
   // Auth page should always redirect authenticated users to app.
