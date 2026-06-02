@@ -12,6 +12,8 @@ interface RecordDTO {
   error?: string | null
   description?: string
   chunks?: number | null
+  ingest_total_chunks?: number | null
+  ingest_indexed_chunks?: number | null
   size_bytes?: number | null
   pages?: number | null
   external_url?: string
@@ -206,6 +208,16 @@ export interface GoogleDriveBrowseResult {
   requestedScope?: string
 }
 
+export interface RecordListOptions {
+  status?: AppRecord['status'] | 'all'
+  format?: RecordFormat | 'all'
+  sourceID?: string
+  limit?: number
+  offset?: number
+}
+
+type RawRecordStatus = 'queued' | 'processing' | 'indexed' | 'failed'
+
 const embedderURL = import.meta.env.VITE_EMBEDDER_URL ?? window.location.origin
 
 function buildURL(path: string): string {
@@ -271,6 +283,8 @@ function mapRecord(dto: RecordDTO): AppRecord {
     error: dto.error ?? undefined,
     description: dto.description ?? '',
     chunks: dto.chunks ?? null,
+    ingestTotalChunks: dto.ingest_total_chunks ?? null,
+    ingestIndexedChunks: dto.ingest_indexed_chunks ?? null,
     pages: dto.pages ?? null,
     size: bytesToLabel(dto.size_bytes ?? undefined),
     url: dto.external_url || undefined,
@@ -370,9 +384,39 @@ async function apiJSON<T>(path: string, token: string, init?: RequestInit): Prom
   return await res.json() as T
 }
 
-export async function listRecords(token: string, domainID: string): Promise<AppRecord[]> {
-  const data = await apiJSON<RecordListDTO>('/api/v1/records?limit=1000', token, domainInit(domainID, { method: 'GET' }))
-  return data.records.map(mapRecord)
+function recordListPath(opts: RecordListOptions, status?: RawRecordStatus): string {
+  const params = new URLSearchParams()
+  params.set('limit', String(opts.limit ?? 1000))
+  if (opts.offset) params.set('offset', String(opts.offset))
+  if (status) params.set('status', status)
+  if (opts.format && opts.format !== 'all') params.set('format', opts.format)
+  if (opts.sourceID) params.set('source_id', opts.sourceID)
+
+  return `/api/v1/records?${params.toString()}`
+}
+
+async function fetchRecords(token: string, domainID: string, opts: RecordListOptions, status?: RawRecordStatus): Promise<RecordDTO[]> {
+  const data = await apiJSON<RecordListDTO>(recordListPath(opts, status), token, domainInit(domainID, { method: 'GET' }))
+  return data.records
+}
+
+export async function listRecords(token: string, domainID: string, opts: RecordListOptions = {}): Promise<AppRecord[]> {
+  if (opts.status === 'processing') {
+    const records = await Promise.all([
+      fetchRecords(token, domainID, opts, 'queued'),
+      fetchRecords(token, domainID, opts, 'processing'),
+    ])
+    return records
+      .flat()
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .map(mapRecord)
+  }
+
+  const status = opts.status && opts.status !== 'all'
+    ? opts.status
+    : undefined
+  const records = await fetchRecords(token, domainID, opts, status)
+  return records.map(mapRecord)
 }
 
 export async function listRecordsBySource(token: string, domainID: string, sourceID: string): Promise<AppRecord[]> {
