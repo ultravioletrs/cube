@@ -245,6 +245,10 @@ func (r *recordRepoSyncStub) UpdateStatus(_ context.Context, _ string, _ domain.
 	return nil
 }
 
+func (r *recordRepoSyncStub) UpdateIngestProgress(_ context.Context, _ string, _, _ int) error {
+	return nil
+}
+
 func (r *recordRepoSyncStub) UpdateAfterIngest(_ context.Context, _ string, _ domain.IngestResult) error {
 	return nil
 }

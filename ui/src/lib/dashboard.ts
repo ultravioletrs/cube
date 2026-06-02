@@ -13,6 +13,50 @@ async function auditSearch(domainID: string, token: string, body: object): Promi
   return res.json()
 }
 
+type OpenSearchBucket = {
+  key?: string | number
+  key_as_string?: string
+  doc_count?: number
+  unique_sessions?: { value?: number }
+  input_tokens?: { value?: number }
+  output_tokens?: { value?: number }
+  success?: { doc_count?: number }
+  client_errors?: { doc_count?: number }
+  server_errors?: { doc_count?: number }
+  request_count?: { value?: number }
+  avg_latency?: { value?: number }
+  avg_input_tokens?: { value?: number }
+  avg_output_tokens?: { value?: number }
+}
+
+type OpenSearchAggregations = {
+  active_models?: { value?: number }
+  total_input_tokens?: { value?: number }
+  total_output_tokens?: { value?: number }
+  activity_over_time?: { buckets?: OpenSearchBucket[] }
+  over_time?: { buckets?: OpenSearchBucket[] }
+  by_model?: { buckets?: OpenSearchBucket[] }
+  total_requests?: { value?: number }
+  content_filtered?: { doc_count?: number }
+  pii_detected?: { doc_count?: number }
+  guardrails_processed?: { doc_count?: number }
+  decisions_allow?: { doc_count?: number }
+  decisions_block?: { doc_count?: number }
+  decisions_modify?: { doc_count?: number }
+  prompt_injection?: { doc_count?: number }
+  jailbreak_attempt?: { doc_count?: number }
+  toxic_content?: { doc_count?: number }
+  off_topic_detected?: { doc_count?: number }
+  hallucination_risk?: { doc_count?: number }
+  avg_guardrails_latency?: { value?: number }
+}
+
+function aggregations(data: unknown): OpenSearchAggregations {
+  if (!data || typeof data !== 'object' || !('aggregations' in data)) return {}
+  const aggs = (data as { aggregations?: unknown }).aggregations
+  return aggs && typeof aggs === 'object' ? aggs as OpenSearchAggregations : {}
+}
+
 export interface DashboardStats {
   conversationsToday: number
   activeModels: number
@@ -55,7 +99,7 @@ export async function fetchDashboardStats(domainID: string, token: string): Prom
     ).length
   }
 
-  const aggs = (osData as any)?.aggregations ?? {}
+  const aggs = aggregations(osData)
   return {
     conversationsToday,
     activeModels: aggs.active_models?.value ?? 0,
@@ -98,10 +142,9 @@ export async function fetchActivityTrends(domainID: string, token: string): Prom
       },
     },
   }
-  const data = (await auditSearch(domainID, token, body)) as any
-  const buckets = data?.aggregations?.activity_over_time?.buckets ?? []
-  return buckets.map((b: any) => ({
-    time: b.key_as_string ?? b.key,
+  const buckets = aggregations(await auditSearch(domainID, token, body)).activity_over_time?.buckets ?? []
+  return buckets.map(b => ({
+    time: String(b.key_as_string ?? b.key ?? ''),
     sessions: b.unique_sessions?.value ?? 0,
     tokens: (b.input_tokens?.value ?? 0) + (b.output_tokens?.value ?? 0),
   }))
@@ -143,10 +186,9 @@ export async function fetchErrorRateTrends(domainID: string, token: string): Pro
       },
     },
   }
-  const data = (await auditSearch(domainID, token, body)) as any
-  const buckets = data?.aggregations?.over_time?.buckets ?? []
-  return buckets.map((b: any) => ({
-    time: b.key_as_string ?? b.key,
+  const buckets = aggregations(await auditSearch(domainID, token, body)).over_time?.buckets ?? []
+  return buckets.map(b => ({
+    time: String(b.key_as_string ?? b.key ?? ''),
     success: b.success?.doc_count ?? 0,
     clientErrors: b.client_errors?.doc_count ?? 0,
     serverErrors: b.server_errors?.doc_count ?? 0,
@@ -184,10 +226,9 @@ export async function fetchModelPerformance(domainID: string, token: string): Pr
       },
     },
   }
-  const data = (await auditSearch(domainID, token, body)) as any
-  const buckets = data?.aggregations?.by_model?.buckets ?? []
-  return buckets.map((b: any) => ({
-    model: b.key,
+  const buckets = aggregations(await auditSearch(domainID, token, body)).by_model?.buckets ?? []
+  return buckets.map(b => ({
+    model: String(b.key ?? ''),
     requestCount: b.request_count?.value ?? 0,
     avgLatencyMs: Math.round(b.avg_latency?.value ?? 0),
     avgInputTokens: Math.round(b.avg_input_tokens?.value ?? 0),
@@ -224,15 +265,14 @@ export async function fetchTokenBreakdown(domainID: string, token: string): Prom
       },
     },
   }
-  const data = (await auditSearch(domainID, token, body)) as any
-  const buckets = data?.aggregations?.by_model?.buckets ?? []
+  const buckets = aggregations(await auditSearch(domainID, token, body)).by_model?.buckets ?? []
   let totalAll = 0
-  const items = buckets.map((b: any) => {
+  const items = buckets.map(b => {
     const inp = b.input_tokens?.value ?? 0
     const out = b.output_tokens?.value ?? 0
     const total = inp + out
     totalAll += total
-    return { model: b.key, inputTokens: inp, outputTokens: out, totalTokens: total, percentage: 0 }
+    return { model: String(b.key ?? ''), inputTokens: inp, outputTokens: out, totalTokens: total, percentage: 0 }
   })
   return items.map((item: TokenBreakdown) => ({
     ...item,
@@ -284,8 +324,7 @@ export async function fetchGuardrailsActivity(domainID: string, token: string): 
       avg_guardrails_latency: { avg: { field: 'guardrails_latency_ms' } },
     },
   }
-  const data = (await auditSearch(domainID, token, body)) as any
-  const a = data?.aggregations ?? {}
+  const a = aggregations(await auditSearch(domainID, token, body))
   return {
     totalRequests: a.total_requests?.value ?? 0,
     cleanRequests:

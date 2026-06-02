@@ -100,7 +100,9 @@ export default function EditSourceSelectionModal({ authToken, source, onClose, o
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadFolder(source.folderLink ?? '', [], 'folders', '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source.folderLink])
 
   function toggleFile(fileID: string, checked: boolean) {

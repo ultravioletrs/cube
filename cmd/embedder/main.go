@@ -64,6 +64,8 @@ type config struct {
 	ingestMaxConcurrency    int
 	ingestPollInterval      time.Duration
 	ingestEmbedBatchSize    int
+	ingestRecordTimeout     time.Duration
+	ingestMaxChunks         int
 }
 
 type imageEmbeddingConfig struct {
@@ -165,6 +167,8 @@ func loadConfig() config {
 		ingestMaxConcurrency: envInt("EMBEDDER_INGEST_MAX_CONCURRENCY", 4),
 		ingestPollInterval:   envDuration("EMBEDDER_INGEST_POLL_INTERVAL", 3*time.Second),
 		ingestEmbedBatchSize: envInt("EMBEDDER_INGEST_EMBED_BATCH_SIZE", 16),
+		ingestRecordTimeout:  envDuration("EMBEDDER_INGEST_RECORD_TIMEOUT", 2*time.Hour),
+		ingestMaxChunks:      envInt("EMBEDDER_INGEST_MAX_CHUNKS", 0),
 	}
 }
 
@@ -282,6 +286,8 @@ func main() {
 	worker.SetMaxConcurrent(cfg.ingestMaxConcurrency)
 	worker.SetPollInterval(cfg.ingestPollInterval)
 	worker.SetEmbedBatchSize(cfg.ingestEmbedBatchSize)
+	worker.SetRecordTimeout(cfg.ingestRecordTimeout)
+	worker.SetMaxChunks(cfg.ingestMaxChunks)
 	var imageEmbeddingClient *imageembedding.Client
 	if strings.TrimSpace(cfg.imageEmbeddingConfig.URL) != "" {
 		imageEmbeddingClient = imageembedding.New(
