@@ -233,12 +233,14 @@ function bytesToLabel(value?: number | null): string | undefined {
 
 function toRecordStatus(status: string): AppRecord['status'] {
   switch (status) {
+    case 'queued':
+      return 'queued'
+    case 'processing':
+      return 'processing'
     case 'indexed':
       return 'indexed'
     case 'failed':
-      return 'error'
-    case 'queued':
-    case 'processing':
+      return 'failed'
     default:
       return 'processing'
   }

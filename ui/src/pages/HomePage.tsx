@@ -12,9 +12,10 @@ import AddSourceModal from '@/components/AddSourceModal'
 import EditSourceSelectionModal from '@/components/EditSourceSelectionModal'
 
 const statusColors = {
+  queued:     { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
   indexed:    { bg: 'rgba(0,212,180,0.1)',  color: '#00d4b4', dot: '#00d4b4' },
   processing: { bg: 'rgba(255,180,0,0.1)',  color: '#ffb400', dot: '#ffb400' },
-  error:      { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
+  failed:     { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
 }
 
 const driveStatusColors = {
@@ -92,10 +93,12 @@ function recordSubtext(record: AppRecord): string {
   if (record.format === 'image') {
     return imageRecordSubtext(record)
   }
+  if (record.status === 'queued') return 'waiting for indexing…'
+  if (record.status === 'processing') return 'indexing…'
   if (record.chunks != null) {
     return record.pages != null ? `${record.chunks} chunks · ${record.pages} pages` : `${record.chunks} chunks`
   }
-  return record.pages != null ? `${record.pages} pages · indexing…` : 'indexing…'
+  return record.pages != null ? `${record.pages} pages` : 'pending'
 }
 
 function recordDetail(record: AppRecord): string {
@@ -247,7 +250,7 @@ export default function HomePage() {
   }, [refreshData])
 
   useEffect(() => {
-    if (!accessToken || !records.some(record => record.status === 'processing')) return
+    if (!accessToken || !records.some(record => record.status === 'queued' || record.status === 'processing')) return
     const timer = window.setInterval(() => { void refreshData({ silent: true }) }, RECORD_POLL_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [accessToken, records, refreshData])
@@ -306,7 +309,7 @@ export default function HomePage() {
     try {
       await retryRecordIngest(accessToken, domainID, record.id)
       setRecords(prev => prev.map(item => (
-        item.id === record.id ? { ...item, status: 'processing', error: undefined } : item
+        item.id === record.id ? { ...item, status: 'queued', error: undefined } : item
       )))
       setLoadError('')
       await refreshData()
@@ -457,7 +460,7 @@ export default function HomePage() {
                 <div style={{ width: '100px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>{recordDetail(record)}</div>
                 <div style={{ width: '110px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)' }}>{record.createdAt}</div>
                 <div style={{ width: '220px', display: 'flex', justifyContent: 'flex-end', gap: '6px' }} onClick={e => e.stopPropagation()}>
-                  {record.status === 'error' && (
+                  {record.status === 'failed' && (
                     <button
                       onClick={() => { void handleRetryRecordIngest(record) }}
                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '6px', padding: '6px 8px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer' }}
