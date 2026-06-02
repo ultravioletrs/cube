@@ -38,6 +38,8 @@ export interface AppRecord {
   description: string
   error?: string
   chunks: number | null
+  ingestTotalChunks?: number | null
+  ingestIndexedChunks?: number | null
   size?: string
   pages?: number | null
   url?: string

@@ -58,10 +58,12 @@ type Record struct {
 	MimeType    string
 
 	// Content metadata populated after successful ingestion.
-	Description string
-	ChunkCount  *int
-	SizeBytes   *int64
-	PageCount   *int
+	Description         string
+	ChunkCount          *int
+	SizeBytes           *int64
+	PageCount           *int
+	IngestTotalChunks   *int
+	IngestIndexedChunks *int
 
 	// SourceVersion and SourceModifiedAt enable idempotent re-sync:
 	// a record is only re-ingested when the source version changes.
@@ -130,6 +132,7 @@ type RecordRepository interface {
 	ListQueued(ctx context.Context, limit int) ([]Record, error)
 	// UpdateStatus transitions a record to the given status (and clears/sets error).
 	UpdateStatus(ctx context.Context, id string, s RecordStatus, errMsg string) error
+	UpdateIngestProgress(ctx context.Context, id string, indexedChunks, totalChunks int) error
 	// UpdateAfterIngest writes chunk_count and size_bytes and marks the record indexed.
 	UpdateAfterIngest(ctx context.Context, id string, res IngestResult) error
 }

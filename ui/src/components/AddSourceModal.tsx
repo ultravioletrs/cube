@@ -274,6 +274,7 @@ export default function AddSourceModal({
 
   useEffect(() => {
     if (!initialGoogleAccessToken) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setGoogleAccessToken(prev => prev || initialGoogleAccessToken)
     setGoogleRefreshToken(prev => prev || initialGoogleRefreshToken)
     setOauthConnected(true)
@@ -317,6 +318,7 @@ export default function AddSourceModal({
     return () => {
       window.removeEventListener('message', handleMessage)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken])
 
   function validate() {

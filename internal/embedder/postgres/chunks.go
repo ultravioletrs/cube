@@ -66,6 +66,29 @@ func (r *ChunksRepository) StoreChunks(ctx context.Context, domainID, userID, re
 	return tx.Commit(ctx)
 }
 
+// AppendChunks inserts a batch starting at startIndex without deleting existing chunks.
+func (r *ChunksRepository) AppendChunks(ctx context.Context, domainID, userID, recordID string, startIndex int, chunks []Chunk) error {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	for i, c := range chunks {
+		vec := float32SliceToPGVector(c.Embedding)
+		_, err := tx.Exec(ctx,
+			`INSERT INTO chunks (domain_id, user_id, record_id, content, embedding, chunk_index)
+			 VALUES ($1, $2, $3, $4, $5::vector, $6)`,
+			domainID, userID, recordID, c.Content, vec, startIndex+i,
+		)
+		if err != nil {
+			return fmt.Errorf("insert chunk %d: %w", startIndex+i, err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 // ChunkSearchResult is a retrieved chunk with the record metadata needed for
 // building citations.
 type ChunkSearchResult struct {

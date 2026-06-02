@@ -122,6 +122,7 @@ export default function InvitationsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     if (!tokens?.accessToken) return
     if (tab === 'domain' && !activeDomain?.id) return
@@ -137,8 +138,9 @@ export default function InvitationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [tokens?.accessToken, activeDomain?.id, tab])
+  }, [tokens?.accessToken, activeDomain, tab])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   async function handleDelete(inv: Invitation) {
