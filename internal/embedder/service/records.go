@@ -52,3 +52,10 @@ func (s *recordsService) RetryIngest(ctx context.Context, id, domainID string) e
 	}
 	return s.repo.UpdateStatus(ctx, id, domain.RecordStatusQueued, "")
 }
+
+func (s *recordsService) CancelIngest(ctx context.Context, id, domainID string) error {
+	if _, err := s.repo.GetByID(ctx, id, domainID); err != nil {
+		return err
+	}
+	return s.repo.UpdateStatus(ctx, id, domain.RecordStatusCancelled, "")
+}

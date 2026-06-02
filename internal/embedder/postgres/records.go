@@ -283,13 +283,20 @@ func (r *recordsRepo) ListQueued(ctx context.Context, limit int) ([]domain.Recor
 func (r *recordsRepo) UpdateStatus(ctx context.Context, id string, s domain.RecordStatus, errMsg string) error {
 	if errMsg != "" {
 		_, err := r.pool.Exec(ctx,
-			`UPDATE records SET status=$1, error=$2, updated_at=now() WHERE id=$3`,
+			`UPDATE records SET status=$1, error=$2, updated_at=now() WHERE id=$3 AND status <> 'cancelled'`,
 			string(s), errMsg, id,
 		)
 		return err
 	}
+	if s == domain.RecordStatusCancelled || s == domain.RecordStatusQueued {
+		_, err := r.pool.Exec(ctx,
+			`UPDATE records SET status=$1, error=NULL, updated_at=now() WHERE id=$2`,
+			string(s), id,
+		)
+		return err
+	}
 	_, err := r.pool.Exec(ctx,
-		`UPDATE records SET status=$1, error=NULL, updated_at=now() WHERE id=$2`,
+		`UPDATE records SET status=$1, error=NULL, updated_at=now() WHERE id=$2 AND status <> 'cancelled'`,
 		string(s), id,
 	)
 	return err
@@ -310,7 +317,7 @@ func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res doma
 		     description=COALESCE(NULLIF($4, ''), description),
 		     error=NULL,
 		     updated_at=now()
-		 WHERE id=$5`,
+		 WHERE id=$5 AND status <> 'cancelled'`,
 		res.ChunkCount, res.SizeBytes, pageCount, res.Description, id,
 	)
 	return err

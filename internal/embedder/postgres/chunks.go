@@ -28,6 +28,14 @@ type Chunk struct {
 	Embedding []float32
 }
 
+// DeleteByRecord removes all chunks for a record.
+func (r *ChunksRepository) DeleteByRecord(ctx context.Context, recordID string) error {
+	if _, err := r.db.Exec(ctx, `DELETE FROM chunks WHERE record_id = $1`, recordID); err != nil {
+		return fmt.Errorf("delete chunks by record: %w", err)
+	}
+	return nil
+}
+
 // StoreChunks deletes existing chunks for recordID then inserts the new batch.
 // The embedding column is written as a pgvector literal: '[f1,f2,...]'.
 func (r *ChunksRepository) StoreChunks(ctx context.Context, domainID, userID, recordID string, chunks []Chunk) error {

@@ -27,6 +27,7 @@ func MountRecords(
 	r.Get("/api/v1/records", listRecords(recordsSvc))
 	r.Get("/api/v1/records/{id}", getRecord(recordsSvc))
 	r.Post("/api/v1/records/{id}/retry", retryRecord(recordsSvc, trigger))
+	r.Post("/api/v1/records/{id}/cancel", cancelRecord(recordsSvc))
 	r.Delete("/api/v1/records/{id}", deleteRecord(recordsSvc))
 	r.Get("/api/v1/sources/{source_id}/records", listRecordsBySource(recordsSvc))
 }
@@ -182,6 +183,24 @@ func retryRecord(svc domain.RecordService, trigger func()) http.HandlerFunc {
 		}
 
 		trigger()
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func cancelRecord(svc domain.RecordService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		domainID := auth.DomainID(r.Context())
+
+		if err := svc.CancelIngest(r.Context(), id, domainID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errBody("record not found"))
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
+			return
+		}
+
 		w.WriteHeader(http.StatusAccepted)
 	}
 }

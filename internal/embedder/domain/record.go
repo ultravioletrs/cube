@@ -29,6 +29,7 @@ const (
 	RecordStatusProcessing RecordStatus = "processing"
 	RecordStatusIndexed    RecordStatus = "indexed"
 	RecordStatusFailed     RecordStatus = "failed"
+	RecordStatusCancelled  RecordStatus = "cancelled"
 )
 
 // Record represents a single indexed item (document, image, link, etc.) in the
@@ -140,4 +141,5 @@ type RecordService interface {
 	List(ctx context.Context, domainID string, f RecordFilter, p Page) (RecordPage, error)
 	Delete(ctx context.Context, id, domainID string) error
 	RetryIngest(ctx context.Context, id, domainID string) error
+	CancelIngest(ctx context.Context, id, domainID string) error
 }

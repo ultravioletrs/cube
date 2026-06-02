@@ -237,6 +237,8 @@ function toRecordStatus(status: string): AppRecord['status'] {
       return 'indexed'
     case 'failed':
       return 'error'
+    case 'cancelled':
+      return 'cancelled'
     case 'queued':
     case 'processing':
     default:
@@ -626,6 +628,16 @@ export async function deleteRecord(token: string, domainID: string, recordID: st
 
 export async function retryRecordIngest(token: string, domainID: string, recordID: string): Promise<void> {
   const res = await fetch(buildURL(`/api/v1/records/${recordID}/retry`), {
+    method: 'POST',
+    headers: authHeaders(token, domainID),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function cancelRecordIngest(token: string, domainID: string, recordID: string): Promise<void> {
+  const res = await fetch(buildURL(`/api/v1/records/${recordID}/cancel`), {
     method: 'POST',
     headers: authHeaders(token, domainID),
   })

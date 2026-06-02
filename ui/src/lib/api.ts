@@ -134,6 +134,7 @@ function toAppRecord(r: Record<string, unknown>): AppRecord {
 function mapStatus(s: string): AppRecord['status'] {
   if (s === 'indexed') return 'indexed'
   if (s === 'error') return 'error'
+  if (s === 'cancelled') return 'cancelled'
   return 'processing'
 }
 
