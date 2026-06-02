@@ -317,7 +317,7 @@ func (r *recordsRepo) UpdateStatus(ctx context.Context, id string, s domain.Reco
 func (r *recordsRepo) UpdateIngestProgress(ctx context.Context, id string, indexedChunks, totalChunks int) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE records
-		 SET ingest_indexed_chunks=$1, ingest_total_chunks=$2, updated_at=now()
+		 SET status='processing', ingest_indexed_chunks=$1, ingest_total_chunks=$2, updated_at=now()
 		 WHERE id=$3`,
 		indexedChunks, totalChunks, id,
 	)

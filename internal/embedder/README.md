@@ -22,7 +22,7 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_EMBEDDING_TEXT_BASE_URL` | Embedding API base URL | `http://ollama:11434` |
 | `EMBEDDER_EMBEDDING_TEXT_MODEL` | Embedding model for text profile | `nomic-embed-text` |
 | `EMBEDDER_EMBEDDING_*` | Profile and routing overrides (text/code/image/custom) | optional |
-| `EMBEDDER_CHUNK_SIZE` | Chunk size | `512` |
+| `EMBEDDER_CHUNK_SIZE` | Chunk size. Large text records automatically disable overlap to reduce embedding work without exceeding local model context limits. | `512` |
 | `EMBEDDER_CHUNK_OVERLAP` | Chunk overlap | `64` |
 | `EMBEDDER_INGEST_*` | Queue polling and concurrency tuning | optional |
 | `EMBEDDER_INGEST_RECORD_TIMEOUT` | Max wall-clock time for one record ingest | `2h` |
