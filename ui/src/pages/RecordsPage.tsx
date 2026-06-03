@@ -10,9 +10,10 @@ import UserMenu from '@/components/UserMenu'
 import AddRecordModal from '@/components/AddRecordModal'
 
 const statusColors = {
+  queued:     { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
   indexed:    { bg: 'rgba(0,212,180,0.1)',  color: '#00d4b4', dot: '#00d4b4' },
   processing: { bg: 'rgba(255,180,0,0.1)',  color: '#ffb400', dot: '#ffb400' },
-  error:      { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
+  failed:     { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
 }
 
 const RECORD_POLL_INTERVAL_MS = 2500
@@ -20,7 +21,7 @@ const statusFilterOptions: Array<{ value: AppRecord['status'] | 'all'; label: st
   { value: 'all', label: 'All statuses' },
   { value: 'indexed', label: 'Indexed' },
   { value: 'processing', label: 'Processing' },
-  { value: 'error', label: 'Failed' },
+  { value: 'failed', label: 'Failed' },
 ]
 const formatFilterOptions: Array<{ value: RecordFormat | 'all'; label: string }> = [
   { value: 'all', label: 'All formats' },
@@ -96,13 +97,15 @@ function recordSubtext(record: AppRecord): string {
   if (record.format === 'image') {
     return imageRecordSubtext(record)
   }
+  if (record.status === 'queued') return 'waiting for indexing…'
   if (record.status === 'processing' && (record.ingestTotalChunks ?? 0) > 0) {
     return `indexing ${record.ingestIndexedChunks ?? 0} / ${record.ingestTotalChunks} chunks`
   }
+  if (record.status === 'processing') return 'indexing…'
   if (record.chunks != null) {
     return record.pages != null ? `${record.chunks} chunks · ${record.pages} pages` : `${record.chunks} chunks`
   }
-  return record.pages != null ? `${record.pages} pages · indexing…` : 'indexing…'
+  return record.pages != null ? `${record.pages} pages` : 'pending'
 }
 
 function recordDetail(record: AppRecord): string {
@@ -318,7 +321,7 @@ function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRec
         </div>
       )}
 
-      {record.status === 'error' && (
+      {record.status === 'failed' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 12px', background: 'rgba(255,80,80,0.06)', borderRadius: '8px', border: '1px solid rgba(255,80,80,0.2)' }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: '2px' }}>
@@ -386,7 +389,7 @@ export default function RecordsPage() {
   }, [accessToken, domainID, setRecords, refreshTick, statusFilter, formatFilter, sourceFilter])
 
   useEffect(() => {
-    if (!accessToken || !records.some(record => record.status === 'processing')) return
+    if (!accessToken || !records.some(record => record.status === 'queued' || record.status === 'processing')) return
     const timer = window.setInterval(refreshRecords, RECORD_POLL_INTERVAL_MS)
     return () => window.clearInterval(timer)
   }, [accessToken, records, refreshRecords])
@@ -414,7 +417,7 @@ export default function RecordsPage() {
     try {
       await retryRecordIngest(accessToken, domainID, id)
       setRecords(prev => prev.map(record => (
-        record.id === id ? { ...record, status: 'processing', error: undefined } : record
+        record.id === id ? { ...record, status: 'queued', error: undefined } : record
       )))
       refreshRecords()
     } catch (err) {
@@ -465,7 +468,7 @@ export default function RecordsPage() {
 
   async function handleBulkRetry() {
     if (!accessToken || bulkWorking) return
-    const retryIds = selectedRecords.filter(record => record.status === 'error').map(record => record.id)
+    const retryIds = selectedRecords.filter(record => record.status === 'failed').map(record => record.id)
     if (retryIds.length === 0) return
     setBulkWorking(true)
     try {
@@ -596,8 +599,8 @@ export default function RecordsPage() {
             </span>
             <button
               onClick={handleBulkRetry}
-              disabled={bulkWorking || !selectedRecords.some(record => record.status === 'error')}
-              style={{ background: 'rgba(255,180,0,0.1)', border: '1px solid rgba(255,180,0,0.3)', borderRadius: '7px', color: '#ffb400', padding: '6px 11px', cursor: bulkWorking ? 'default' : 'pointer', opacity: bulkWorking || !selectedRecords.some(record => record.status === 'error') ? 0.45 : 1, fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
+              disabled={bulkWorking || !selectedRecords.some(record => record.status === 'failed')}
+              style={{ background: 'rgba(255,180,0,0.1)', border: '1px solid rgba(255,180,0,0.3)', borderRadius: '7px', color: '#ffb400', padding: '6px 11px', cursor: bulkWorking ? 'default' : 'pointer', opacity: bulkWorking || !selectedRecords.some(record => record.status === 'failed') ? 0.45 : 1, fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
             >
               Retry failed
             </button>

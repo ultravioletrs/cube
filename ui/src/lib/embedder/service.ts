@@ -245,12 +245,14 @@ function bytesToLabel(value?: number | null): string | undefined {
 
 function toRecordStatus(status: string): AppRecord['status'] {
   switch (status) {
+    case 'queued':
+      return 'queued'
+    case 'processing':
+      return 'processing'
     case 'indexed':
       return 'indexed'
     case 'failed':
-      return 'error'
-    case 'queued':
-    case 'processing':
+      return 'failed'
     default:
       return 'processing'
   }
@@ -410,11 +412,9 @@ export async function listRecords(token: string, domainID: string, opts: RecordL
       .map(mapRecord)
   }
 
-  const status = opts.status === 'error'
-    ? 'failed'
-    : opts.status && opts.status !== 'all'
-      ? opts.status
-      : undefined
+  const status = opts.status && opts.status !== 'all'
+    ? opts.status
+    : undefined
   const records = await fetchRecords(token, domainID, opts, status)
   return records.map(mapRecord)
 }
