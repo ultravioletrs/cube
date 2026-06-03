@@ -29,6 +29,7 @@ const (
 	RecordStatusProcessing RecordStatus = "processing"
 	RecordStatusIndexed    RecordStatus = "indexed"
 	RecordStatusFailed     RecordStatus = "failed"
+	RecordStatusCancelled  RecordStatus = "cancelled"
 )
 
 // Record represents a single indexed item (document, image, link, etc.) in the
@@ -57,10 +58,12 @@ type Record struct {
 	MimeType    string
 
 	// Content metadata populated after successful ingestion.
-	Description string
-	ChunkCount  *int
-	SizeBytes   *int64
-	PageCount   *int
+	Description         string
+	ChunkCount          *int
+	SizeBytes           *int64
+	PageCount           *int
+	IngestTotalChunks   *int
+	IngestIndexedChunks *int
 
 	// SourceVersion and SourceModifiedAt enable idempotent re-sync:
 	// a record is only re-ingested when the source version changes.
@@ -129,6 +132,7 @@ type RecordRepository interface {
 	ListQueued(ctx context.Context, limit int) ([]Record, error)
 	// UpdateStatus transitions a record to the given status (and clears/sets error).
 	UpdateStatus(ctx context.Context, id string, s RecordStatus, errMsg string) error
+	UpdateIngestProgress(ctx context.Context, id string, indexedChunks, totalChunks int) error
 	// UpdateAfterIngest writes chunk_count and size_bytes and marks the record indexed.
 	UpdateAfterIngest(ctx context.Context, id string, res IngestResult) error
 }
@@ -140,4 +144,5 @@ type RecordService interface {
 	List(ctx context.Context, domainID string, f RecordFilter, p Page) (RecordPage, error)
 	Delete(ctx context.Context, id, domainID string) error
 	RetryIngest(ctx context.Context, id, domainID string) error
+	CancelIngest(ctx context.Context, id, domainID string) error
 }

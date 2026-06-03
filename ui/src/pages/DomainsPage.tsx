@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { listDomains, createDomain, deleteDomain, toRoute } from '@/lib/platform/service'
 import type { Domain } from '@/lib/platform/service'
@@ -167,6 +167,8 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
 
 export default function DomainsPage() {
   const { tokens } = useAuth()
+  const accessToken = tokens?.accessToken
+  const location = useLocation()
   const navigate = useNavigate()
   const { activeDomain, setActiveDomain } = useOutletContext<AppContext>()
 
@@ -176,13 +178,18 @@ export default function DomainsPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [lastDomainID] = useState(loadLastDomainID)
+  const redirectPath = (() => {
+    const state = location.state as { from?: string } | null
+    const from = state?.from
+    return from && from !== '/domains' ? from : '/dashboard'
+  })()
 
   const load = useCallback(async () => {
-    if (!tokens?.accessToken) return
+    if (!accessToken) return
     setLoading(true)
     setLoadError(null)
     try {
-      const list = await listDomains(tokens.accessToken)
+      const list = await listDomains(accessToken)
       setDomains(list)
       if (activeDomain && !list.some(domain => domain.id === activeDomain.id)) {
         setActiveDomain(null)
@@ -192,8 +199,9 @@ export default function DomainsPage() {
     } finally {
       setLoading(false)
     }
-  }, [tokens?.accessToken, activeDomain, setActiveDomain])
+  }, [accessToken, activeDomain, setActiveDomain])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   function handleSelect(domain: Domain) {
@@ -205,7 +213,7 @@ export default function DomainsPage() {
       route: domain.route,
       status: domain.status as string | undefined,
     })
-    navigate('/records')
+    navigate(redirectPath, { replace: true })
   }
 
   async function handleDelete(domain: Domain) {

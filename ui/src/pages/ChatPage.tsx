@@ -333,6 +333,7 @@ export default function ChatPage() {
   useEffect(() => {
     for (let i = chatMessages.length - 1; i >= 0; i--) {
       if (chatMessages[i].role === 'assistant' && (chatMessages[i].sources?.length ?? 0) > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setPanelCitations(chatMessages[i].sources!)
         return
       }
@@ -351,7 +352,7 @@ export default function ChatPage() {
     } finally {
       setLoadingConv(false)
     }
-  }, [accessToken, loadingConv, setChatMessages, setConversationId])
+  }, [accessToken, domainID, loadingConv, setChatMessages, setConversationId])
 
   const handleDeleteConversation = useCallback(async (id: string) => {
     if (!accessToken) return
@@ -364,7 +365,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error('failed to delete conversation:', err)
     }
-  }, [accessToken, conversationId, clearChatMessages, setConversations])
+  }, [accessToken, domainID, conversationId, clearChatMessages, setConversations])
 
   const scopedSourceState = selectedSourceID && sourceScopeState?.sourceID === selectedSourceID
     ? sourceScopeState
@@ -421,7 +422,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true
     }
-  }, [selectedSourceID, accessToken])
+  }, [selectedSourceID, accessToken, domainID])
 
   async function handleSyncSelectedSource() {
     if (!selectedSourceID || !accessToken || isSyncingSelectedSource) return
@@ -550,7 +551,7 @@ export default function ChatPage() {
       }
       setLoading(false)
     })
-  }, [input, loading, chatMessages, setChatMessages, accessToken, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, records, conversationId, setConversationId, setConversations])
+  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, conversationId, setConversationId, setConversations])
 
   const indexedSources = records.filter(s => s.status === 'indexed')
 

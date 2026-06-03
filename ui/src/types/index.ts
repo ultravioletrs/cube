@@ -33,11 +33,13 @@ export interface AppRecord {
   sourceID?: string
   name: string
   format: RecordFormat
-  status: 'indexed' | 'processing' | 'error'
+  status: 'queued' | 'processing' | 'indexed' | 'failed' | 'cancelled'
   createdAt: string
   description: string
   error?: string
   chunks: number | null
+  ingestTotalChunks?: number | null
+  ingestIndexedChunks?: number | null
   size?: string
   pages?: number | null
   url?: string

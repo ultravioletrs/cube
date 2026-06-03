@@ -74,6 +74,7 @@ export default function AuditLogsPage() {
   const [page, setPage] = useState(0)
   const [total, setTotal] = useState(0)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     if (!tokens?.accessToken) return
     setLoading(true)
@@ -98,6 +99,7 @@ export default function AuditLogsPage() {
     }
   }, [tokens?.accessToken, tab, page, activeDomain?.id, user])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   function switchTab(t: Tab) {

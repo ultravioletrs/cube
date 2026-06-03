@@ -54,6 +54,7 @@ export default function AppLayout() {
   useEffect(() => {
     // Clear stale data from the previous domain immediately so pages never
     // briefly show records that belong to a different domain.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecords([])
     setDriveSources([])
     setConversations([])
@@ -106,6 +107,7 @@ export default function AppLayout() {
   }, [activeDomain])
 
   const context: AppContext = { records, setRecords, driveSources, setDriveSources, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations, activeDomain, setActiveDomain }
+  const requiresDomain = !activeDomain && location.pathname !== '/domains'
 
   if (!activeDomain && !isDomainSelection) {
     return <Navigate to="/domains" replace state={{ from: location.pathname }} />
@@ -115,7 +117,11 @@ export default function AppLayout() {
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
       {!isDomainSelection && <Sidebar activeDomain={activeDomain} />}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Outlet context={context} />
+        {requiresDomain ? (
+          <Navigate to="/domains" replace state={{ from: location.pathname }} />
+        ) : (
+          <Outlet context={context} />
+        )}
       </main>
     </div>
   )

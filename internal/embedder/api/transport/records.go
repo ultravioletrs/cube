@@ -27,6 +27,7 @@ func MountRecords(
 	r.Get("/api/v1/records", listRecords(recordsSvc))
 	r.Get("/api/v1/records/{id}", getRecord(recordsSvc))
 	r.Post("/api/v1/records/{id}/retry", retryRecord(recordsSvc, trigger))
+	r.Post("/api/v1/records/{id}/cancel", cancelRecord(recordsSvc))
 	r.Delete("/api/v1/records/{id}", deleteRecord(recordsSvc))
 	r.Get("/api/v1/sources/{source_id}/records", listRecordsBySource(recordsSvc))
 }
@@ -35,24 +36,26 @@ func MountRecords(
 // ExternalID / ExternalURL / ExternalRef carry the full traceability chain back
 // to the original document in the source system.
 type recordResponse struct {
-	ID          string                `json:"id"`
-	UserID      string                `json:"user_id"`
-	SourceID    string                `json:"source_id"`
-	Name        string                `json:"name"`
-	Format      string                `json:"format"`
-	Status      string                `json:"status"`
-	ExternalID  string                `json:"external_id"`
-	ExternalURL string                `json:"external_url"`
-	ExternalRef string                `json:"external_ref,omitempty"`
-	MimeType    string                `json:"mime_type,omitempty"`
-	Description string                `json:"description,omitempty"`
-	ChunkCount  *int                  `json:"chunks,omitempty"`
-	SizeBytes   *int64                `json:"size_bytes,omitempty"`
-	PageCount   *int                  `json:"pages,omitempty"`
-	Error       *string               `json:"error,omitempty"`
-	CreatedAt   string                `json:"created_at"`
-	UpdatedAt   string                `json:"updated_at"`
-	Source      *recordSourceResponse `json:"source,omitempty"`
+	ID                  string                `json:"id"`
+	UserID              string                `json:"user_id"`
+	SourceID            string                `json:"source_id"`
+	Name                string                `json:"name"`
+	Format              string                `json:"format"`
+	Status              string                `json:"status"`
+	ExternalID          string                `json:"external_id"`
+	ExternalURL         string                `json:"external_url"`
+	ExternalRef         string                `json:"external_ref,omitempty"`
+	MimeType            string                `json:"mime_type,omitempty"`
+	Description         string                `json:"description,omitempty"`
+	ChunkCount          *int                  `json:"chunks,omitempty"`
+	IngestTotalChunks   *int                  `json:"ingest_total_chunks,omitempty"`
+	IngestIndexedChunks *int                  `json:"ingest_indexed_chunks,omitempty"`
+	SizeBytes           *int64                `json:"size_bytes,omitempty"`
+	PageCount           *int                  `json:"pages,omitempty"`
+	Error               *string               `json:"error,omitempty"`
+	CreatedAt           string                `json:"created_at"`
+	UpdatedAt           string                `json:"updated_at"`
+	Source              *recordSourceResponse `json:"source,omitempty"`
 }
 
 type recordSourceResponse struct {
@@ -64,23 +67,25 @@ type recordSourceResponse struct {
 
 func toRecordResponse(rec domain.Record) recordResponse {
 	resp := recordResponse{
-		ID:          rec.ID,
-		UserID:      rec.UserID,
-		SourceID:    rec.SourceID,
-		Name:        rec.Name,
-		Format:      string(rec.Format),
-		Status:      string(rec.Status),
-		ExternalID:  rec.ExternalID,
-		ExternalURL: rec.ExternalURL,
-		ExternalRef: rec.ExternalRef,
-		MimeType:    rec.MimeType,
-		Description: rec.Description,
-		ChunkCount:  rec.ChunkCount,
-		SizeBytes:   rec.SizeBytes,
-		PageCount:   rec.PageCount,
-		Error:       rec.Error,
-		CreatedAt:   rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-		UpdatedAt:   rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		ID:                  rec.ID,
+		UserID:              rec.UserID,
+		SourceID:            rec.SourceID,
+		Name:                rec.Name,
+		Format:              string(rec.Format),
+		Status:              string(rec.Status),
+		ExternalID:          rec.ExternalID,
+		ExternalURL:         rec.ExternalURL,
+		ExternalRef:         rec.ExternalRef,
+		MimeType:            rec.MimeType,
+		Description:         rec.Description,
+		ChunkCount:          rec.ChunkCount,
+		IngestTotalChunks:   rec.IngestTotalChunks,
+		IngestIndexedChunks: rec.IngestIndexedChunks,
+		SizeBytes:           rec.SizeBytes,
+		PageCount:           rec.PageCount,
+		Error:               rec.Error,
+		CreatedAt:           rec.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:           rec.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 	}
 	if rec.Source != nil {
 		resp.Source = &recordSourceResponse{
@@ -182,6 +187,24 @@ func retryRecord(svc domain.RecordService, trigger func()) http.HandlerFunc {
 		}
 
 		trigger()
+		w.WriteHeader(http.StatusAccepted)
+	}
+}
+
+func cancelRecord(svc domain.RecordService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "id")
+		domainID := auth.DomainID(r.Context())
+
+		if err := svc.CancelIngest(r.Context(), id, domainID); err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				writeJSON(w, http.StatusNotFound, errBody("record not found"))
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, errBody("internal error"))
+			return
+		}
+
 		w.WriteHeader(http.StatusAccepted)
 	}
 }
