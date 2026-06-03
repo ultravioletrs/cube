@@ -136,6 +136,7 @@ function mapStatus(s: string): AppRecord['status'] {
   if (s === 'processing') return 'processing'
   if (s === 'indexed') return 'indexed'
   if (s === 'failed') return 'failed'
+  if (s === 'cancelled') return 'cancelled'
   return 'processing'
 }
 

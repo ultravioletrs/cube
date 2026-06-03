@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { deleteRecord, listRecords, retryRecordIngest, uploadRecordFile } from '@/lib/embedder/service'
+import { cancelRecordIngest, deleteRecord, listRecords, retryRecordIngest, uploadRecordFile } from '@/lib/embedder/service'
 import { imageIngestLabel, imageIngestStatusText, imageRecordSubtext } from '@/lib/embedder/image-ingest'
 import type { AppContext, AppRecord, RecordFormat } from '@/types'
 import UserMenu from '@/components/UserMenu'
@@ -14,6 +14,7 @@ const statusColors = {
   indexed:    { bg: 'rgba(0,212,180,0.1)',  color: '#00d4b4', dot: '#00d4b4' },
   processing: { bg: 'rgba(255,180,0,0.1)',  color: '#ffb400', dot: '#ffb400' },
   failed:     { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
+  cancelled:  { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
 }
 
 const RECORD_POLL_INTERVAL_MS = 2500
@@ -256,8 +257,9 @@ function friendlyError(msg: string): string {
   return 'Indexing failed.'
 }
 
-function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRecord; onClose: () => void; onStartChat: (r: AppRecord) => void; onRetry: (id: string) => Promise<void> }) {
+function DetailPanel({ record, onClose, onStartChat, onRetry, onCancel }: { record: AppRecord; onClose: () => void; onStartChat: (r: AppRecord) => void; onRetry: (id: string) => Promise<void>; onCancel: (id: string) => Promise<void> }) {
   const [retrying, setRetrying] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   const meta: { label: string; value: string }[] = []
   if (record.format !== 'link' && record.size) meta.push({ label: 'SIZE', value: record.size })
   meta.push({ label: 'ADDED', value: record.createdAt })
@@ -343,6 +345,31 @@ function DetailPanel({ record, onClose, onStartChat, onRetry }: { record: AppRec
         </div>
       )}
 
+      {record.status === 'processing' && (
+        <button
+          disabled={cancelling}
+          onClick={async () => { setCancelling(true); await onCancel(record.id); setCancelling(false) }}
+          style={{ alignSelf: 'flex-start', background: 'rgba(255,180,0,0.1)', border: '1px solid rgba(255,180,0,0.28)', borderRadius: '6px', padding: '6px 12px', cursor: cancelling ? 'default' : 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: '600', color: '#ffb400', opacity: cancelling ? 0.5 : 1 }}
+        >
+          {cancelling ? 'Cancelling...' : 'Cancel Ingest'}
+        </button>
+      )}
+
+      {record.status === 'cancelled' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 12px', background: 'rgba(156,163,175,0.06)', borderRadius: '8px', border: '1px solid rgba(156,163,175,0.2)' }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#9ca3af', lineHeight: 1.5 }}>
+            Ingest was cancelled before the record was indexed.
+          </span>
+          <button
+            disabled={retrying}
+            onClick={async () => { setRetrying(true); await onRetry(record.id); setRetrying(false) }}
+            style={{ alignSelf: 'flex-start', background: 'rgba(156,163,175,0.1)', border: '1px solid rgba(156,163,175,0.3)', borderRadius: '6px', padding: '5px 12px', cursor: retrying ? 'default' : 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: '600', color: '#c0c6d0', opacity: retrying ? 0.5 : 1 }}
+          >
+            {retrying ? 'Retrying...' : 'Retry Ingest'}
+          </button>
+        </div>
+      )}
+
       <button onClick={() => onStartChat(record)} style={{ background: 'var(--accent)', border: 'none', color: '#070c16', padding: '11px 16px', borderRadius: '10px', cursor: 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center', marginTop: 'auto' }}>
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
           <path d="M2 3A1.5 1.5 0 013.5 1.5h8A1.5 1.5 0 0113 3v6a1.5 1.5 0 01-1.5 1.5H8.5l-2 2v-2H3.5A1.5 1.5 0 012 9V3z" stroke="#070c16" strokeWidth="1.4"/>
@@ -422,6 +449,19 @@ export default function RecordsPage() {
       refreshRecords()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to retry ingest')
+    }
+  }
+
+  async function handleCancelRecord(id: string) {
+    if (!accessToken) return
+    try {
+      await cancelRecordIngest(accessToken, domainID, id)
+      setRecords(prev => prev.map(record => (
+        record.id === id ? { ...record, status: 'cancelled', error: undefined } : record
+      )))
+      refreshRecords()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel ingest')
     }
   }
 
@@ -696,6 +736,7 @@ export default function RecordsPage() {
           onClose={() => setSelectedId(null)}
           onStartChat={r => navigate('/chat', { state: { source: r } })}
           onRetry={handleRetryRecord}
+          onCancel={handleCancelRecord}
         />
       )}
 

@@ -216,7 +216,7 @@ export interface RecordListOptions {
   offset?: number
 }
 
-type RawRecordStatus = 'queued' | 'processing' | 'indexed' | 'failed'
+type RawRecordStatus = 'queued' | 'processing' | 'indexed' | 'failed' | 'cancelled'
 
 const embedderURL = import.meta.env.VITE_EMBEDDER_URL ?? window.location.origin
 
@@ -253,6 +253,8 @@ function toRecordStatus(status: string): AppRecord['status'] {
       return 'indexed'
     case 'failed':
       return 'failed'
+    case 'cancelled':
+      return 'cancelled'
     default:
       return 'processing'
   }
@@ -672,6 +674,16 @@ export async function deleteRecord(token: string, domainID: string, recordID: st
 
 export async function retryRecordIngest(token: string, domainID: string, recordID: string): Promise<void> {
   const res = await fetch(buildURL(`/api/v1/records/${recordID}/retry`), {
+    method: 'POST',
+    headers: authHeaders(token, domainID),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function cancelRecordIngest(token: string, domainID: string, recordID: string): Promise<void> {
+  const res = await fetch(buildURL(`/api/v1/records/${recordID}/cancel`), {
     method: 'POST',
     headers: authHeaders(token, domainID),
   })

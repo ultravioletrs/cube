@@ -33,7 +33,7 @@ export interface AppRecord {
   sourceID?: string
   name: string
   format: RecordFormat
-  status: 'queued' | 'processing' | 'indexed' | 'failed'
+  status: 'queued' | 'processing' | 'indexed' | 'failed' | 'cancelled'
   createdAt: string
   description: string
   error?: string

@@ -9,6 +9,7 @@ package ingest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -50,6 +51,8 @@ const (
 	imageEmbeddingMaxAttempts = 3
 	imageEmbeddingRetryDelay  = 2 * time.Second
 )
+
+var errRecordCancelled = errors.New("record ingest cancelled")
 
 // NewWorker creates an ingestion worker. chunkSize and overlap are in words.
 func NewWorker(
@@ -202,10 +205,19 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
+		return
+	}
+
 	text, pageCount, err := w.downloadContent(recordCtx, rec)
 	if err != nil {
 		logger.Warn("ingest: download failed", "err", err)
 		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
 		return
 	}
 
@@ -231,8 +243,16 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 
 	indexedChunks, err := w.embedAndStoreBatched(recordCtx, ctx, rec, embedder, chunks)
 	if err != nil {
+		if errors.Is(err, errRecordCancelled) {
+			w.cleanupCancelledRecord(ctx, rec, logger)
+			return
+		}
 		logger.Warn("ingest: embed failed", "err", err)
 		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
 		return
 	}
 
@@ -245,10 +265,19 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 }
 
 func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.Record, logger *slog.Logger) {
+	if w.isCancelled(statusCtx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
+		return
+	}
+
 	content, err := w.downloadRawContent(ctx, rec)
 	if err != nil {
 		logger.Warn("ingest: image download failed", "err", err)
 		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
 		return
 	}
 
@@ -259,6 +288,10 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 	if err != nil {
 		logger.Warn("ingest: image extraction failed", "err", err)
 		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
 		return
 	}
 	if doc.ImageMode == ImageIngestModeNone {
@@ -289,8 +322,16 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 
 	indexedChunks, err := w.embedAndStoreBatched(ctx, statusCtx, rec, embedder, chunks)
 	if err != nil {
+		if errors.Is(err, errRecordCancelled) {
+			w.cleanupCancelledRecord(ctx, rec, logger)
+			return
+		}
 		logger.Warn("ingest: embed image text failed", "err", err)
 		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
+		return
+	}
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
 		return
 	}
 
@@ -307,10 +348,18 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 			return
 		}
 		if err := w.storeImageEmbeddingContentWithRetry(ctx, rec, content, logger); err != nil {
+			if errors.Is(err, errRecordCancelled) {
+				w.cleanupCancelledRecord(ctx, rec, logger)
+				return
+			}
 			logger.Warn("ingest: visual image embedding failed", "err", err)
 			_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, err.Error())
 			return
 		}
+	}
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
+		return
 	}
 
 	_ = w.records.UpdateAfterIngest(statusCtx, rec.ID, domain.IngestResult{
@@ -335,6 +384,26 @@ func imageIngestDescription(doc ExtractedDocument) string {
 	}
 }
 
+func (w *Worker) isCancelled(ctx context.Context, rec domain.Record) bool {
+	current, err := w.records.GetByID(ctx, rec.ID, rec.DomainID)
+	if err != nil {
+		return false
+	}
+	return current.Status == domain.RecordStatusCancelled
+}
+
+func (w *Worker) cleanupCancelledRecord(ctx context.Context, rec domain.Record, logger *slog.Logger) {
+	if err := w.chunks.DeleteByRecord(ctx, rec.ID); err != nil {
+		logger.Warn("ingest: cleanup cancelled chunks failed", "err", err)
+	}
+	if w.imageEmbeddings != nil {
+		if err := w.imageEmbeddings.DeleteByRecord(ctx, rec.ID); err != nil {
+			logger.Warn("ingest: cleanup cancelled image embedding failed", "err", err)
+		}
+	}
+	logger.Info("ingest: cancelled")
+}
+
 func (w *Worker) embedAndStoreBatched(
 	ctx context.Context,
 	statusCtx context.Context,
@@ -346,6 +415,9 @@ func (w *Worker) embedAndStoreBatched(
 	if batchSize <= 0 {
 		batchSize = 16
 	}
+	if w.isCancelled(statusCtx, rec) {
+		return 0, errRecordCancelled
+	}
 	if err := w.chunks.DeleteByRecord(statusCtx, rec.ID); err != nil {
 		return 0, err
 	}
@@ -356,6 +428,9 @@ func (w *Worker) embedAndStoreBatched(
 	}
 
 	for i := 0; i < len(chunks); i += batchSize {
+		if w.isCancelled(statusCtx, rec) {
+			return 0, errRecordCancelled
+		}
 		end := i + batchSize
 		if end > len(chunks) {
 			end = len(chunks)
@@ -408,6 +483,9 @@ func (w *Worker) embedAndStoreSplitFallback(
 ) (int, error) {
 	indexed := 0
 	for _, text := range chunks {
+		if w.isCancelled(statusCtx, rec) {
+			return 0, errRecordCancelled
+		}
 		parts, vecs, err := embedWithContextSplit(ctx, embedder, text)
 		if err != nil {
 			return 0, err
@@ -471,27 +549,6 @@ func isContextLengthError(err error) bool {
 	return strings.Contains(msg, "context length") || strings.Contains(msg, "input length exceeds")
 }
 
-// embedBatched sends chunks to the embedder in groups so a single large
-// document does not produce one enormous HTTP request that times out.
-func embedBatched(ctx context.Context, embedder embedding.Embedder, chunks []string, batchSize int) ([][]float32, error) {
-	if batchSize <= 0 {
-		batchSize = 16
-	}
-	all := make([][]float32, 0, len(chunks))
-	for i := 0; i < len(chunks); i += batchSize {
-		end := i + batchSize
-		if end > len(chunks) {
-			end = len(chunks)
-		}
-		vecs, err := embedder.Embed(ctx, chunks[i:end])
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, vecs...)
-	}
-	return all, nil
-}
-
 func (w *Worker) storeImageEmbedding(ctx context.Context, rec domain.Record, logger *slog.Logger) error {
 	content, err := w.downloadRawContent(ctx, rec)
 	if err != nil {
@@ -503,6 +560,9 @@ func (w *Worker) storeImageEmbedding(ctx context.Context, rec domain.Record, log
 func (w *Worker) storeImageEmbeddingContentWithRetry(ctx context.Context, rec domain.Record, content []byte, logger *slog.Logger) error {
 	var lastErr error
 	for attempt := 1; attempt <= imageEmbeddingMaxAttempts; attempt++ {
+		if w.isCancelled(ctx, rec) {
+			return errRecordCancelled
+		}
 		if err := w.storeImageEmbeddingContent(ctx, rec, content, logger); err != nil {
 			lastErr = err
 			if attempt == imageEmbeddingMaxAttempts {

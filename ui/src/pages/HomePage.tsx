@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { createSource, deleteRecord, deleteSource, listRecords, listSources, retryRecordIngest, syncSource, updateGoogleSourceSelection, uploadRecordFile } from '@/lib/embedder/service'
+import { cancelRecordIngest, createSource, deleteRecord, deleteSource, listRecords, listSources, retryRecordIngest, syncSource, updateGoogleSourceSelection, uploadRecordFile } from '@/lib/embedder/service'
 import { imageIngestLabel, imageIngestStatusText, imageRecordSubtext } from '@/lib/embedder/image-ingest'
 import type { AppContext, AppRecord, DriveSource, DriveSourceDraft } from '@/types'
 import UserMenu from '@/components/UserMenu'
@@ -16,6 +16,7 @@ const statusColors = {
   indexed:    { bg: 'rgba(0,212,180,0.1)',  color: '#00d4b4', dot: '#00d4b4' },
   processing: { bg: 'rgba(255,180,0,0.1)',  color: '#ffb400', dot: '#ffb400' },
   failed:     { bg: 'rgba(255,80,80,0.1)',  color: '#ff5050', dot: '#ff5050' },
+  cancelled:  { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
 }
 
 const driveStatusColors = {
@@ -318,6 +319,20 @@ export default function HomePage() {
     }
   }
 
+  async function handleCancelRecordIngest(record: AppRecord) {
+    if (!accessToken) return
+    try {
+      await cancelRecordIngest(accessToken, domainID, record.id)
+      setRecords(prev => prev.map(item => (
+        item.id === record.id ? { ...item, status: 'cancelled', error: undefined } : item
+      )))
+      setLoadError('')
+      await refreshData()
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to cancel ingest')
+    }
+  }
+
   async function handleRetrySourceSync(sourceID: string) {
     if (!accessToken) return
     setSyncingSourceIDs(prev => (prev.includes(sourceID) ? prev : [...prev, sourceID]))
@@ -466,6 +481,22 @@ export default function HomePage() {
                       style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '6px', padding: '6px 8px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer' }}
                     >
                       Retry ingest
+                    </button>
+                  )}
+                  {record.status === 'cancelled' && (
+                    <button
+                      onClick={() => { void handleRetryRecordIngest(record) }}
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '6px', padding: '6px 8px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer' }}
+                    >
+                      Retry ingest
+                    </button>
+                  )}
+                  {record.status === 'processing' && (
+                    <button
+                      onClick={() => { void handleCancelRecordIngest(record) }}
+                      style={{ background: 'rgba(255,180,0,0.08)', border: '1px solid rgba(255,180,0,0.25)', borderRadius: '6px', padding: '6px 8px', color: '#ffb400', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer' }}
+                    >
+                      Cancel ingest
                     </button>
                   )}
                   {record.error && (

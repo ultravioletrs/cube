@@ -300,15 +300,24 @@ func (r *recordsRepo) UpdateStatus(ctx context.Context, id string, s domain.Reco
 		_, err := r.pool.Exec(ctx,
 			`UPDATE records
 			 SET status=$1, error=$2, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, updated_at=now()
-			 WHERE id=$3`,
+			 WHERE id=$3 AND status <> 'cancelled'`,
 			string(s), errMsg, id,
+		)
+		return err
+	}
+	if s == domain.RecordStatusCancelled || s == domain.RecordStatusQueued {
+		_, err := r.pool.Exec(ctx,
+			`UPDATE records
+			 SET status=$1, error=NULL, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, updated_at=now()
+			 WHERE id=$2`,
+			string(s), id,
 		)
 		return err
 	}
 	_, err := r.pool.Exec(ctx,
 		`UPDATE records
 		 SET status=$1, error=NULL, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, updated_at=now()
-		 WHERE id=$2`,
+		 WHERE id=$2 AND status <> 'cancelled'`,
 		string(s), id,
 	)
 	return err
@@ -341,7 +350,7 @@ func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res doma
 		     description=COALESCE(NULLIF($4, ''), description),
 		     error=NULL,
 		     updated_at=now()
-		 WHERE id=$5`,
+		 WHERE id=$5 AND status <> 'cancelled'`,
 		res.ChunkCount, res.SizeBytes, pageCount, res.Description, id,
 	)
 	return err
