@@ -75,6 +75,19 @@ function ProviderButtons({ providers, active, onSelect, labelMap }: { providers:
   )
 }
 
+function InlineNotice({ tone, children }: { tone: 'info' | 'warning' | 'success'; children: React.ReactNode }) {
+  const styles = {
+    info:    { bg: 'rgba(0,212,180,0.05)', border: 'rgba(0,212,180,0.16)', color: 'var(--text-muted)' },
+    warning: { bg: 'rgba(255,180,0,0.07)', border: 'rgba(255,180,0,0.22)', color: '#ffb400' },
+    success: { bg: 'rgba(0,212,180,0.08)', border: 'rgba(0,212,180,0.24)', color: 'var(--accent)' },
+  }[tone]
+  return (
+    <div style={{ marginTop: '8px', padding: '8px 12px', background: styles.bg, border: `1px solid ${styles.border}`, borderRadius: '7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: styles.color, lineHeight: 1.5 }}>
+      {children}
+    </div>
+  )
+}
+
 const providerLabel: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', local: 'Local / Ollama', cohere: 'Cohere' }
 
 const llmModels: Record<string, { value: string; label: string }[]> = {
@@ -168,6 +181,7 @@ export default function ConfigPage() {
   const currentModelOptions = llmProvider === 'local'
     ? ollamaModels.map(m => ({ value: m, label: m }))
     : llmModels[llmProvider] ?? []
+  const externalProviderMissingKey = llmProvider !== 'local' && !apiKey.trim()
 
   const handleSave = () => {
     saveModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })
@@ -198,6 +212,11 @@ export default function ConfigPage() {
             {llmProvider !== 'local' && (
               <Field label="API Key" hint={`Your ${providerLabel[llmProvider]} API key. Stored locally in your browser only.`}>
                 <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                {externalProviderMissingKey && (
+                  <InlineNotice tone="warning">
+                    API key is missing. Chat requests will use the server default model instead of {providerLabel[llmProvider]}.
+                  </InlineNotice>
+                )}
               </Field>
             )}
             <Field label="Model" hint={llmProvider === 'local' ? 'Models fetched live from your Ollama instance.' : 'The selected model must support function calling for optimal RAG performance.'}>
@@ -205,8 +224,15 @@ export default function ConfigPage() {
                 ? <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)', padding: '9px 0' }}>Loading models from Ollama…</div>
                 : <SelectInput value={llmModel} onChange={setLlmModel} options={currentModelOptions} />
               }
+              {llmProvider === 'local' && !ollamaLoading && ollamaModels.length > 0 && (
+                <InlineNotice tone="success">
+                  Ollama connected. {ollamaModels.length} local {ollamaModels.length === 1 ? 'model' : 'models'} available.
+                </InlineNotice>
+              )}
               {llmProvider === 'local' && !ollamaLoading && ollamaModels.length === 0 && (
-                <div style={{ marginTop: '8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ffb400' }}>No local models found — make sure Ollama is running.</div>
+                <InlineNotice tone="warning">
+                  No local models found. Make sure Ollama is running before using Local / Ollama.
+                </InlineNotice>
               )}
             </Field>
             <Field label="Temperature" hint="Lower values produce more deterministic, grounded responses."><Slider value={temperature} onChange={setTemperature} min={0} max={1} step={0.05} label="temperature" /></Field>

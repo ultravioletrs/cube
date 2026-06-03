@@ -18,7 +18,7 @@ export interface ModelConfig {
 
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   provider: 'local',
-  model: '',
+  model: 'llama3.2:3b',
   apiKey: '',
   temperature: 0.2,
   maxTokens: 1024,
@@ -52,6 +52,7 @@ export function toBackendModelConfig(cfg: ModelConfig): {
   max_tokens: number
 } | null {
   if (!cfg.model) return null
+  if (cfg.provider !== 'local' && !cfg.apiKey.trim()) return null
   const providerMap: Record<LLMProvider, string> = {
     openai: 'openai',
     anthropic: 'openai', // Anthropic is OpenAI-compatible
