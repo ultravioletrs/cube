@@ -8,6 +8,8 @@ import type { Domain } from '@/lib/platform/service'
 import type { AppContext } from '@/types'
 import UserMenu from '@/components/UserMenu'
 
+const LAST_DOMAIN_KEY = 'cube_active_domain'
+
 const statusColors: Record<string, { bg: string; color: string }> = {
   enabled:  { bg: 'rgba(0,212,180,0.1)',  color: '#00d4b4' },
   disabled: { bg: 'rgba(255,180,0,0.1)',  color: '#ffb400' },
@@ -33,6 +35,17 @@ function DomainIcon({ name }: { name: string }) {
       </span>
     </div>
   )
+}
+
+function loadLastDomainID(): string {
+  try {
+    const raw = localStorage.getItem(LAST_DOMAIN_KEY)
+    if (!raw) return ''
+    const parsed = JSON.parse(raw) as { id?: unknown }
+    return typeof parsed.id === 'string' ? parsed.id : ''
+  } catch {
+    return ''
+  }
 }
 
 function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCreated: (d: Domain) => Promise<void> }) {
@@ -164,6 +177,7 @@ export default function DomainsPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [lastDomainID] = useState(loadLastDomainID)
   const redirectPath = (() => {
     const state = location.state as { from?: string } | null
     const from = state?.from
@@ -177,12 +191,15 @@ export default function DomainsPage() {
     try {
       const list = await listDomains(accessToken)
       setDomains(list)
+      if (activeDomain && !list.some(domain => domain.id === activeDomain.id)) {
+        setActiveDomain(null)
+      }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load domains')
     } finally {
       setLoading(false)
     }
-  }, [accessToken])
+  }, [accessToken, activeDomain, setActiveDomain])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
@@ -287,12 +304,13 @@ export default function DomainsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
             {domains.map(domain => {
               const isActive = activeDomain?.id === domain.id
+              const isLast = !activeDomain && lastDomainID === domain.id
               return (
                 <div
                   key={domain.id}
                   style={{
-                    background: isActive ? 'rgba(0,212,180,0.05)' : 'var(--card-bg)',
-                    border: `1px solid ${isActive ? 'rgba(0,212,180,0.3)' : 'var(--border)'}`,
+                    background: isActive || isLast ? 'rgba(0,212,180,0.05)' : 'var(--card-bg)',
+                    border: `1px solid ${isActive || isLast ? 'rgba(0,212,180,0.3)' : 'var(--border)'}`,
                     borderRadius: '12px',
                     padding: '16px',
                     display: 'flex',
@@ -302,8 +320,8 @@ export default function DomainsPage() {
                     transition: 'border-color 0.15s ease, background 0.15s ease',
                   }}
                   onClick={() => handleSelect(domain)}
-                  onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.12)' }}
-                  onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)' }}
+                  onMouseEnter={e => { if (!isActive && !isLast) (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.12)' }}
+                  onMouseLeave={e => { if (!isActive && !isLast) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <DomainIcon name={domain.name ?? '?'} />
@@ -317,7 +335,7 @@ export default function DomainsPage() {
                         </p>
                       )}
                     </div>
-                    {isActive && (
+                    {(isActive || isLast) && (
                       <div style={{ flexShrink: 0, width: '18px', height: '18px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                           <path d="M2 5l2.5 2.5L8 3" stroke="#070c16" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -331,9 +349,9 @@ export default function DomainsPage() {
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button
                         onClick={e => { e.stopPropagation(); handleSelect(domain) }}
-                        style={{ padding: '4px 10px', border: `1px solid ${isActive ? 'rgba(0,212,180,0.4)' : 'var(--border)'}`, borderRadius: '6px', background: isActive ? 'rgba(0,212,180,0.1)' : 'transparent', color: isActive ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}
+                        style={{ padding: '4px 10px', border: `1px solid ${isActive || isLast ? 'rgba(0,212,180,0.4)' : 'var(--border)'}`, borderRadius: '6px', background: isActive || isLast ? 'rgba(0,212,180,0.1)' : 'transparent', color: isActive || isLast ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}
                       >
-                        {isActive ? 'Active' : 'Select'}
+                        {isActive ? 'Active' : isLast ? 'Last used' : 'Select'}
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); void handleDelete(domain) }}

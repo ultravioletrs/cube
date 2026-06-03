@@ -16,6 +16,7 @@ import type { AuthTokens, AuthUser } from '@/lib/auth/types'
 const REFRESH_TOKEN_KEY = 'cube_refresh_token'
 const ACCESS_TOKEN_KEY = 'cube_access_token'
 const CHAT_KEY = 'cube_chat'
+const DOMAIN_SESSION_KEY = 'cube_active_domain_session'
 const AUTO_REFRESH_FALLBACK_MS = 45 * 60 * 1000
 const AUTO_REFRESH_SKEW_MS = 60 * 1000
 const AUTO_REFRESH_MIN_DELAY_MS = 5 * 1000
@@ -31,6 +32,10 @@ function readStoredTokens(): AuthTokens | null {
 function persistTokens(tokens: AuthTokens): void {
   localStorage.setItem(ACCESS_TOKEN_KEY, tokens.accessToken)
   localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refreshToken)
+}
+
+function clearSessionSelection(): void {
+  sessionStorage.removeItem(DOMAIN_SESSION_KEY)
 }
 
 function clearStoredTokens(): void {
@@ -202,6 +207,7 @@ export function AuthProvider({
       const tokens = await service.login({ identity, password })
       const user = await service.getProfile(tokens.accessToken)
       persistTokens(tokens)
+      clearSessionSelection()
       setState({ user, tokens, isLoading: false, isAuthenticated: true })
     },
     [service],
@@ -227,6 +233,7 @@ export function AuthProvider({
     sessionVersionRef.current += 1
     clearRefreshTimer()
     clearStoredTokens()
+    clearSessionSelection()
     setState({ user: null, tokens: null, isLoading: false, isAuthenticated: false })
   }, [clearRefreshTimer, service, state.tokens?.accessToken])
 

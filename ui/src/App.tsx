@@ -1,6 +1,6 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-import { Navigate, Routes, Route, useLocation } from 'react-router-dom'
+import { Navigate, Routes, Route } from 'react-router-dom'
 import type { ReactNode } from 'react'
 import AppLayout from '@/layouts/AppLayout'
 import AuthPage from '@/pages/AuthPage'
@@ -21,13 +21,12 @@ import { ATTESTATION_ENABLED } from '@/lib/features'
 
 function RootRedirect() {
   const { isAuthenticated } = useAuth()
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  if (isAuthenticated) return <Navigate to="/domains" replace />
   return <Navigate to="/login" replace />
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
-  const location = useLocation()
 
   if (isLoading) return (
     <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
@@ -39,7 +38,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   )
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    return <Navigate to="/login" state={{ from: '/domains' }} replace />
   }
 
   return <>{children}</>
