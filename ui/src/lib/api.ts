@@ -156,6 +156,27 @@ export async function listOllamaModels(token: string, domainID: string): Promise
   return data.models ?? []
 }
 
+export interface ModelConnectionResult {
+  connected: boolean
+  message: string
+}
+
+export async function testModelConnection(
+  token: string,
+  config: BackendModelConfig,
+): Promise<ModelConnectionResult> {
+  const res = await fetch('/api/v1/models/test-connection', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null
+    throw new Error(body?.error || `model connection test: ${res.status}`)
+  }
+  return res.json() as Promise<ModelConnectionResult>
+}
+
 export interface GuardrailsStatus {
   enabled: boolean
   configured: boolean
