@@ -5,9 +5,10 @@ import { useOutletContext, useLocation } from 'react-router-dom'
 import type { AppContext, AppRecord, ChatMessage, Conversation, MsgSource } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
-import { streamChat } from '@/lib/api'
+import { listOllamaModels, streamChat } from '@/lib/api'
 import type { Citation } from '@/lib/api'
 import { loadModelConfig, toBackendModelConfig } from '@/lib/modelConfig'
+import type { ModelConfig } from '@/lib/modelConfig'
 import { deleteConversation, getConversation, listRecordsBySource, syncSource } from '@/lib/embedder/service'
 
 interface ChatRouteState {
@@ -38,6 +39,36 @@ function citationToSource(c: Citation): MsgSource {
 function citationCounts(citations: MsgSource[]) {
   const records = new Set(citations.map(citation => citation.recordID || citation.doc))
   return { records: records.size, chunks: citations.length }
+}
+
+type ModelStatus = 'checking' | 'connected' | 'configured' | 'model-unavailable' | 'provider-unavailable' | 'server-default'
+
+function initialModelStatus(config: ModelConfig): ModelStatus {
+  if (!toBackendModelConfig(config)) return 'server-default'
+  return config.provider === 'local' ? 'checking' : 'configured'
+}
+
+function modelStatusDetails(config: ModelConfig, status: ModelStatus) {
+  const selectedProvider = config.provider === 'local' ? 'Ollama' : config.provider === 'openai' ? 'OpenAI' : 'Anthropic'
+  const provider = status === 'server-default' ? 'Server default' : selectedProvider
+  const model = status === 'server-default' ? '' : config.model
+  const labels: Record<ModelStatus, string> = {
+    checking: 'Checking',
+    connected: 'Connected',
+    configured: 'Configured',
+    'model-unavailable': 'Model unavailable',
+    'provider-unavailable': 'Provider unavailable',
+    'server-default': 'In use',
+  }
+  const colors: Record<ModelStatus, string> = {
+    checking: 'var(--text-dim)',
+    connected: 'var(--accent)',
+    configured: 'var(--accent)',
+    'model-unavailable': '#ffb400',
+    'provider-unavailable': '#ff5050',
+    'server-default': '#ffb400',
+  }
+  return { provider, model, label: labels[status], color: colors[status] }
 }
 
 function renderMarkdown(text: string) {
@@ -334,8 +365,24 @@ export default function ChatPage() {
   const [manualActiveSources, setManualActiveSources] = useState<string[] | null>(null)
   const [showPanel, setShowPanel] = useState(true)
   const [panelCitations, setPanelCitations] = useState<MsgSource[]>([])
+  const [modelConfig] = useState(loadModelConfig)
+  const [modelStatus, setModelStatus] = useState<ModelStatus>(() => initialModelStatus(loadModelConfig()))
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (modelConfig.provider !== 'local' || !toBackendModelConfig(modelConfig)) return
+
+    let active = true
+    listOllamaModels(accessToken ?? '', domainID)
+      .then(models => {
+        if (active) setModelStatus(models.includes(modelConfig.model) ? 'connected' : 'model-unavailable')
+      })
+      .catch(() => {
+        if (active) setModelStatus('provider-unavailable')
+      })
+    return () => { active = false }
+  }, [accessToken, domainID, modelConfig])
 
   // Auto-update panel citations when the last assistant message gets sources.
   useEffect(() => {
@@ -562,6 +609,7 @@ export default function ChatPage() {
   }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, conversationId, setConversationId, setConversations])
 
   const indexedSources = records.filter(s => s.status === 'indexed')
+  const modelStatusInfo = modelStatusDetails(modelConfig, modelStatus)
 
   function handleToggleSource(id: string) {
     setManualActiveSources(prev => {
@@ -598,6 +646,16 @@ export default function ChatPage() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <div
+              title={[modelStatusInfo.provider, modelStatusInfo.model, modelStatusInfo.label].filter(Boolean).join(' · ')}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 9px', border: '1px solid var(--border)', borderRadius: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', maxWidth: '240px' }}
+            >
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: modelStatusInfo.color, flexShrink: 0 }} />
+              <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {modelStatusInfo.provider}{modelStatusInfo.model ? ` · ${modelStatusInfo.model}` : ''}
+              </span>
+              <span style={{ color: modelStatusInfo.color, flexShrink: 0 }}>{modelStatusInfo.label}</span>
+            </div>
             {chatMessages.length > 0 && (
               <button
                 onClick={clearChatMessages}
