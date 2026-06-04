@@ -15,6 +15,7 @@ export type RecordFormat = 'text' | 'pdf' | 'md' | 'docx' | 'code' | 'image' | '
 
 export interface MsgSource {
   id: string
+  recordID?: string
   doc: string
   page: number
   excerpt: string
