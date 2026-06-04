@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
-import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG } from '@/lib/modelConfig'
+import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG, LLM_MODEL_OPTIONS } from '@/lib/modelConfig'
 import type { LLMProvider } from '@/lib/modelConfig'
 import { getGuardrailsStatus, listOllamaModels, setGuardrailsEnabled } from '@/lib/api'
 
@@ -90,11 +90,6 @@ function InlineNotice({ tone, children }: { tone: 'info' | 'warning' | 'success'
 
 const providerLabel: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', local: 'Local / Ollama', cohere: 'Cohere' }
 
-const llmModels: Record<string, { value: string; label: string }[]> = {
-  openai: [{ value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }, { value: 'o3', label: 'o3 (reasoning)' }],
-  anthropic: [{ value: 'claude-opus-4-5', label: 'Claude Opus 4.5' }, { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' }, { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }],
-}
-
 const embModels: Record<string, { value: string; label: string }[]> = {
   openai: [{ value: 'text-embedding-3-large', label: 'text-embedding-3-large (3072d)' }, { value: 'text-embedding-3-small', label: 'text-embedding-3-small (1536d)' }],
   local: [{ value: 'bge-m3', label: 'BGE-M3 (1024d)' }, { value: 'nomic-embed', label: 'Nomic Embed (768d)' }, { value: 'all-minilm', label: 'all-MiniLM-L6 (384d)' }],
@@ -174,13 +169,13 @@ export default function ConfigPage() {
     if (provider === 'local') {
       setLlmModel(ollamaModels[0] ?? '')
     } else {
-      setLlmModel(llmModels[provider]?.[0]?.value ?? '')
+      setLlmModel(LLM_MODEL_OPTIONS[provider]?.[0]?.value ?? '')
     }
   }
 
   const currentModelOptions = llmProvider === 'local'
     ? ollamaModels.map(m => ({ value: m, label: m }))
-    : llmModels[llmProvider] ?? []
+    : LLM_MODEL_OPTIONS[llmProvider] ?? []
   const externalProviderMissingKey = llmProvider !== 'local' && !apiKey.trim()
 
   const handleSave = () => {

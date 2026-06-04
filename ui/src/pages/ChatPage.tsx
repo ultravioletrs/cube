@@ -7,7 +7,7 @@ import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
 import { listOllamaModels, streamChat } from '@/lib/api'
 import type { Citation } from '@/lib/api'
-import { loadModelConfig, toBackendModelConfig } from '@/lib/modelConfig'
+import { LLM_MODEL_OPTIONS, loadExternalModelConfig, loadModelConfig, saveModelConfig, toBackendModelConfig } from '@/lib/modelConfig'
 import type { ModelConfig } from '@/lib/modelConfig'
 import { deleteConversation, getConversation, listRecordsBySource, syncSource } from '@/lib/embedder/service'
 
@@ -365,24 +365,41 @@ export default function ChatPage() {
   const [manualActiveSources, setManualActiveSources] = useState<string[] | null>(null)
   const [showPanel, setShowPanel] = useState(true)
   const [panelCitations, setPanelCitations] = useState<MsgSource[]>([])
-  const [modelConfig] = useState(loadModelConfig)
+  const [modelConfig, setModelConfig] = useState(loadModelConfig)
+  const [externalProviderConfig] = useState(loadExternalModelConfig)
   const [modelStatus, setModelStatus] = useState<ModelStatus>(() => initialModelStatus(loadModelConfig()))
+  const [ollamaModels, setOllamaModels] = useState<string[]>([])
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const modelMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (modelConfig.provider !== 'local' || !toBackendModelConfig(modelConfig)) return
-
     let active = true
     listOllamaModels(accessToken ?? '', domainID)
       .then(models => {
-        if (active) setModelStatus(models.includes(modelConfig.model) ? 'connected' : 'model-unavailable')
+        if (!active) return
+        setOllamaModels(models)
+        if (modelConfig.provider === 'local') {
+          setModelStatus(models.includes(modelConfig.model) ? 'connected' : 'model-unavailable')
+        }
       })
       .catch(() => {
-        if (active) setModelStatus('provider-unavailable')
+        if (!active) return
+        setOllamaModels([])
+        if (modelConfig.provider === 'local') setModelStatus('provider-unavailable')
       })
     return () => { active = false }
   }, [accessToken, domainID, modelConfig])
+
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    const closeMenu = (event: MouseEvent) => {
+      if (!modelMenuRef.current?.contains(event.target as Node)) setModelMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeMenu)
+    return () => document.removeEventListener('mousedown', closeMenu)
+  }, [modelMenuOpen])
 
   // Auto-update panel citations when the last assistant message gets sources.
   useEffect(() => {
@@ -595,7 +612,7 @@ export default function ChatPage() {
       },
       controller.signal,
       conversationId,
-      toBackendModelConfig(loadModelConfig()),
+      toBackendModelConfig(modelConfig),
     ).catch((err) => {
       if (err.name !== 'AbortError') {
         setChatMessages(prev => prev.map(m =>
@@ -606,10 +623,24 @@ export default function ChatPage() {
       }
       setLoading(false)
     })
-  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, conversationId, setConversationId, setConversations])
+  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, conversationId, setConversationId, setConversations, modelConfig])
 
   const indexedSources = records.filter(s => s.status === 'indexed')
   const modelStatusInfo = modelStatusDetails(modelConfig, modelStatus)
+  const configuredExternalProvider = externalProviderConfig?.provider ?? null
+
+  function handleModelSelect(provider: ModelConfig['provider'], model: string) {
+    const next = {
+      ...modelConfig,
+      provider,
+      model,
+      apiKey: provider === 'local' ? modelConfig.apiKey : externalProviderConfig?.apiKey ?? modelConfig.apiKey,
+    }
+    saveModelConfig(next)
+    setModelConfig(next)
+    setModelStatus(initialModelStatus(next))
+    setModelMenuOpen(false)
+  }
 
   function handleToggleSource(id: string) {
     setManualActiveSources(prev => {
@@ -646,15 +677,60 @@ export default function ChatPage() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            <div
-              title={[modelStatusInfo.provider, modelStatusInfo.model, modelStatusInfo.label].filter(Boolean).join(' · ')}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 9px', border: '1px solid var(--border)', borderRadius: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', maxWidth: '240px' }}
-            >
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: modelStatusInfo.color, flexShrink: 0 }} />
-              <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {modelStatusInfo.provider}{modelStatusInfo.model ? ` · ${modelStatusInfo.model}` : ''}
-              </span>
-              <span style={{ color: modelStatusInfo.color, flexShrink: 0 }}>{modelStatusInfo.label}</span>
+            <div ref={modelMenuRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setModelMenuOpen(open => !open)}
+                title="Select chat model"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 9px', background: modelMenuOpen ? 'rgba(0,212,180,0.07)' : 'transparent', border: `1px solid ${modelMenuOpen ? 'rgba(0,212,180,0.3)' : 'var(--border)'}`, borderRadius: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', maxWidth: '250px', cursor: 'pointer' }}
+              >
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: modelStatusInfo.color, flexShrink: 0 }} />
+                <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {modelStatusInfo.provider}{modelStatusInfo.model ? ` · ${modelStatusInfo.model}` : ''}
+                </span>
+                <span style={{ color: modelStatusInfo.color, flexShrink: 0 }}>{modelStatusInfo.label}</span>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+                  <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {modelMenuOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: '260px', maxHeight: '340px', overflowY: 'auto', padding: '5px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 14px 36px rgba(0,0,0,0.45)', zIndex: 40 }}>
+                  <div style={{ padding: '5px 7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>OLLAMA</div>
+                  {ollamaModels.length > 0 ? ollamaModels.map(model => (
+                    <button
+                      key={model}
+                      onClick={() => handleModelSelect('local', model)}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 8px', background: modelConfig.provider === 'local' && modelConfig.model === model ? 'rgba(0,212,180,0.1)' : 'transparent', border: 'none', borderRadius: '5px', color: modelConfig.provider === 'local' && modelConfig.model === model ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer', textAlign: 'left' }}
+                    >
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: modelConfig.provider === 'local' && modelConfig.model === model ? 'var(--accent)' : 'var(--text-dim)', flexShrink: 0 }} />
+                      {model}
+                    </button>
+                  )) : (
+                    <div style={{ padding: '7px 8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)' }}>No local models available</div>
+                  )}
+                  {configuredExternalProvider && (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--border)', margin: '5px 2px' }} />
+                      <div style={{ padding: '5px 7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
+                        {configuredExternalProvider.toUpperCase()}
+                      </div>
+                      {LLM_MODEL_OPTIONS[configuredExternalProvider].map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => handleModelSelect(configuredExternalProvider, option.value)}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 8px', background: modelConfig.model === option.value ? 'rgba(0,212,180,0.1)' : 'transparent', border: 'none', borderRadius: '5px', color: modelConfig.model === option.value ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: modelConfig.model === option.value ? 'var(--accent)' : 'var(--text-dim)', flexShrink: 0 }} />
+                          {option.label}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  <div style={{ height: '1px', background: 'var(--border)', margin: '5px 2px' }} />
+                  <div style={{ padding: '6px 7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                    Configure providers and API keys in Settings.
+                  </div>
+                </div>
+              )}
             </div>
             {chatMessages.length > 0 && (
               <button
