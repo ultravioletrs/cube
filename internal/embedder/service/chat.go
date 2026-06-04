@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/llm"
@@ -30,6 +31,32 @@ For short keywords, filename fragments, dates, or codes, mention relevant record
 Use direct phrasing such as "I found this in <record name>" or "The relevant record is <record name>". Do not say "the matched record name for the query".
 If the excerpts do not contain enough information to answer the user's intent, say what was found and ask a concise follow-up question.
 Cite relevant excerpt numbers when making factual claims.`
+
+const conversationSystemPrompt = `You are a helpful assistant.
+Respond naturally to conversational messages.
+Do not claim to have searched, found, or used records when no document excerpts are provided.`
+
+var conversationalMessages = map[string]struct{}{
+	"good afternoon":  {},
+	"good evening":    {},
+	"good morning":    {},
+	"goodbye":         {},
+	"got it":          {},
+	"hello":           {},
+	"hi":              {},
+	"hi there":        {},
+	"how are you":     {},
+	"hey":             {},
+	"ok":              {},
+	"okay":            {},
+	"see you":         {},
+	"thank you":       {},
+	"thanks":          {},
+	"thanks a lot":    {},
+	"understood":      {},
+	"you are welcome": {},
+	"you're welcome":  {},
+}
 
 // NewChatService returns a ChatService that retrieves context chunks then
 // streams the LLM response.  reranker may be nil to skip re-ranking.
@@ -72,8 +99,9 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	var citations []domain.Citation
 	var chunks []domain.VectorChunk
 	var retrievalWarning string
+	retrieveForQuery := shouldRetrieve(query)
 
-	if query != "" {
+	if retrieveForQuery {
 		var err error
 		chunks, err = s.retrieve.Retrieve(ctx, domainID, query, recordIDs, s.topK)
 		if err != nil {
@@ -82,6 +110,9 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 		} else if len(chunks) == 0 {
 			retrievalWarning = "No relevant chunks found in indexed records — answering without document context."
 		}
+	}
+	if !retrieveForQuery {
+		slog.Info("chat: skipped retrieval for conversational message")
 	}
 
 	// Re-rank if we have a reranker and more than one chunk to order.
@@ -133,9 +164,13 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	// message and drop stale history so small models (e.g. llama3.2:3b) are not
 	// confused by prior wrong answers or an oversized context window.
 	llmMessages := make([]llm.Message, 0, len(messages)+1)
+	systemPrompt := ragSystemPrompt
+	if !retrieveForQuery {
+		systemPrompt = conversationSystemPrompt
+	}
 	llmMessages = append(llmMessages, llm.Message{
 		Role:    "system",
-		Content: ragSystemPrompt,
+		Content: systemPrompt,
 	})
 	if contextBlock.Len() > 0 {
 		// RAG mode: only send the last user message augmented with context.
@@ -219,6 +254,19 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	}()
 
 	return out, nil
+}
+
+func shouldRetrieve(query string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(query))
+	normalized = strings.TrimFunc(normalized, func(r rune) bool {
+		return unicode.IsPunct(r) || unicode.IsSpace(r)
+	})
+	normalized = strings.Join(strings.Fields(normalized), " ")
+	if normalized == "" {
+		return false
+	}
+	_, conversational := conversationalMessages[normalized]
+	return !conversational
 }
 
 func matchedRecordsBlock(chunks []domain.VectorChunk) string {
