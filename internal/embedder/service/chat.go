@@ -23,6 +23,14 @@ type chatService struct {
 	factory    llm.ClientFactory // builds a client from a per-request config
 }
 
+const ragSystemPrompt = `You are a retrieval-grounded assistant.
+When document excerpts are provided, answer from those excerpts first and avoid inventing information.
+When the user's intent is unclear, consider both the retrieved document context and the possible general meaning of the query. Clearly distinguish what the records show from general knowledge, and ask a concise follow-up question when needed.
+For short keywords, filename fragments, dates, or codes, mention relevant record names naturally when they help answer the question.
+Use direct phrasing such as "I found this in <record name>" or "The relevant record is <record name>". Do not say "the matched record name for the query".
+If the excerpts do not contain enough information to answer the user's intent, say what was found and ask a concise follow-up question.
+Cite relevant excerpt numbers when making factual claims.`
+
 // NewChatService returns a ChatService that retrieves context chunks then
 // streams the LLM response.  reranker may be nil to skip re-ranking.
 // factory is called to build a temporary client when the request overrides
@@ -61,7 +69,6 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 			break
 		}
 	}
-
 	var citations []domain.Citation
 	var chunks []domain.VectorChunk
 	var retrievalWarning string
@@ -102,10 +109,16 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 		// On reranker error, keep the RRF order — non-fatal.
 	}
 
+	slog.Info("chat: prepared rag context",
+		"retrieval_query_chars", len(query),
+		"retrieved_chunks", len(chunks),
+		"prompt_chunks", len(chunks),
+	)
+
 	// Build citation list.
 	var contextBlock strings.Builder
 	for i, c := range chunks {
-		contextBlock.WriteString(fmt.Sprintf("[%d] %s:\n%s\n\n", i+1, c.RecordName, c.Content))
+		contextBlock.WriteString(fmt.Sprintf("[%d] Record: %s\nExcerpt:\n%s\n\n", i+1, c.RecordName, c.Content))
 		citations = append(citations, domain.Citation{
 			RecordID:    c.RecordID,
 			RecordName:  c.RecordName,
@@ -122,7 +135,7 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	llmMessages := make([]llm.Message, 0, len(messages)+1)
 	llmMessages = append(llmMessages, llm.Message{
 		Role:    "system",
-		Content: "You are a helpful, knowledgeable assistant. When document excerpts are provided, use them as your primary source and cite them, but also use your general knowledge to give complete, thorough answers.",
+		Content: ragSystemPrompt,
 	})
 	if contextBlock.Len() > 0 {
 		// RAG mode: only send the last user message augmented with context.
@@ -132,8 +145,11 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 			if messages[i].Role == "user" {
 				llmMessages = append(llmMessages, llm.Message{
 					Role: "user",
-					Content: "Use the following document excerpts to inform your answer. " +
-						"Cite relevant excerpts, then elaborate with a complete and thorough explanation.\n\n" +
+					Content: "Use the following retrieved records and excerpts to answer the question. " +
+						"Mention relevant record names naturally when they help answer the question. " +
+						"Prefer direct phrasing like \"I found this in <record name>\". " +
+						"Clearly distinguish information found in the records from general knowledge.\n\n" +
+						"MATCHED RECORDS:\n" + matchedRecordsBlock(chunks) + "\n" +
 						"EXCERPTS:\n" + contextBlock.String() +
 						"QUESTION: " + messages[i].Content,
 				})
@@ -203,6 +219,28 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	}()
 
 	return out, nil
+}
+
+func matchedRecordsBlock(chunks []domain.VectorChunk) string {
+	if len(chunks) == 0 {
+		return ""
+	}
+	seen := make(map[string]struct{}, len(chunks))
+	var b strings.Builder
+	for _, c := range chunks {
+		name := strings.TrimSpace(c.RecordName)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		b.WriteString("- ")
+		b.WriteString(name)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 func truncate(s string, n int) string {
