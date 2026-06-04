@@ -27,11 +27,17 @@ function formatInlineError(err: string): string {
 function citationToSource(c: Citation): MsgSource {
   return {
     id: `${c.record_id}-${c.chunk_index}`,
+    recordID: c.record_id,
     doc: c.record_name,
     page: c.chunk_index + 1,
     excerpt: c.excerpt,
     url: c.external_url,
   }
+}
+
+function citationCounts(citations: MsgSource[]) {
+  const records = new Set(citations.map(citation => citation.recordID || citation.doc))
+  return { records: records.size, chunks: citations.length }
 }
 
 function renderMarkdown(text: string) {
@@ -54,6 +60,7 @@ function MessageBubble({ msg, onShowSources }: { msg: ChatMessage; onShowSources
       </div>
     )
   }
+  const counts = citationCounts(msg.sources ?? [])
   return (
     <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-start' }}>
       <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(0,212,180,0.15)', border: '1px solid rgba(0,212,180,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
@@ -70,7 +77,7 @@ function MessageBubble({ msg, onShowSources }: { msg: ChatMessage; onShowSources
               onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,180,0.07)' }}
             >
               <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="9" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M4 5h5M4 8h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>
-              Context · {msg.sources.length}
+              Records · {counts.records} · Chunks · {counts.chunks}
             </button>
           </div>
         )}
@@ -213,6 +220,7 @@ function SourcesPanel({
   onSyncSource?: () => void
   visibleSourceSyncNotice?: { kind: 'info' | 'error'; text: string } | null
 }) {
+  const citationSummary = citationCounts(citations)
   return (
     <div style={{ width: '260px', minWidth: '260px', height: '100%', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--sidebar-bg)', overflow: 'hidden' }}>
 
@@ -269,7 +277,7 @@ function SourcesPanel({
           <div style={{ height: '1px', background: 'var(--border)', flexShrink: 0 }} />
           <div style={{ flexShrink: 0, padding: '12px 14px 8px' }}>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
-              CONTEXT · {citations.length}
+              RECORDS · {citationSummary.records} · CHUNKS · {citationSummary.chunks}
             </span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 12px' }}>
