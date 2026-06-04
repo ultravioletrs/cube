@@ -1,7 +1,8 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { listDomains, createDomain, deleteDomain, toRoute } from '@/lib/platform/service'
 import type { Domain } from '@/lib/platform/service'
@@ -9,6 +10,11 @@ import type { AppContext } from '@/types'
 import UserMenu from '@/components/UserMenu'
 
 const LAST_DOMAIN_KEY = 'cube_active_domain'
+const DOMAINS_STALE_TIME_MS = 30_000
+
+function domainsQueryKey(userID: string) {
+  return ['domains', userID] as const
+}
 
 const statusColors: Record<string, { bg: string; color: string }> = {
   enabled:  { bg: 'rgba(0,212,180,0.1)',  color: '#00d4b4' },
@@ -166,15 +172,14 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
 }
 
 export default function DomainsPage() {
-  const { tokens } = useAuth()
+  const { tokens, user } = useAuth()
   const accessToken = tokens?.accessToken
+  const userID = user?.id ?? ''
   const location = useLocation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { activeDomain, setActiveDomain } = useOutletContext<AppContext>()
 
-  const [domains, setDomains] = useState<Domain[]>([])
-  const [loading, setLoading] = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [lastDomainID] = useState(loadLastDomainID)
@@ -184,25 +189,22 @@ export default function DomainsPage() {
     return from && from !== '/domains' ? from : '/dashboard'
   })()
 
-  const load = useCallback(async () => {
-    if (!accessToken) return
-    setLoading(true)
-    setLoadError(null)
-    try {
-      const list = await listDomains(accessToken)
-      setDomains(list)
-      if (activeDomain && !list.some(domain => domain.id === activeDomain.id)) {
-        setActiveDomain(null)
-      }
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load domains')
-    } finally {
-      setLoading(false)
-    }
-  }, [accessToken, activeDomain, setActiveDomain])
+  const {
+    data: domains = [],
+    error: loadError,
+    isPending: loading,
+  } = useQuery({
+    queryKey: domainsQueryKey(userID),
+    queryFn: () => listDomains(accessToken!),
+    enabled: Boolean(accessToken && userID),
+    staleTime: DOMAINS_STALE_TIME_MS,
+  })
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (!loading && !loadError && activeDomain && !domains.some(domain => domain.id === activeDomain.id)) {
+      setActiveDomain(null)
+    }
+  }, [activeDomain, domains, loadError, loading, setActiveDomain])
 
   function handleSelect(domain: Domain) {
     const id = domain.id ?? ''
@@ -222,7 +224,10 @@ export default function DomainsPage() {
     setActionError(null)
     try {
       await deleteDomain(domain.id ?? '', tokens.accessToken)
-      setDomains(prev => prev.filter(d => d.id !== domain.id))
+      queryClient.setQueryData<Domain[]>(
+        domainsQueryKey(userID),
+        current => current?.filter(d => d.id !== domain.id) ?? [],
+      )
       if (activeDomain?.id === domain.id) setActiveDomain(null)
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to delete domain')
@@ -230,7 +235,10 @@ export default function DomainsPage() {
   }
 
   async function handleCreated(domain: Domain) {
-    await load()
+    queryClient.setQueryData<Domain[]>(
+      domainsQueryKey(userID),
+      current => current?.some(item => item.id === domain.id) ? current : [...(current ?? []), domain],
+    )
     setShowCreate(false)
     handleSelect(domain)
   }
@@ -271,7 +279,7 @@ export default function DomainsPage() {
 
         {!loading && loadError && (
           <div style={{ padding: '14px 16px', background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', borderRadius: '10px', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: '#ff6b6b' }}>
-            {loadError}
+            {loadError instanceof Error ? loadError.message : 'Failed to load domains'}
           </div>
         )}
 
