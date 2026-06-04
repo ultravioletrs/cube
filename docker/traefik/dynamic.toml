@@ -65,6 +65,15 @@
     interval = "10s"
     timeout = "10s"
 
+[http.services.embedder.loadBalancer]
+  [[http.services.embedder.loadBalancer.servers]]
+    url = "http://cube-embedder:8082"
+  [http.services.embedder.loadBalancer.healthCheck]
+    scheme = "http"
+    path = "/health"
+    interval = "10s"
+    timeout = "10s"
+
 [http.services.domains.loadBalancer]
   [[http.services.domains.loadBalancer.servers]]
     url = "http://supermq-domains:9003"
@@ -161,8 +170,15 @@
   middlewares = ["retry-middleware", "headers-middleware"]
   priority = 9
 
+[http.routers.embedder]
+  rule = "PathPrefix(`/api`)"
+  entryPoints = ["websecure"]
+  service = "embedder"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 8
+
 [http.routers.ui]
-  rule = "PathPrefix(`/`) || PathPrefix(`/api`)"
+  rule = "PathPrefix(`/`)"
   entryPoints = ["websecure"]
   service = "ui"
   middlewares = ["retry-middleware", "headers-middleware"]

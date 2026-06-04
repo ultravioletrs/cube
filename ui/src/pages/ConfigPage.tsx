@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
-import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG, LLM_MODEL_OPTIONS } from '@/lib/modelConfig'
+import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG, LLM_MODEL_OPTIONS, toBackendModelConfig } from '@/lib/modelConfig'
 import type { LLMProvider } from '@/lib/modelConfig'
-import { getGuardrailsStatus, listOllamaModels, setGuardrailsEnabled } from '@/lib/api'
+import { getGuardrailsStatus, listOllamaModels, setGuardrailsEnabled, testModelConnection } from '@/lib/api'
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -118,6 +118,8 @@ export default function ConfigPage() {
   const [guardrailsEnabled, setGuardrailsEnabledState] = useState(false)
   const [guardrailsConfigured, setGuardrailsConfigured] = useState(false)
   const [guardrailsLoading, setGuardrailsLoading] = useState(false)
+  const [connectionTesting, setConnectionTesting] = useState(false)
+  const [connectionResult, setConnectionResult] = useState<{ connected: boolean; message: string } | null>(null)
 
   useEffect(() => {
     if (!tokens?.accessToken) return
@@ -166,6 +168,7 @@ export default function ConfigPage() {
   const handleProviderChange = (p: string) => {
     const provider = p as LLMProvider
     setLlmProvider(provider)
+    setConnectionResult(null)
     if (provider === 'local') {
       setLlmModel(ollamaModels[0] ?? '')
     } else {
@@ -182,6 +185,20 @@ export default function ConfigPage() {
     saveModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const handleTestConnection = async () => {
+    const config = toBackendModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })
+    if (!config || !accessToken || connectionTesting) return
+    setConnectionTesting(true)
+    setConnectionResult(null)
+    try {
+      setConnectionResult(await testModelConnection(accessToken, config))
+    } catch (err) {
+      setConnectionResult({ connected: false, message: err instanceof Error ? err.message : 'Connection test failed' })
+    } finally {
+      setConnectionTesting(false)
+    }
   }
 
   return (
@@ -206,7 +223,7 @@ export default function ConfigPage() {
             <Field label="Provider"><ProviderButtons providers={['openai', 'anthropic', 'local']} active={llmProvider} onSelect={handleProviderChange} labelMap={providerLabel} /></Field>
             {llmProvider !== 'local' && (
               <Field label="API Key" hint={`Your ${providerLabel[llmProvider]} API key. Stored locally in your browser only.`}>
-                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
+                <input type="password" value={apiKey} onChange={e => { setApiKey(e.target.value); setConnectionResult(null) }} placeholder="sk-..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
                 {externalProviderMissingKey && (
                   <InlineNotice tone="warning">
                     API key is missing. Chat requests will use the server default model instead of {providerLabel[llmProvider]}.
@@ -217,8 +234,22 @@ export default function ConfigPage() {
             <Field label="Model" hint={llmProvider === 'local' ? 'Models fetched live from your Ollama instance.' : 'The selected model must support function calling for optimal RAG performance.'}>
               {llmProvider === 'local' && ollamaLoading
                 ? <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)', padding: '9px 0' }}>Loading models from Ollama…</div>
-                : <SelectInput value={llmModel} onChange={setLlmModel} options={currentModelOptions} />
+                : <SelectInput value={llmModel} onChange={value => { setLlmModel(value); setConnectionResult(null) }} options={currentModelOptions} />
               }
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+                <button
+                  onClick={() => { void handleTestConnection() }}
+                  disabled={connectionTesting || !toBackendModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })}
+                  style={{ padding: '7px 12px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: '600', cursor: connectionTesting ? 'default' : 'pointer', opacity: connectionTesting ? 0.55 : 1 }}
+                >
+                  {connectionTesting ? 'Testing…' : 'Test connection'}
+                </button>
+                {connectionResult && (
+                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: connectionResult.connected ? 'var(--accent)' : '#ff5050' }}>
+                    {connectionResult.message}
+                  </span>
+                )}
+              </div>
               {llmProvider === 'local' && !ollamaLoading && ollamaModels.length > 0 && (
                 <InlineNotice tone="success">
                   Ollama connected. {ollamaModels.length} local {ollamaModels.length === 1 ? 'model' : 'models'} available.
