@@ -36,6 +36,8 @@ const conversationSystemPrompt = `You are a helpful assistant.
 Respond naturally to conversational messages.
 Do not claim to have searched, found, or used records when no document excerpts are provided.`
 
+const noRelevantContextResponse = "I couldn't find relevant information in the indexed records for that question. Please narrow the question or select a specific record or source."
+
 var conversationalMessages = map[string]struct{}{
 	"good afternoon":  {},
 	"good evening":    {},
@@ -99,6 +101,8 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	var citations []domain.Citation
 	var chunks []domain.VectorChunk
 	var retrievalWarning string
+	noRelevantContext := false
+	weakContext := false
 	retrieveForQuery := shouldRetrieve(query)
 	skippedReason := ""
 
@@ -109,7 +113,14 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 			retrievalWarning = "Retrieval failed: " + err.Error() + " — answering without document context."
 			chunks = nil
 		} else if len(chunks) == 0 {
-			retrievalWarning = "No relevant chunks found in indexed records — answering without document context."
+			retrievalWarning = "No relevant chunks found in indexed records."
+			noRelevantContext = true
+		} else {
+			chunks = lexicallyGroundedChunks(query, chunks)
+			if len(chunks) == 0 {
+				retrievalWarning = "Retrieved chunks did not appear relevant enough to answer from indexed records."
+				weakContext = true
+			}
 		}
 	}
 	if !retrieveForQuery {
@@ -229,6 +240,19 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 			}
 		}
 
+		if noRelevantContext || weakContext {
+			select {
+			case out <- domain.ChatEvent{Type: domain.ChatEventToken, Content: noRelevantContextResponse}:
+			case <-ctx.Done():
+				return
+			}
+			select {
+			case out <- domain.ChatEvent{Type: domain.ChatEventDone}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
 		tokenCh := make(chan string, 64)
 		errCh := make(chan error, 1)
 
@@ -300,6 +324,56 @@ func matchedRecordsBlock(chunks []domain.VectorChunk) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+func hasLexicalGrounding(query string, chunks []domain.VectorChunk) bool {
+	return len(lexicallyGroundedChunks(query, chunks)) > 0
+}
+
+func lexicallyGroundedChunks(query string, chunks []domain.VectorChunk) []domain.VectorChunk {
+	terms := meaningfulQueryTerms(query)
+	if len(terms) == 0 {
+		return nil
+	}
+	grounded := make([]domain.VectorChunk, 0, len(chunks))
+	for _, c := range chunks {
+		haystack := strings.ToLower(c.RecordName + " " + c.Content)
+		for _, term := range terms {
+			if strings.Contains(haystack, term) {
+				grounded = append(grounded, c)
+				break
+			}
+		}
+	}
+	return grounded
+}
+
+func meaningfulQueryTerms(query string) []string {
+	stopwords := map[string]struct{}{
+		"about": {}, "after": {}, "again": {}, "also": {}, "and": {}, "any": {}, "are": {}, "can": {}, "could": {}, "details": {}, "did": {}, "document": {}, "documents": {}, "does": {}, "file": {}, "files": {}, "for": {}, "from": {}, "give": {}, "has": {}, "have": {}, "how": {}, "into": {}, "its": {}, "more": {}, "please": {}, "record": {}, "records": {}, "show": {}, "some": {}, "tell": {}, "that": {}, "the": {}, "their": {}, "them": {}, "there": {}, "this": {}, "was": {}, "what": {}, "when": {}, "where": {}, "which": {}, "with": {}, "would": {}, "you": {},
+	}
+	seen := make(map[string]struct{})
+	terms := make([]string, 0, 8)
+	for _, field := range strings.Fields(strings.ToLower(query)) {
+		term := strings.TrimFunc(field, func(r rune) bool {
+			return unicode.IsPunct(r) || unicode.IsSpace(r)
+		})
+		if len(term) < 3 {
+			continue
+		}
+		if _, skip := stopwords[term]; skip {
+			continue
+		}
+		if _, ok := seen[term]; ok {
+			continue
+		}
+		seen[term] = struct{}{}
+		terms = append(terms, term)
+		if len(terms) >= 8 {
+			break
+		}
+	}
+	return terms
 }
 
 func buildChatDebug(query string, topK int, retrievalEnabled bool, skippedReason string, recordIDs []string, chunks []domain.VectorChunk) domain.ChatDebug {
