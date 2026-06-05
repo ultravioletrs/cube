@@ -327,7 +327,7 @@ rrf AS (
 	args = append(args, topK)
 
 	sb.WriteString(`
-SELECT c.content, c.record_id, rec.name, COALESCE(rec.external_url, ''), c.chunk_index
+SELECT c.content, c.record_id, rec.name, COALESCE(rec.external_url, ''), c.chunk_index, rrf.score
 FROM rrf
 JOIN chunks c ON c.id = rrf.chunk_id
 JOIN records rec ON rec.id = c.record_id
@@ -344,9 +344,11 @@ LIMIT `)
 	var results []ChunkSearchResult
 	for rows.Next() {
 		var res ChunkSearchResult
-		if err := rows.Scan(&res.Content, &res.RecordID, &res.RecordName, &res.ExternalURL, &res.ChunkIndex); err != nil {
+		var score float64
+		if err := rows.Scan(&res.Content, &res.RecordID, &res.RecordName, &res.ExternalURL, &res.ChunkIndex, &score); err != nil {
 			return nil, fmt.Errorf("scan chunk: %w", err)
 		}
+		res.Score = &score
 		results = append(results, res)
 	}
 	return results, rows.Err()

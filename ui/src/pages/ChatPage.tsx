@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useOutletContext, useLocation } from 'react-router-dom'
-import type { AppContext, AppRecord, ChatMessage, Conversation, MsgSource } from '@/types'
+import type { AppContext, AppRecord, ChatDebug, ChatMessage, Conversation, MsgSource } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
 import { listOllamaModels, streamChat } from '@/lib/api'
@@ -39,6 +39,10 @@ function citationToSource(c: Citation): MsgSource {
 function citationCounts(citations: MsgSource[]) {
   const records = new Set(citations.map(citation => citation.recordID || citation.doc))
   return { records: records.size, chunks: citations.length }
+}
+
+function formatScore(score?: number) {
+  return typeof score === 'number' ? score.toFixed(4) : 'n/a'
 }
 
 type ModelStatus = 'checking' | 'connected' | 'configured' | 'model-unavailable' | 'provider-unavailable' | 'server-default'
@@ -236,6 +240,8 @@ function SourcesPanel({
   canCustomizeSources,
   onToggle,
   citations,
+  debug,
+  debugEnabled,
   selectedSourceID,
   isSyncingSelectedSource,
   onSyncSource,
@@ -246,6 +252,8 @@ function SourcesPanel({
   canCustomizeSources: boolean
   onToggle: (id: string) => void
   citations: MsgSource[]
+  debug?: ChatDebug | null
+  debugEnabled?: boolean
   selectedSourceID?: string
   isSyncingSelectedSource?: boolean
   onSyncSource?: () => void
@@ -335,6 +343,49 @@ function SourcesPanel({
           </div>
         </>
       )}
+
+      {debugEnabled && (
+        <>
+          <div style={{ height: '1px', background: 'var(--border)', flexShrink: 0 }} />
+          <div style={{ flexShrink: 0, padding: '12px 14px 8px' }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
+              DEBUG · RETRIEVAL
+            </span>
+          </div>
+          <div style={{ flex: citations.length > 0 ? '0 0 45%' : '1', overflowY: 'auto', padding: '0 8px 12px' }}>
+            {debug ? (
+              <>
+                <div style={{ marginBottom: '8px', background: 'rgba(0,212,180,0.04)', border: '1px solid rgba(0,212,180,0.15)', borderRadius: '8px', padding: '9px 10px' }}>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', marginBottom: '5px', letterSpacing: '0.08em' }}>QUERY</div>
+                  <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{debug.query || 'empty'}</div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)' }}>
+                    <span>topK {debug.top_k}</span>
+                    <span>{debug.retrieval_enabled ? 'retrieval on' : `retrieval skipped${debug.skipped_reason ? `: ${debug.skipped_reason}` : ''}`}</span>
+                    {debug.record_ids && debug.record_ids.length > 0 && <span>scoped records {debug.record_ids.length}</span>}
+                  </div>
+                </div>
+                {debug.prompt_chunks.length === 0 ? (
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', padding: '8px 4px' }}>No chunks sent to the model.</div>
+                ) : debug.prompt_chunks.map(chunk => (
+                  <div key={`${chunk.record_id}-${chunk.chunk_index}-${chunk.rank}`} style={{ marginBottom: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '5px' }}>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--accent)', flexShrink: 0 }}>#{chunk.rank}</span>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{chunk.record_name}</span>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', flexShrink: 0 }}>s {formatScore(chunk.score)}</span>
+                    </div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', marginBottom: '5px' }}>chunk {chunk.chunk_index}</div>
+                    <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, fontStyle: 'italic' }}>
+                      "{chunk.preview}"
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', padding: '8px 4px' }}>Ask a question to see retrieval details.</div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -345,6 +396,7 @@ export default function ChatPage() {
   const location = useLocation()
   const accessToken = tokens?.accessToken
   const domainID = activeDomain?.id ?? ''
+  const debugEnabled = new URLSearchParams(location.search).get('debug') === '1'
   const routeState = (location.state ?? null) as ChatRouteState | null
   const selectedRecord = routeState?.source
   const selectedSourceID = routeState?.sourceID
@@ -365,6 +417,7 @@ export default function ChatPage() {
   const [manualActiveSources, setManualActiveSources] = useState<string[] | null>(null)
   const [showPanel, setShowPanel] = useState(true)
   const [panelCitations, setPanelCitations] = useState<MsgSource[]>([])
+  const [panelDebug, setPanelDebug] = useState<ChatDebug | null>(null)
   const [modelConfig, setModelConfig] = useState(loadModelConfig)
   const [externalProviderConfig] = useState(loadExternalModelConfig)
   const [modelStatus, setModelStatus] = useState<ModelStatus>(() => initialModelStatus(loadModelConfig()))
@@ -411,6 +464,17 @@ export default function ChatPage() {
       }
     }
   }, [chatMessages])
+
+  useEffect(() => {
+    if (!debugEnabled) return
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      if (chatMessages[i].role === 'assistant' && chatMessages[i].debug) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setPanelDebug(chatMessages[i].debug!)
+        return
+      }
+    }
+  }, [chatMessages, debugEnabled])
 
   const handleSelectConversation = useCallback(async (id: string) => {
     if (!accessToken || loadingConv) return
@@ -562,6 +626,7 @@ export default function ChatPage() {
     setInput('')
     setLoading(true)
     setRetrievalWarning(null)
+    if (debugEnabled) setPanelDebug(null)
 
     const history: ChatMessage[] = [...chatMessages, { id: Date.now(), role: 'user', content: userContent }]
     setChatMessages(history)
@@ -599,6 +664,12 @@ export default function ChatPage() {
           setChatMessages(prev => prev.map(m =>
             m.id === assistantId ? { ...m, sources } : m
           ))
+        } else if (event.type === 'debug' && event.debug) {
+          setPanelDebug(event.debug)
+          setShowPanel(true)
+          setChatMessages(prev => prev.map(m =>
+            m.id === assistantId ? { ...m, debug: event.debug } : m
+          ))
         } else if (event.type === 'done') {
           setLoading(false)
         } else if (event.type === 'error') {
@@ -613,6 +684,7 @@ export default function ChatPage() {
       controller.signal,
       conversationId,
       toBackendModelConfig(modelConfig),
+      debugEnabled,
     ).catch((err) => {
       if (err.name !== 'AbortError') {
         setChatMessages(prev => prev.map(m =>
@@ -623,7 +695,7 @@ export default function ChatPage() {
       }
       setLoading(false)
     })
-  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, conversationId, setConversationId, setConversations, modelConfig])
+  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, conversationId, setConversationId, setConversations, modelConfig, debugEnabled])
 
   const indexedSources = records.filter(s => s.status === 'indexed')
   const modelStatusInfo = modelStatusDetails(modelConfig, modelStatus)
@@ -865,6 +937,8 @@ export default function ChatPage() {
           canCustomizeSources={canCustomizeSources}
           onToggle={handleToggleSource}
           citations={panelCitations}
+          debug={panelDebug}
+          debugEnabled={debugEnabled}
           selectedSourceID={selectedSourceID}
           isSyncingSelectedSource={isSyncingSelectedSource}
           onSyncSource={() => { void handleSyncSelectedSource() }}

@@ -61,6 +61,7 @@ export default function App() {
         <Route path="/records" element={<RecordsPage />} />
         <Route path="/sources" element={<SourcesPage />} />
         <Route path="/chat" element={<ChatPage />} />
+        <Route path="/prompt" element={<ChatPage />} />
         <Route path="/config" element={<ConfigPage />} />
         <Route path="/domains" element={<DomainsPage />} />
         <Route path="/members" element={<MembersPage />} />

@@ -97,6 +97,7 @@ type ChunkSearchResult struct {
 	RecordName  string
 	ExternalURL string
 	ChunkIndex  int
+	Score       *float64
 }
 
 // SearchChunks performs a cosine-distance vector similarity search over the
