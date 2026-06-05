@@ -6,6 +6,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
@@ -68,7 +69,7 @@ func (s *vectorRetrieveService) Retrieve(ctx context.Context, domainID, query st
 		return nil, fmt.Errorf("search chunks: %w", err)
 	}
 
-	if s.imageEmbeddings != nil && s.imageEmbedder != nil {
+	if s.imageEmbeddings != nil && s.imageEmbedder != nil && hasVisualIntent(query) {
 		imageQuery, err := s.imageEmbedder.EmbedText(ctx, query)
 		if err != nil {
 			return nil, fmt.Errorf("embed visual query: %w", err)
@@ -92,6 +93,47 @@ func (s *vectorRetrieveService) Retrieve(ctx context.Context, domainID, query st
 		}
 	}
 	return chunks, nil
+}
+
+func hasVisualIntent(query string) bool {
+	normalized := strings.ToLower(strings.Join(strings.Fields(query), " "))
+	if normalized == "" {
+		return false
+	}
+	visualTerms := []string{
+		"describe image",
+		"describe the image",
+		"describe picture",
+		"describe the picture",
+		"describe photo",
+		"describe the photo",
+		"describe screenshot",
+		"describe the screenshot",
+		"what is shown",
+		"what's shown",
+		"what is in this image",
+		"what is in the image",
+		"what is in this picture",
+		"what is in the picture",
+		"image",
+		"images",
+		"picture",
+		"pictures",
+		"photo",
+		"photos",
+		"screenshot",
+		"screenshots",
+		"scan",
+		"scans",
+		"visual",
+		"visually",
+	}
+	for _, term := range visualTerms {
+		if strings.Contains(normalized, term) {
+			return true
+		}
+	}
+	return false
 }
 
 func interleaveChunkResults(textResults, imageResults []postgres.ChunkSearchResult, topK int) []postgres.ChunkSearchResult {
