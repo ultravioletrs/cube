@@ -69,7 +69,7 @@ func NewChatService(retrieve domain.VectorRetrieveService, llmClient llm.Client,
 	return &chatService{retrieve: retrieve, llm: llmClient, reranker: reranker, topK: topK, defaultCfg: defaultCfg, factory: factory}
 }
 
-func (s *chatService) Chat(ctx context.Context, domainID string, messages []domain.ChatMessage, recordIDs []string, modelCfg *domain.ModelConfig) (<-chan domain.ChatEvent, error) {
+func (s *chatService) Chat(ctx context.Context, domainID string, messages []domain.ChatMessage, recordIDs []string, modelCfg *domain.ModelConfig, debug bool) (<-chan domain.ChatEvent, error) {
 	// Build a per-request client if the caller overrides the model.
 	llmClient := s.llm
 	if modelCfg != nil && modelCfg.Model != "" && s.factory != nil {
@@ -100,6 +100,7 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	var chunks []domain.VectorChunk
 	var retrievalWarning string
 	retrieveForQuery := shouldRetrieve(query)
+	skippedReason := ""
 
 	if retrieveForQuery {
 		var err error
@@ -112,6 +113,7 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 		}
 	}
 	if !retrieveForQuery {
+		skippedReason = "conversational message"
 		slog.Info("chat: skipped retrieval for conversational message")
 	}
 
@@ -218,6 +220,15 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 			}
 		}
 
+		if debug {
+			debugData := buildChatDebug(query, s.topK, retrieveForQuery, skippedReason, recordIDs, chunks)
+			select {
+			case out <- domain.ChatEvent{Type: domain.ChatEventDebug, Debug: &debugData}:
+			case <-ctx.Done():
+				return
+			}
+		}
+
 		tokenCh := make(chan string, 64)
 		errCh := make(chan error, 1)
 
@@ -289,6 +300,32 @@ func matchedRecordsBlock(chunks []domain.VectorChunk) string {
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+func buildChatDebug(query string, topK int, retrievalEnabled bool, skippedReason string, recordIDs []string, chunks []domain.VectorChunk) domain.ChatDebug {
+	if topK <= 0 {
+		topK = 5
+	}
+	debug := domain.ChatDebug{
+		Query:            query,
+		TopK:             topK,
+		RetrievalEnabled: retrievalEnabled,
+		SkippedReason:    skippedReason,
+		RecordIDs:        append([]string(nil), recordIDs...),
+		PromptChunks:     make([]domain.ChatDebugChunk, 0, len(chunks)),
+	}
+	for i, c := range chunks {
+		debug.PromptChunks = append(debug.PromptChunks, domain.ChatDebugChunk{
+			Rank:        i + 1,
+			RecordID:    c.RecordID,
+			RecordName:  c.RecordName,
+			ExternalURL: c.ExternalURL,
+			ChunkIndex:  c.ChunkIndex,
+			Score:       c.Score,
+			Preview:     truncate(c.Content, 280),
+		})
+	}
+	return debug
 }
 
 func truncate(s string, n int) string {

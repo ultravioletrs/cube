@@ -88,6 +88,7 @@ func (s *vectorRetrieveService) Retrieve(ctx context.Context, domainID, query st
 			ExternalURL: r.ExternalURL,
 			ChunkIndex:  r.ChunkIndex,
 			Content:     r.Content,
+			Score:       r.Score,
 		}
 	}
 	return chunks, nil

@@ -22,11 +22,31 @@ export interface MsgSource {
   url?: string
 }
 
+export interface ChatDebugChunk {
+  rank: number
+  record_id: string
+  record_name: string
+  external_url?: string
+  chunk_index: number
+  score?: number
+  preview: string
+}
+
+export interface ChatDebug {
+  query: string
+  top_k: number
+  retrieval_enabled: boolean
+  skipped_reason?: string
+  record_ids?: string[]
+  prompt_chunks: ChatDebugChunk[]
+}
+
 export interface ChatMessage {
   id: number
   role: 'user' | 'assistant'
   content: string
   sources?: MsgSource[]
+  debug?: ChatDebug
 }
 
 export interface AppRecord {

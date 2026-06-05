@@ -24,6 +24,7 @@ type chatRequest struct {
 	RecordIDs      []string             `json:"record_ids,omitempty"`
 	ConversationID string               `json:"conversation_id,omitempty"`
 	Model          *domain.ModelConfig  `json:"model,omitempty"`
+	Debug          bool                 `json:"debug,omitempty"`
 }
 
 func chatHandler(svc domain.ChatService, conversations domain.ConversationRepository) http.HandlerFunc {
@@ -59,7 +60,7 @@ func chatHandler(svc domain.ChatService, conversations domain.ConversationReposi
 			_ = conversations.AppendMessages(r.Context(), convID, toDomainMessages(req.Messages))
 		}
 
-		events, err := svc.Chat(r.Context(), domainID, req.Messages, req.RecordIDs, req.Model)
+		events, err := svc.Chat(r.Context(), domainID, req.Messages, req.RecordIDs, req.Model, req.Debug)
 		if err != nil {
 			writeJSON(w, http.StatusInternalServerError, errBody("chat failed: "+err.Error()))
 			return

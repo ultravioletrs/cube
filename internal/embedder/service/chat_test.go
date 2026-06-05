@@ -12,12 +12,13 @@ import (
 )
 
 type chatRetrieveStub struct {
-	calls int
+	calls  int
+	chunks []domain.VectorChunk
 }
 
 func (s *chatRetrieveStub) Retrieve(context.Context, string, string, []string, int) ([]domain.VectorChunk, error) {
 	s.calls++
-	return nil, nil
+	return s.chunks, nil
 }
 
 type chatLLMStub struct {
@@ -61,7 +62,7 @@ func TestChatSkipsRetrievalForConversationalMessage(t *testing.T) {
 
 	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
 		{Role: "user", Content: "hello!"},
-	}, nil, nil)
+	}, nil, nil, false)
 	if err != nil {
 		t.Fatalf("chat failed: %v", err)
 	}
@@ -73,6 +74,53 @@ func TestChatSkipsRetrievalForConversationalMessage(t *testing.T) {
 	}
 	if len(client.messages) == 0 || client.messages[0].Content != conversationSystemPrompt {
 		t.Fatal("expected conversational system prompt")
+	}
+}
+
+func TestChatEmitsRetrievalDebug(t *testing.T) {
+	score := 0.42
+	retrieve := &chatRetrieveStub{chunks: []domain.VectorChunk{{
+		RecordID:   "record-1",
+		RecordName: "DusanEUCNC.pdf",
+		ChunkIndex: 2,
+		Content:    "Dusan Borovcanin invoice details",
+		Score:      &score,
+	}}}
+	client := &chatLLMStub{}
+	service := NewChatService(retrieve, client, nil, 5, llm.Config{}, nil)
+
+	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
+		{Role: "user", Content: "dusan"},
+	}, []string{"record-1"}, nil, true)
+	if err != nil {
+		t.Fatalf("chat failed: %v", err)
+	}
+
+	var debug *domain.ChatDebug
+	for ev := range events {
+		if ev.Type == domain.ChatEventDebug {
+			debug = ev.Debug
+		}
+	}
+
+	if debug == nil {
+		t.Fatal("expected retrieval debug event")
+	}
+	if debug.Query != "dusan" || !debug.RetrievalEnabled || debug.TopK != 5 {
+		t.Fatalf("unexpected debug metadata: %+v", *debug)
+	}
+	if len(debug.RecordIDs) != 1 || debug.RecordIDs[0] != "record-1" {
+		t.Fatalf("unexpected debug record scope: %+v", debug.RecordIDs)
+	}
+	if len(debug.PromptChunks) != 1 {
+		t.Fatalf("expected one debug chunk, got %d", len(debug.PromptChunks))
+	}
+	chunk := debug.PromptChunks[0]
+	if chunk.Rank != 1 || chunk.RecordName != "DusanEUCNC.pdf" || chunk.ChunkIndex != 2 {
+		t.Fatalf("unexpected debug chunk: %+v", chunk)
+	}
+	if chunk.Score == nil || *chunk.Score != score {
+		t.Fatalf("expected score %v, got %v", score, chunk.Score)
 	}
 }
 
