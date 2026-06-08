@@ -48,8 +48,8 @@ type Config struct {
 	CVMId          string        `env:"UV_CUBE_AGENT_CVM_ID"      envDefault:""`
 	EntityID       string        `env:"UV_CUBE_AGENT_ENTITY_ID"   envDefault:""`
 	AtomGRPCURL    string        `env:"ATOM_GRPC_URL"             envDefault:"atom:8081"`
-	AtomGraphQLURL string        `env:"ATOM_GRAPHQL_URL"         envDefault:"http://atom:8080/graphql"`
-	AtomTimeout    time.Duration `env:"ATOM_TIMEOUT"       envDefault:"15s"`
+	AtomGraphQLURL string        `env:"ATOM_GRAPHQL_URL"          envDefault:"http://atom:8080/graphql"`
+	AtomTimeout    time.Duration `env:"ATOM_TIMEOUT"              envDefault:"15s"`
 }
 
 func main() {
@@ -76,6 +76,7 @@ func main() {
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 		os.Exit(1)
+
 		return
 	}
 
@@ -107,6 +108,7 @@ func main() {
 	case attestation.VTPM:
 		logger.Info("vTPM attestation is not supported")
 		os.Exit(1)
+
 		return
 	}
 
@@ -118,6 +120,7 @@ func main() {
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent service: %s", err))
 		os.Exit(1)
+
 		return
 	}
 
@@ -126,31 +129,16 @@ func main() {
 
 	handler := api.MakeHandler(svc, cfg.InstanceID)
 
-	var certProvider atls.CertificateProvider
-	var atomClient *atom.Client
+	certProvider, atomClient, err := setupCertProvider(provider, ccPlatform, cfg)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(1)
 
-	if ccPlatform != attestation.NoCC {
-		entityID := firstNonEmpty(cfg.EntityID, cfg.CVMId)
-		if cfg.CertsToken != "" && entityID != "" {
-			atomClient, err = atom.NewClient(cfg.AtomGRPCURL, cfg.AtomGraphQLURL, cfg.AtomTimeout)
-			if err != nil {
-				logger.Error(fmt.Sprintf("failed to create atom client: %s", err))
-				os.Exit(1)
-				return
-			}
-			defer atomClient.Close()
+		return
+	}
 
-			certProvider, err = atomcerts.NewProvider(
-				provider, ccPlatform, atomClient, cfg.CertsToken, entityID, 365*24*time.Hour,
-			)
-		} else {
-			certProvider, err = atls.NewProvider(provider, ccPlatform, "", "", nil)
-		}
-		if err != nil {
-			logger.Error(fmt.Sprintf("failed to create certificate provider: %s", err))
-			os.Exit(1)
-			return
-		}
+	if atomClient != nil {
+		defer atomClient.Close()
 	}
 
 	httpSvr := http.NewServer(
@@ -170,6 +158,40 @@ func main() {
 	}
 }
 
+func setupCertProvider(
+	provider attestation.Provider, ccPlatform attestation.PlatformType, cfg Config,
+) (atls.CertificateProvider, *atom.Client, error) {
+	if ccPlatform == attestation.NoCC {
+		return nil, nil, nil
+	}
+
+	entityID := firstNonEmpty(cfg.EntityID, cfg.CVMId)
+	if cfg.CertsToken == "" || entityID == "" {
+		certProvider, err := atls.NewProvider(provider, ccPlatform, "", "", nil)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create certificate provider: %w", err)
+		}
+
+		return certProvider, nil, nil
+	}
+
+	atomClient, err := atom.NewClient(cfg.AtomGRPCURL, cfg.AtomGraphQLURL, cfg.AtomTimeout)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to create atom client: %w", err)
+	}
+
+	certProvider, err := atomcerts.NewProvider(
+		provider, ccPlatform, atomClient, cfg.CertsToken, entityID, 365*24*time.Hour,
+	)
+	if err != nil {
+		atomClient.Close()
+
+		return nil, nil, fmt.Errorf("failed to create certificate provider: %w", err)
+	}
+
+	return certProvider, atomClient, nil
+}
+
 func newLogger(level string) *slog.Logger {
 	var slogLevel slog.Level
 	if err := slogLevel.UnmarshalText([]byte(strings.ToLower(level))); err != nil {
@@ -185,5 +207,6 @@ func firstNonEmpty(values ...string) string {
 			return strings.TrimSpace(value)
 		}
 	}
+
 	return ""
 }

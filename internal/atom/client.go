@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,12 @@ import (
 )
 
 const DefaultTimeout = 15 * time.Second
+
+var (
+	errAuthorizationDenied = errors.New("authorization denied")
+	errEmptyCertificate    = errors.New("atom issued empty certificate")
+	errGraphQLFailed       = errors.New("atom graphql failed")
+)
 
 type Client struct {
 	graphQLURL string
@@ -56,9 +63,11 @@ func NewClient(grpcAddr, graphQLURL string, timeout time.Duration) (*Client, err
 	if timeout == 0 {
 		timeout = DefaultTimeout
 	}
+
 	if grpcAddr == "" {
 		grpcAddr = "atom:8081"
 	}
+
 	if graphQLURL == "" {
 		graphQLURL = "http://atom:8080/graphql"
 	}
@@ -83,6 +92,7 @@ func (c *Client) Close() error {
 	if c.conn == nil {
 		return nil
 	}
+
 	return c.conn.Close()
 }
 
@@ -104,9 +114,10 @@ func (c *Client) Authenticate(ctx context.Context, token string) (cubeauth.Sessi
 	}, nil
 }
 
-func (c *Client) Check(ctx context.Context, callerToken string, req CheckRequest) error {
+func (c *Client) Check(ctx context.Context, callerToken string, req *CheckRequest) error {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
+
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+callerToken)
 
 	resp, err := c.authz.Check(ctx, &atomv1.CheckRequest{
@@ -120,13 +131,15 @@ func (c *Client) Check(ctx context.Context, callerToken string, req CheckRequest
 	if err != nil {
 		return err
 	}
+
 	if !resp.GetAllowed() {
-		reason := resp.GetReason()
-		if reason == "" {
-			reason = "authorization denied"
+		if reason := resp.GetReason(); reason != "" {
+			return fmt.Errorf("%w: %s", errAuthorizationDenied, reason)
 		}
-		return fmt.Errorf("%s", reason)
+
+		return errAuthorizationDenied
 	}
+
 	return nil
 }
 
@@ -135,7 +148,9 @@ func (c *Client) ResolveCertificate(
 ) (*atomv1.ResolveCertificateResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
+
 	ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+callerToken)
+
 	return c.certs.ResolveCertificate(ctx, &atomv1.ResolveCertificateRequest{
 		SerialNumber:      serialNumber,
 		FingerprintSha256: fingerprintSHA256,
@@ -174,12 +189,15 @@ func (c *Client) IssueCertificateFromCSR(
 	if err := c.doGraphQL(ctx, token, query, map[string]any{"input": input}, &payload); err != nil {
 		return IssuedCertificate{}, err
 	}
+
 	if len(payload.Errors) > 0 {
 		return IssuedCertificate{}, payload.Errors[0]
 	}
+
 	if payload.Data.IssueCertificateFromCSR.Certificate.CertificatePEM == "" {
-		return IssuedCertificate{}, fmt.Errorf("atom issued empty certificate")
+		return IssuedCertificate{}, errEmptyCertificate
 	}
+
 	return payload.Data.IssueCertificateFromCSR, nil
 }
 
@@ -193,6 +211,7 @@ func (c *Client) doGraphQL(
 	if err != nil {
 		return err
 	}
+
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
@@ -200,10 +219,13 @@ func (c *Client) doGraphQL(
 	if err != nil {
 		return err
 	}
+
 	req.Header.Set("Content-Type", "application/json")
+
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return err
@@ -214,9 +236,11 @@ func (c *Client) doGraphQL(
 	if err != nil {
 		return err
 	}
+
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return fmt.Errorf("atom graphql failed: status=%d body=%s", resp.StatusCode, string(data))
+		return fmt.Errorf("%w: status=%d body=%s", errGraphQLFailed, resp.StatusCode, string(data))
 	}
+
 	return json.Unmarshal(data, out)
 }
 
@@ -228,6 +252,7 @@ func (e graphQLError) Error() string {
 	if e.Message == "" {
 		return "atom graphql error"
 	}
+
 	return e.Message
 }
 
@@ -236,15 +261,18 @@ func jwtExpiresAt(token string) string {
 	if len(parts) < 2 {
 		return ""
 	}
+
 	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
 	if err != nil {
 		return ""
 	}
+
 	var claims struct {
 		Exp int64 `json:"exp"`
 	}
 	if err := json.Unmarshal(payload, &claims); err != nil || claims.Exp == 0 {
 		return ""
 	}
+
 	return time.Unix(claims.Exp, 0).UTC().Format(time.RFC3339)
 }

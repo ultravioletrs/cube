@@ -32,7 +32,10 @@ import (
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
-const ContentType = "application/json"
+const (
+	ContentType = "application/json"
+	keyError    = "error"
+)
 
 // GuardrailsConfig holds configuration for the guardrails sidecar service.
 type GuardrailsConfig struct {
@@ -57,31 +60,31 @@ func MakeHandler(
 	mux.Handle("/metrics", promhttp.Handler())
 
 	// Route management endpoints (public, requires authentication)
-	mux.Post("/api/routes", withAtomSession(atomClient, false, kithttp.NewServer(
+	mux.Post("/api/routes", withAtomSession(atomClient, kithttp.NewServer(
 		endpoints.CreateRoute,
 		decodeCreateRouteRequest,
 		encodeCreateRouteResponse,
 	)).ServeHTTP)
 
-	mux.Get("/api/routes", withAtomSession(atomClient, false, kithttp.NewServer(
+	mux.Get("/api/routes", withAtomSession(atomClient, kithttp.NewServer(
 		endpoints.ListRoutes,
 		decodeListRoutesRequest,
 		encodeListRoutesResponse,
 	)).ServeHTTP)
 
-	mux.Get("/api/routes/{name}", withAtomSession(atomClient, false, kithttp.NewServer(
+	mux.Get("/api/routes/{name}", withAtomSession(atomClient, kithttp.NewServer(
 		endpoints.GetRoute,
 		decodeGetRouteRequest,
 		encodeGetRouteResponse,
 	)).ServeHTTP)
 
-	mux.Put("/api/routes/{name}", withAtomSession(atomClient, false, kithttp.NewServer(
+	mux.Put("/api/routes/{name}", withAtomSession(atomClient, kithttp.NewServer(
 		endpoints.UpdateRoute,
 		decodeUpdateRouteRequest,
 		encodeUpdateRouteResponse,
 	)).ServeHTTP)
 
-	mux.Delete("/api/routes/{name}", withAtomSession(atomClient, false, kithttp.NewServer(
+	mux.Delete("/api/routes/{name}", withAtomSession(atomClient, kithttp.NewServer(
 		endpoints.DeleteRoute,
 		decodeDeleteRouteRequest,
 		encodeDeleteRouteResponse,
@@ -102,7 +105,7 @@ func MakeHandler(
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
 
-	mux.Post("/attestation/policy", withAtomSession(atomClient, false, kithttp.NewServer(
+	mux.Post("/attestation/policy", withAtomSession(atomClient, kithttp.NewServer(
 		endpoints.UpdateAttestationPolicy,
 		decodeUpdateAttestationPolicyRequest,
 		encodeUpdateAttestationPolicyResponse,
@@ -154,8 +157,8 @@ func healthHandler(service, instanceID string) http.HandlerFunc {
 	}
 }
 
-func withAtomSession(atomClient *atom.Client, usePathTenant bool, next http.Handler) http.Handler {
-	return withAtomSessionMiddleware(atomClient, usePathTenant)(next)
+func withAtomSession(atomClient *atom.Client, next http.Handler) http.Handler {
+	return withAtomSessionMiddleware(atomClient, false)(next)
 }
 
 func withAtomSessionMiddleware(atomClient *atom.Client, usePathTenant bool) func(http.Handler) http.Handler {
@@ -163,15 +166,18 @@ func withAtomSessionMiddleware(atomClient *atom.Client, usePathTenant bool) func
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := sessionToken(r)
 			if token == "" {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing session"})
+				writeJSON(w, http.StatusUnauthorized, map[string]string{keyError: "missing session"})
+
 				return
 			}
 
 			session, err := atomClient.Authenticate(r.Context(), token)
 			if err != nil {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid session"})
+				writeJSON(w, http.StatusUnauthorized, map[string]string{keyError: "invalid session"})
+
 				return
 			}
+
 			session.Token = token
 
 			if usePathTenant {
@@ -198,9 +204,16 @@ func sessionToken(r *http.Request) string {
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
+	data, err := json.Marshal(value)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+
+		return
+	}
+
 	w.Header().Set("Content-Type", ContentType)
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
+	_, _ = w.Write(data)
 }
 
 func requestIDMiddleware(next http.Handler) http.Handler {
@@ -209,6 +222,7 @@ func requestIDMiddleware(next http.Handler) http.Handler {
 		if requestID == "" {
 			requestID = uuid.NewString()
 		}
+
 		w.Header().Set("X-Request-Id", requestID)
 		r.Header.Set("X-Request-Id", requestID)
 		next.ServeHTTP(w, r)
@@ -250,7 +264,7 @@ func encodeError(_ context.Context, err error, w http.ResponseWriter) {
 	}
 
 	if err := json.NewEncoder(w).Encode(map[string]any{
-		"error": err.Error(),
+		keyError: err.Error(),
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -341,6 +355,7 @@ func prepareProxyRequest(
 			req.Header.Set("X-Domain-Id", domainID)
 		}
 	}
+
 	if session.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+session.Token)
 	}
@@ -387,7 +402,7 @@ func prepareProxyRequest(
 func injectAuditFilter(req *http.Request, domainID string) {
 	if req.Body != nil && req.ContentLength > 0 {
 		if err := injectAuditFilterIntoBody(req, domainID); err != nil {
-			slog.Error("Failed to inject audit filter into body", "error", err)
+			slog.Error("Failed to inject audit filter into body", keyError, err)
 		}
 	}
 

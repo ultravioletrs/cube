@@ -43,7 +43,9 @@ func (t *tracingMiddleware) GetAttestationPolicy(ctx context.Context, session *c
 }
 
 // UpdateAttestationPolicy implements proxy.Service.
-func (t *tracingMiddleware) UpdateAttestationPolicy(ctx context.Context, session *cubeauth.Session, policy []byte) error {
+func (t *tracingMiddleware) UpdateAttestationPolicy(
+	ctx context.Context, session *cubeauth.Session, policy []byte,
+) error {
 	return t.svc.UpdateAttestationPolicy(ctx, session, policy)
 }
 

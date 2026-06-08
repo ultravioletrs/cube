@@ -12,6 +12,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,6 +24,15 @@ import (
 const (
 	nonceLength = 64
 	nonceSuffix = ".nonce"
+)
+
+var (
+	errAtomClientRequired   = errors.New("atom client is required")
+	errAtomTokenRequired    = errors.New("atom token is required")
+	errAtomEntityIDRequired = errors.New("atom entity id is required")
+	errInvalidServerName    = errors.New("invalid server name")
+	errInvalidNonceLength   = errors.New("invalid nonce length")
+	errNoCertificatePEM     = errors.New("atom returned no certificate PEM block")
 )
 
 type Provider struct {
@@ -46,15 +56,19 @@ func NewProvider(
 	if err != nil {
 		return nil, fmt.Errorf("create attestation provider: %w", err)
 	}
+
 	if atomClient == nil {
-		return nil, fmt.Errorf("atom client is required")
+		return nil, errAtomClientRequired
 	}
+
 	if token == "" {
-		return nil, fmt.Errorf("atom token is required")
+		return nil, errAtomTokenRequired
 	}
+
 	if entityID == "" {
-		return nil, fmt.Errorf("atom entity id is required")
+		return nil, errAtomEntityIDRequired
 	}
+
 	if ttl <= 0 {
 		ttl = 365 * 24 * time.Hour
 	}
@@ -99,6 +113,7 @@ func (p *Provider) GetCertificate(clientHello *tls.ClientHelloInfo) (*tls.Certif
 	}
 
 	ttlSeconds := uint64(p.ttl.Seconds())
+
 	issued, err := p.atomClient.IssueCertificateFromCSR(
 		clientHello.Context(), p.token, p.entityID, string(csrPEM), ttlSeconds,
 	)
@@ -141,16 +156,18 @@ func (p *Provider) createCSR(privateKey *ecdsa.PrivateKey, extension pkix.Extens
 
 func extractNonceFromSNI(serverName string) ([]byte, error) {
 	if len(serverName) < len(nonceSuffix) || serverName[len(serverName)-len(nonceSuffix):] != nonceSuffix {
-		return nil, fmt.Errorf("invalid server name: %s", serverName)
+		return nil, fmt.Errorf("%w: %s", errInvalidServerName, serverName)
 	}
 
 	nonceStr := serverName[:len(serverName)-len(nonceSuffix)]
+
 	nonce, err := hex.DecodeString(nonceStr)
 	if err != nil {
 		return nil, fmt.Errorf("decode nonce: %w", err)
 	}
+
 	if len(nonce) != nonceLength {
-		return nil, fmt.Errorf("invalid nonce length: expected %d bytes, got %d bytes", nonceLength, len(nonce))
+		return nil, fmt.Errorf("%w: expected %d bytes, got %d bytes", errInvalidNonceLength, nonceLength, len(nonce))
 	}
 
 	return nonce, nil
@@ -158,19 +175,23 @@ func extractNonceFromSNI(serverName string) ([]byte, error) {
 
 func parseCertificateChain(certificatePEM string) ([][]byte, error) {
 	var certs [][]byte
+
 	rest := []byte(certificatePEM)
 	for {
 		block, remaining := pem.Decode(rest)
 		if block == nil {
 			break
 		}
+
 		rest = remaining
+
 		if block.Type == "CERTIFICATE" {
 			certs = append(certs, block.Bytes)
 		}
 	}
+
 	if len(certs) == 0 {
-		return nil, fmt.Errorf("atom returned no certificate PEM block")
+		return nil, errNoCertificatePEM
 	}
 
 	return certs, nil

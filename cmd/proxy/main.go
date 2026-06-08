@@ -29,6 +29,7 @@ import (
 	ppostgres "github.com/ultravioletrs/cube/proxy/postgres"
 	"github.com/ultravioletrs/cube/proxy/router"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -48,9 +49,9 @@ type config struct {
 	OpenSearchURL  string        `env:"UV_CUBE_OPENSEARCH_URL"      envDefault:"http://opensearch:9200"`
 	RouterConfig   string        `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
 	AgentURL       string        `env:"UV_CUBE_AGENT_URL"           envDefault:"http://cube-agent:8901"`
-	AtomGRPCURL    string        `env:"ATOM_GRPC_URL"              envDefault:"atom:8081"`
-	AtomGraphQLURL string        `env:"ATOM_GRAPHQL_URL"           envDefault:"http://atom:8080/graphql"`
-	AtomTimeout    time.Duration `env:"ATOM_TIMEOUT"               envDefault:"15s"`
+	AtomGRPCURL    string        `env:"ATOM_GRPC_URL"               envDefault:"atom:8081"`
+	AtomGraphQLURL string        `env:"ATOM_GRAPHQL_URL"            envDefault:"http://atom:8080/graphql"`
+	AtomTimeout    time.Duration `env:"ATOM_TIMEOUT"                envDefault:"15s"`
 }
 
 type httpServerConfig struct {
@@ -70,6 +71,7 @@ type fileConfig struct {
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
 	g, ctx := errgroup.WithContext(ctx)
 
 	cfg := config{}
@@ -87,6 +89,7 @@ func main() {
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
+
 		return
 	}
 	defer atomClient.Close()
@@ -95,6 +98,7 @@ func main() {
 	if err := env.ParseWithOptions(&dbConfig, env.Options{Prefix: envPrefixDB}); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
+
 		return
 	}
 
@@ -102,11 +106,12 @@ func main() {
 	if err != nil {
 		logger.Error(fmt.Sprintf("Failed to connect to %s database: %s", svcName, err))
 		os.Exit(1)
+
 		return
 	}
 	defer db.Close()
 
-	tracer := trace.NewNoopTracerProvider().Tracer(svcName)
+	tracer := noop.NewTracerProvider().Tracer(svcName)
 	repo := ppostgres.NewRepository(db)
 
 	agentConfig := clients.AttestedClientConfig{}
@@ -114,6 +119,7 @@ func main() {
 	if err := env.ParseWithOptions(&agentConfig, env.Options{Prefix: envPrefixAgent}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s agent client configuration : %s", svcName, err))
 		os.Exit(1)
+
 		return
 	}
 
@@ -121,6 +127,7 @@ func main() {
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent HTTP client: %s", err))
 		os.Exit(1)
+
 		return
 	}
 
@@ -128,6 +135,7 @@ func main() {
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
+
 		return
 	}
 
@@ -140,6 +148,7 @@ func main() {
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create service: %s", err))
 		os.Exit(1)
+
 		return
 	}
 
@@ -160,6 +169,7 @@ func main() {
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
 		os.Exit(1)
+
 		return
 	}
 
@@ -177,8 +187,10 @@ func main() {
 
 	g.Go(func() error {
 		<-ctx.Done()
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer shutdownCancel()
+
 		return httpSvr.Shutdown(shutdownCtx)
 	})
 
@@ -218,14 +230,17 @@ func loadDatabaseRoutes(
 	}
 
 	seeded := 0
+
 	for i := range defaultRoutes {
 		route := &defaultRoutes[i]
 		if route.Enabled != nil && !*route.Enabled {
 			continue
 		}
+
 		if _, ok := existing[route.Name]; ok {
 			continue
 		}
+
 		if err := router.ValidateRoute(route); err != nil {
 			log.Printf("Skipping invalid default route %s: %s", route.Name, err)
 
@@ -243,6 +258,7 @@ func loadDatabaseRoutes(
 		existing[created.Name] = struct{}{}
 		seeded++
 	}
+
 	if seeded > 0 {
 		log.Printf("Seeded %d missing default routes into database", seeded)
 	}
@@ -282,9 +298,11 @@ func serveHTTP(srv *stdhttp.Server, cfg httpServerConfig, logger *slog.Logger) e
 	} else {
 		err = srv.ListenAndServe()
 	}
+
 	if errors.Is(err, stdhttp.ErrServerClosed) {
 		return nil
 	}
+
 	return err
 }
 

@@ -24,7 +24,7 @@ const (
 var ErrAuthorization = errors.New("authorization denied")
 
 type AuthzChecker interface {
-	Check(ctx context.Context, callerToken string, req atom.CheckRequest) error
+	Check(ctx context.Context, callerToken string, req *atom.CheckRequest) error
 }
 
 type authMiddleware struct {
@@ -65,9 +65,11 @@ func (am *authMiddleware) GetAttestationPolicy(ctx context.Context, session *cub
 	if session.TenantID == "" {
 		return nil, ErrAuthorization
 	}
+
 	if err := am.authorize(ctx, session, actionRead); err != nil {
 		return nil, err
 	}
+
 	return am.next.GetAttestationPolicy(ctx, session)
 }
 
@@ -77,6 +79,7 @@ func (am *authMiddleware) UpdateAttestationPolicy(
 	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return err
 	}
+
 	return am.next.UpdateAttestationPolicy(ctx, session, policy)
 }
 
@@ -86,6 +89,7 @@ func (am *authMiddleware) CreateRoute(
 	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return nil, err
 	}
+
 	return am.next.CreateRoute(ctx, session, route)
 }
 
@@ -95,6 +99,7 @@ func (am *authMiddleware) UpdateRoute(
 	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return nil, err
 	}
+
 	return am.next.UpdateRoute(ctx, session, name, route)
 }
 
@@ -102,6 +107,7 @@ func (am *authMiddleware) DeleteRoute(ctx context.Context, session *cubeauth.Ses
 	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return err
 	}
+
 	return am.next.DeleteRoute(ctx, session, name)
 }
 
@@ -111,6 +117,7 @@ func (am *authMiddleware) GetRoute(
 	if err := am.authorize(ctx, session, actionRead); err != nil {
 		return nil, err
 	}
+
 	return am.next.GetRoute(ctx, session, name)
 }
 
@@ -120,6 +127,7 @@ func (am *authMiddleware) ListRoutes(
 	if err := am.authorize(ctx, session, actionRead); err != nil {
 		return nil, 0, err
 	}
+
 	return am.next.ListRoutes(ctx, session, offset, limit)
 }
 
@@ -127,6 +135,7 @@ func (am *authMiddleware) authorize(ctx context.Context, session *cubeauth.Sessi
 	if am.authz == nil {
 		return ErrAuthorization
 	}
+
 	req := atom.CheckRequest{
 		SubjectID: session.EntityID,
 		Action:    action,
@@ -138,9 +147,11 @@ func (am *authMiddleware) authorize(ctx context.Context, session *cubeauth.Sessi
 		req.ObjectKind = "tenant"
 		req.ObjectID = session.TenantID
 	}
-	if err := am.authz.Check(ctx, session.Token, req); err != nil {
+
+	if err := am.authz.Check(ctx, session.Token, &req); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -174,6 +185,7 @@ func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *cubeauth
 	if strings.Contains(path, "/v1/models/") && ctx.Value(proxy.MethodContextKey) == http.MethodDelete {
 		return am.authorize(ctx, session, actionManage)
 	}
+
 	return nil
 }
 
@@ -201,5 +213,6 @@ func determineAction(path string) string {
 		strings.Contains(path, "/rerank"):
 		return actionExecute
 	}
+
 	return actionRead
 }

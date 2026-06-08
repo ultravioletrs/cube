@@ -23,5 +23,6 @@ func WithSession(ctx context.Context, session Session) context.Context {
 
 func SessionFromContext(ctx context.Context) (Session, bool) {
 	session, ok := ctx.Value(SessionKey).(Session)
+
 	return session, ok
 }

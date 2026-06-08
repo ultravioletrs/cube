@@ -19,8 +19,9 @@ type authzChecker struct {
 	requests []atom.CheckRequest
 }
 
-func (a *authzChecker) Check(_ context.Context, _ string, req atom.CheckRequest) error {
-	a.requests = append(a.requests, req)
+func (a *authzChecker) Check(_ context.Context, _ string, req *atom.CheckRequest) error {
+	a.requests = append(a.requests, *req)
+
 	return nil
 }
 
@@ -264,21 +265,27 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
+
 			if !tc.expectCheck {
 				if len(auth.requests) != 0 {
 					t.Fatalf("expected no authorization check, got %d", len(auth.requests))
 				}
+
 				return
 			}
+
 			if len(auth.requests) == 0 {
 				t.Fatal("expected authorization check")
 			}
+
 			if got := auth.requests[0].Action; got != tc.expectedAction {
 				t.Fatalf("expected action %q, got %q", tc.expectedAction, got)
 			}
+
 			if got := auth.requests[0].ObjectKind; got != "tenant" {
 				t.Fatalf("expected object kind tenant, got %q", got)
 			}
+
 			if got := auth.requests[0].ObjectID; got != "tenant1" {
 				t.Fatalf("expected object ID tenant1, got %q", got)
 			}

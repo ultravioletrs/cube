@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib" // pgx driver registration for database/sql.
 	"github.com/jmoiron/sqlx"
 	migrate "github.com/rubenv/sql-migrate"
 	"github.com/ultravioletrs/cube/proxy"
@@ -41,23 +41,32 @@ func Setup(cfg Config) (*sqlx.DB, error) {
 		"host=%s port=%s user=%s dbname=%s password=%s sslmode=%s sslcert=%s sslkey=%s sslrootcert=%s",
 		cfg.Host, cfg.Port, cfg.User, cfg.Name, cfg.Pass, cfg.SSLMode, cfg.SSLCert, cfg.SSLKey, cfg.SSLRootCert,
 	)
+
 	db, err := sqlx.Open("pgx", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open proxy db: %w", err)
 	}
+
 	db.SetConnMaxLifetime(time.Hour)
 	db.SetConnMaxIdleTime(time.Minute)
 	db.SetMaxIdleConns(10)
 	db.SetMaxOpenConns(20)
 
-	if err := db.Ping(); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
 		db.Close()
+
 		return nil, fmt.Errorf("ping proxy db: %w", err)
 	}
+
 	if _, err := migrate.Exec(db.DB, "postgres", Migration(), migrate.Up); err != nil {
 		db.Close()
+
 		return nil, fmt.Errorf("migrate proxy db: %w", err)
 	}
+
 	return db, nil
 }
 

@@ -35,6 +35,10 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 	// ErrAttestationUnmarshal indicates that the attestation report could not be unmarshaled.
 	ErrAttestationUnmarshal = errors.New("failed to unmarshal the attestation report")
+	// ErrVTpmUnsupported indicates that plain vTPM attestation is not supported.
+	ErrVTpmUnsupported = errors.New("plain vTPM attestation is not supported")
+	// ErrNoCCPlatform indicates that no confidential computing platform was detected.
+	ErrNoCCPlatform = errors.New("no confidential computing platform detected")
 )
 
 type TLSConfig struct {
@@ -159,9 +163,9 @@ func (a *agentService) Attestation(
 
 		return vTPMQuote, nil
 	case attestation.VTPM:
-		return []byte{}, errors.New("plain vTPM attestation is not supported")
+		return []byte{}, ErrVTpmUnsupported
 	case attestation.NoCC:
-		return []byte{}, errors.New("no confidential computing platform detected")
+		return []byte{}, ErrNoCCPlatform
 	default:
 		return []byte{}, ErrAttestationType
 	}

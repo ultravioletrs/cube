@@ -26,6 +26,10 @@ linters:
         - style
         - experimental
         - opinionated
+      disabled-checks:
+        # hugeParam is noisy for idiomatic value types passed through
+        # context/request structs (e.g. cubeauth.Session); not worth the churn.
+        - hugeParam
     goheader:
       template: |-
         Copyright (c) Ultraviolet
@@ -60,6 +64,14 @@ linters:
       - path: proxy/middleware/auth_test.go
         linters:
           - goconst
+      # ATOM GraphQL/JSON API fields are camelCase on the wire; the struct tags
+      # must mirror that external contract, so snake_case enforcement is excluded.
+      - path: internal/atom/client.go
+        linters:
+          - tagliatelle
+      - path: internal/cubeauth/session.go
+        linters:
+          - tagliatelle
 issues:
   max-issues-per-linter: 100
   max-same-issues: 100
