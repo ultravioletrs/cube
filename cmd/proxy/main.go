@@ -69,15 +69,21 @@ type fileConfig struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatalf("%s service terminated: %s", svcName, err)
+	}
+}
+
+func run() error {
+	cfg := config{}
+	if err := env.Parse(&cfg); err != nil {
+		return fmt.Errorf("failed to load %s configuration: %w", svcName, err)
+	}
+
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
 	g, ctx := errgroup.WithContext(ctx)
-
-	cfg := config{}
-	if err := env.Parse(&cfg); err != nil {
-		log.Fatalf("failed to load %s configuration : %s", svcName, err)
-	}
 
 	logger := newLogger(cfg.LogLevel)
 
@@ -87,27 +93,18 @@ func main() {
 
 	atomClient, err := atom.NewClient(cfg.AtomGRPCURL, cfg.AtomGraphQLURL, cfg.AtomTimeout)
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to create atom client: %w", err)
 	}
 	defer atomClient.Close()
 
 	dbConfig := ppostgres.Config{Name: defDB}
 	if err := env.ParseWithOptions(&dbConfig, env.Options{Prefix: envPrefixDB}); err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to load %s db configuration: %w", svcName, err)
 	}
 
 	db, err := ppostgres.Setup(dbConfig)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to connect to %s database: %s", svcName, err))
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to connect to %s database: %w", svcName, err)
 	}
 	defer db.Close()
 
@@ -117,26 +114,17 @@ func main() {
 	agentConfig := clients.AttestedClientConfig{}
 
 	if err := env.ParseWithOptions(&agentConfig, env.Options{Prefix: envPrefixAgent}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load %s agent client configuration : %s", svcName, err))
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to load %s agent client configuration: %w", svcName, err)
 	}
 
 	agentClient, err := httpclient.NewClient(&agentConfig)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create agent HTTP client: %s", err))
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to create agent HTTP client: %w", err)
 	}
 
 	fileCfg, rter, err := initRouter(cfg.RouterConfig)
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to init router: %w", err)
 	}
 
 	// Load routes from database and update in-memory router
@@ -146,10 +134,7 @@ func main() {
 
 	svc, err := newService(logger, tracer, &agentConfig, repo, rter)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create service: %s", err))
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to create service: %w", err)
 	}
 
 	svc = middleware.AuthMiddleware(atomClient)(svc)
@@ -167,10 +152,7 @@ func main() {
 
 	httpServerConfig := httpServerConfig{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
-		os.Exit(1)
-
-		return
+		return fmt.Errorf("failed to load %s HTTP server configuration: %w", svcName, err)
 	}
 
 	// Wrap agent transport with instrumented transport for aTLS audit logging
@@ -195,8 +177,10 @@ func main() {
 	})
 
 	if err := g.Wait(); err != nil {
-		logger.Error(fmt.Sprintf("Proxy service terminated: %s", err))
+		return fmt.Errorf("proxy service terminated: %w", err)
 	}
+
+	return nil
 }
 
 // newServiceWithRouter creates a service with router integration for dynamic route management.

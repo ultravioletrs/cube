@@ -53,6 +53,7 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - node_modules
       # Embedder was migrated from Veda as a single unit; strict lint cleanup
       # will be addressed in follow-up PRs.
       - cmd/embedder/
@@ -64,6 +65,11 @@ linters:
       - path: proxy/middleware/auth_test.go
         linters:
           - goconst
+      # Table-driven tests are naturally large; the maintainability index is
+      # not a useful signal for test files.
+      - path: _test\.go
+        linters:
+          - maintidx
       # ATOM GraphQL/JSON API fields are camelCase on the wire; the struct tags
       # must mirror that external contract, so snake_case enforcement is excluded.
       - path: internal/atom/client.go
