@@ -271,19 +271,70 @@ func TestMatchedRecordsBlockDeduplicatesRecordNames(t *testing.T) {
 	}
 }
 
-func TestHasLexicalGroundingMatchesRecordNameOrContent(t *testing.T) {
+func TestGroundedChunksMatchesRecordNameOrContent(t *testing.T) {
 	chunks := []domain.VectorChunk{{
 		RecordName: "record_a.pdf",
 		Content:    "Example alpha chunk",
 	}}
 
-	if !hasLexicalGrounding("alpha request", chunks) {
+	if len(groundedChunks(meaningfulQueryTerms("alpha request"), chunks)) == 0 {
 		t.Fatal("expected content to ground query")
 	}
-	if !hasLexicalGrounding("alpha details", chunks) {
+	if len(groundedChunks(meaningfulQueryTerms("alpha details"), chunks)) == 0 {
 		t.Fatal("expected content to ground query")
 	}
-	if hasLexicalGrounding("external topic", chunks) {
+	if len(groundedChunks(meaningfulQueryTerms("external topic"), chunks)) != 0 {
 		t.Fatal("expected unrelated query to be weak")
+	}
+}
+
+func TestChatKeepsChunksWhenQueryHasNoMeaningfulTerms(t *testing.T) {
+	retrieve := &chatRetrieveStub{chunks: []domain.VectorChunk{{
+		RecordID:   "record-1",
+		RecordName: "record_a.pdf",
+		ChunkIndex: 1,
+		Content:    "Unrelated retrieved content",
+	}}}
+	client := &chatLLMStub{}
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+
+	// Query is entirely stopwords/short tokens: no lexical signal to filter on.
+	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
+		{Role: "user", Content: "what is this about"},
+	}, nil, nil, true)
+	if err != nil {
+		t.Fatalf("chat failed: %v", err)
+	}
+	for range events {
+	}
+
+	if client.calls != 1 {
+		t.Fatalf("expected LLM to be called, got %d calls", client.calls)
+	}
+}
+
+func TestChatSkipsGroundingForExplicitlyScopedRecords(t *testing.T) {
+	retrieve := &chatRetrieveStub{chunks: []domain.VectorChunk{{
+		RecordID:   "record-1",
+		RecordName: "record_a.pdf",
+		ChunkIndex: 1,
+		Content:    "Unrelated retrieved content",
+	}}}
+	client := &chatLLMStub{}
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+
+	// User scoped to record-1; grounding must not block the answer even when
+	// the query terms do not literally appear in the chunk.
+	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
+		{Role: "user", Content: "specific external topic"},
+	}, []string{"record-1"}, nil, true)
+	if err != nil {
+		t.Fatalf("chat failed: %v", err)
+	}
+	for range events {
+	}
+
+	if client.calls != 1 {
+		t.Fatalf("expected LLM to be called for scoped records, got %d calls", client.calls)
 	}
 }

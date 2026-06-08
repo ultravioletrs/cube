@@ -115,11 +115,18 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 		} else if len(chunks) == 0 {
 			retrievalWarning = "No relevant chunks found in indexed records."
 			noRelevantContext = true
-		} else {
-			chunks = lexicallyGroundedChunks(query, chunks)
-			if len(chunks) == 0 {
+		} else if len(recordIDs) > 0 {
+			// User explicitly scoped retrieval to specific records; trust those
+			// chunks rather than second-guessing them with lexical grounding.
+		} else if terms := meaningfulQueryTerms(query); len(terms) > 0 {
+			// Only filter when the query carries a lexical signal to filter on.
+			// A query of pure stopwords/short tokens yields no terms; in that
+			// case keep the retrieved chunks instead of discarding everything.
+			if grounded := groundedChunks(terms, chunks); len(grounded) == 0 {
 				retrievalWarning = "Retrieved chunks did not appear relevant enough to answer from indexed records."
 				weakContext = true
+			} else {
+				chunks = grounded
 			}
 		}
 	}
@@ -326,12 +333,7 @@ func matchedRecordsBlock(chunks []domain.VectorChunk) string {
 	return b.String()
 }
 
-func hasLexicalGrounding(query string, chunks []domain.VectorChunk) bool {
-	return len(lexicallyGroundedChunks(query, chunks)) > 0
-}
-
-func lexicallyGroundedChunks(query string, chunks []domain.VectorChunk) []domain.VectorChunk {
-	terms := meaningfulQueryTerms(query)
+func groundedChunks(terms []string, chunks []domain.VectorChunk) []domain.VectorChunk {
 	if len(terms) == 0 {
 		return nil
 	}
