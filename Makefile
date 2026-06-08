@@ -17,9 +17,18 @@ COMMIT ?= $(shell git rev-parse HEAD)
 AI_BACKEND ?= ollama
 OLLAMA_TARGET_URL = http://ollama:11434
 VLLM_TARGET_URL = http://vllm:8000
+COMPOSE_PROFILE = $(if $(filter vllm,$(AI_BACKEND)),vllm,default)
 
 ENV_FILE = ./docker/.env
 CONFIG_FILE = ./docker/config.json
+COMPOSE_FILE = ./docker/compose.yaml
+COMPOSE = docker compose -f $(COMPOSE_FILE) --env-file $(ENV_FILE)
+LOCAL_UI_URL ?= https://localhost
+LOCAL_ADMIN_IDENTITY ?= admin
+LOCAL_ADMIN_PASSWORD ?= m2N2Lfno
+LOCAL_READY_RETRIES ?= 60
+LOCAL_READY_SLEEP ?= 5
+OLLAMA_MODELS ?= llama3.2:3b starcoder2:3b nomic-embed-text:v1.5
 
 define compile_service
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
@@ -169,12 +178,15 @@ endif
 .PHONY: up-ollama
 up-ollama: config-ollama
 	@echo "Starting Cube with Ollama backend..."
-	docker compose -f docker/compose.yaml -f docker/cube-compose.yaml --env-file docker/.env --profile default up -d
+	$(COMPOSE) --profile default up -d
+	@$(MAKE) wait-local
+	@$(MAKE) wait-ollama-models
 
 .PHONY: up-vllm
 up-vllm: config-vllm
 	@echo "Starting Cube with vLLM backend..."
-	docker compose -f docker/compose.yaml -f docker/cube-compose.yaml --env-file docker/.env --profile vllm up -d
+	$(COMPOSE) --profile vllm up -d
+	@$(MAKE) wait-local
 
 GUARDRAILS_CONFIG_FILE = ./guardrails/rails/config.yml
 
@@ -208,7 +220,7 @@ disable-atls:
 	fi
 
 .PHONY: up
-up: config-local enable-guardrails config-backend disable-atls
+up: check-local config-local enable-guardrails config-backend disable-atls
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
@@ -216,12 +228,67 @@ else
 endif
 
 .PHONY: up-disable-guardrails
-up-disable-guardrails: config-cloud-local disable-guardrails config-backend disable-atls
+up-disable-guardrails: check-local config-cloud-local disable-guardrails config-backend disable-atls
 ifeq ($(AI_BACKEND),vllm)
 	@$(MAKE) up-vllm
 else
 	@$(MAKE) up-ollama
 endif
+
+.PHONY: check-local
+check-local:
+	@command -v docker >/dev/null 2>&1 || { echo "Docker is required."; exit 1; }
+	@docker compose version >/dev/null 2>&1 || { echo "Docker Compose v2 is required."; exit 1; }
+	@docker info >/dev/null 2>&1 || { echo "Docker daemon is not running or is not accessible."; exit 1; }
+	@command -v curl >/dev/null 2>&1 || { echo "curl is required for startup readiness checks."; exit 1; }
+	@test -f $(ENV_FILE) || { echo "Missing $(ENV_FILE)."; exit 1; }
+	@test -f $(COMPOSE_FILE) || { echo "Missing $(COMPOSE_FILE)."; exit 1; }
+	@echo "✓ Local prerequisites are available"
+
+.PHONY: wait-local
+wait-local:
+	@echo "Waiting for Cube local services..."
+	@i=1; \
+	while [ $$i -le $(LOCAL_READY_RETRIES) ]; do \
+		code=$$(curl -k -sS -o /dev/null -w "%{http_code}" -X POST "$(LOCAL_UI_URL)/users/tokens/issue" \
+			-H "Content-Type: application/json" \
+			-d '{"username":"$(LOCAL_ADMIN_IDENTITY)","password":"$(LOCAL_ADMIN_PASSWORD)"}' 2>/dev/null || true); \
+		if [ "$$code" = "201" ]; then \
+			echo "✓ Cube is ready at $(LOCAL_UI_URL)"; \
+			exit 0; \
+		fi; \
+		if [ $$i -eq 12 ]; then \
+			echo "Restarting dependent services while auth settles..."; \
+			$(COMPOSE) --profile $(COMPOSE_PROFILE) restart users magistrala-backend ui >/dev/null 2>&1 || true; \
+		fi; \
+		echo "Waiting for services ($$i/$(LOCAL_READY_RETRIES), login status: $${code:-unreachable})..."; \
+		sleep $(LOCAL_READY_SLEEP); \
+		i=$$((i + 1)); \
+	done; \
+	echo "Cube did not become ready. Run 'make ps' or 'make logs' to inspect services."; \
+	exit 1
+
+.PHONY: wait-ollama-models
+wait-ollama-models:
+	@echo "Waiting for Ollama models: $(OLLAMA_MODELS)"
+	@i=1; \
+	while [ $$i -le $(LOCAL_READY_RETRIES) ]; do \
+		models="$$(docker exec ollama ollama list 2>/dev/null || true)"; \
+		missing=""; \
+		for model in $(OLLAMA_MODELS); do \
+			echo "$$models" | awk 'NR > 1 { print $$1 }' | grep -Fxq "$$model" || missing="$$missing $$model"; \
+		done; \
+		if [ -z "$$missing" ]; then \
+			echo "✓ Required Ollama models are ready"; \
+			exit 0; \
+		fi; \
+		echo "Waiting for models ($$i/$(LOCAL_READY_RETRIES)):$$missing"; \
+		sleep $(LOCAL_READY_SLEEP); \
+		i=$$((i + 1)); \
+	done; \
+	echo "Required Ollama models were not downloaded. Run 'docker logs pull-llama',"; \
+	echo "'docker logs pull-starcoder2', and 'docker logs pull-nomic-embed-text'."; \
+	exit 1
 
 .PHONY: config-local
 config-local:
@@ -258,12 +325,12 @@ restore-config:
 .PHONY: down
 down:
 	@echo "Stopping all Cube services..."
-	docker compose -f docker/compose.yaml down
+	$(COMPOSE) --profile $(COMPOSE_PROFILE) down
 
 .PHONY: down-volumes
 down-volumes:
 	@echo "Stopping all Cube services and removing volumes..."
-	docker compose -f docker/compose.yaml down -v
+	$(COMPOSE) --profile $(COMPOSE_PROFILE) down -v
 
 .PHONY: restart
 restart: down up
@@ -276,7 +343,11 @@ restart-vllm: down up-vllm
 
 .PHONY: logs
 logs:
-	docker compose -f docker/compose.yaml logs -f
+	$(COMPOSE) --profile $(COMPOSE_PROFILE) logs -f
+
+.PHONY: ps
+ps:
+	$(COMPOSE) --profile $(COMPOSE_PROFILE) ps
 
 .PHONY: logs-cloud
 logs-cloud:
@@ -358,6 +429,10 @@ help:
 	@echo "  down-cloud-volumes      Stop cloud services, remove volumes, and restore config"
 	@echo "  restart                 Restart with configured backend"
 	@echo "  restart-cloud           Restart cloud deployment"
+	@echo "  check-local             Validate local Docker prerequisites"
+	@echo "  wait-local              Wait until the local UI/login API is ready"
+	@echo "  wait-ollama-models      Wait until required local models are available"
+	@echo "  ps                      Show local Docker service status"
 	@echo ""
 	@echo "Cloud Configuration Commands:"
 	@echo "  config-cloud-local Configure cloud deployment with localhost defaults"

@@ -11,6 +11,9 @@ services, is from the repository root:
 make up
 ```
 
+This command starts the Docker stack and waits until the local login API is
+ready. Use `make ps` from the repository root to inspect service status.
+
 Open `https://localhost` and accept the local self-signed TLS certificate if
 your browser displays a warning.
 

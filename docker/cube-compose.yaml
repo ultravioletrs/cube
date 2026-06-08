@@ -16,6 +16,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
+    profiles: ["cloud"]
     restart: unless-stopped
     command: tunnel run
     environment:
@@ -218,6 +219,9 @@ services:
   cube-embedder:
     container_name: cube-embedder
     image: cube-embedder-local:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.embedder
     restart: on-failure
     networks:
       - cube-network

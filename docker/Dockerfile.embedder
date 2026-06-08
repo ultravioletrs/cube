@@ -5,8 +5,10 @@
 FROM golang:1.26.0-alpine AS builder
 WORKDIR /src
 COPY . .
+ARG TARGETOS
+ARG TARGETARCH
 RUN apk add --no-cache git && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
     go build -ldflags "-s -w" -o /exe ./cmd/embedder/main.go
 
 # Runtime image with poppler-utils + tesseract OCR support.

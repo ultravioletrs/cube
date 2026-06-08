@@ -94,6 +94,16 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    make down-volumes
    ```
 
+   `make up` applies the local Docker configuration, starts the required
+   services, and waits until the local login API is ready. Use `make ps` to
+   inspect service status and `make logs` to follow container logs.
+
+   On the first run, Docker builds the local embedder services and downloads
+   the required container images and Ollama models. This can take several
+   minutes depending on the machine and network connection. Subsequent starts
+   reuse the downloaded images, models, and persistent volumes. The command
+   completes only after the login API and required Ollama models are ready.
+
    **Local Development Access:**
    - Cube AI web UI: https://localhost
    - Traefik Gateway: https://localhost (ports 80/443)

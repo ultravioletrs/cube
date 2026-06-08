@@ -39,7 +39,7 @@ services:
     depends_on:
       - ollama
     entrypoint: /bin/sh
-    command: -c "docker exec ollama ollama run llama3.2:3b"
+    command: -c "docker exec ollama ollama pull llama3.2:3b"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
