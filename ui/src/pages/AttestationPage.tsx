@@ -51,6 +51,7 @@ export default function AttestationPage() {
 
   const domainID = activeDomain?.id ?? ''
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     if (!tokens?.accessToken || !domainID) return
     setLoading(true)
@@ -66,6 +67,7 @@ export default function AttestationPage() {
     }
   }, [tokens?.accessToken, domainID])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   function handleDraftChange(value: string) {

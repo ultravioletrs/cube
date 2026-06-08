@@ -17,10 +17,30 @@ export type RecordFormat = 'text' | 'pdf' | 'md' | 'docx' | 'code' | 'image' | '
 
 export interface MsgSource {
   id: string
+  recordID?: string
   doc: string
   page: number
   excerpt: string
   url?: string
+}
+
+export interface ChatDebugChunk {
+  rank: number
+  record_id: string
+  record_name: string
+  external_url?: string
+  chunk_index: number
+  score?: number
+  preview: string
+}
+
+export interface ChatDebug {
+  query: string
+  top_k: number
+  retrieval_enabled: boolean
+  skipped_reason?: string
+  record_ids?: string[]
+  prompt_chunks: ChatDebugChunk[]
 }
 
 export interface ChatMessage {
@@ -28,6 +48,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   sources?: MsgSource[]
+  debug?: ChatDebug
 }
 
 export interface AppRecord {
@@ -35,11 +56,13 @@ export interface AppRecord {
   sourceID?: string
   name: string
   format: RecordFormat
-  status: 'indexed' | 'processing' | 'error'
+  status: 'queued' | 'processing' | 'indexed' | 'failed' | 'cancelled'
   createdAt: string
   description: string
   error?: string
   chunks: number | null
+  ingestTotalChunks?: number | null
+  ingestIndexedChunks?: number | null
   size?: string
   pages?: number | null
   url?: string

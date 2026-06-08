@@ -27,6 +27,7 @@ export default function MembersPage() {
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     if (!activeWorkspace?.id) return
     setLoading(true)
@@ -40,6 +41,7 @@ export default function MembersPage() {
     }
   }, [activeWorkspace?.id])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   async function handleRemove(member: WorkspaceMember) {

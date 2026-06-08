@@ -66,10 +66,23 @@ type DriveFile struct {
 	Parents      []string `json:"parents"`
 }
 
+// ImageIngestMode describes which signals should be indexed for an image.
+type ImageIngestMode string
+
+const (
+	ImageIngestModeNone   ImageIngestMode = ""
+	ImageIngestModeOCR    ImageIngestMode = "ocr_only"
+	ImageIngestModeImage  ImageIngestMode = "image_only"
+	ImageIngestModeHybrid ImageIngestMode = "hybrid"
+)
+
 // ExtractedDocument is normalized text plus metadata captured during extraction.
 type ExtractedDocument struct {
-	Text      string
-	PageCount *int
+	Text             string
+	PageCount        *int
+	ImageMode        ImageIngestMode
+	OCRText          string
+	OCRTextCharCount int
 }
 
 // DriveReader lists and downloads files from Google Drive.
@@ -463,9 +476,31 @@ func ExtractText(f DriveFile, content []byte) (ExtractedDocument, error) {
 
 func extractImageText(f DriveFile, content []byte) ExtractedDocument {
 	if text, ok := maybeImageOCR(f, content); ok {
-		return ExtractedDocument{Text: text}
+		cfg := GetExtractionConfig().OCR
+		charCount := len([]rune(condensedText(text)))
+		mode := ImageIngestModeHybrid
+		if charCount < cfg.MinTextChars {
+			mode = ImageIngestModeImage
+		}
+		return ExtractedDocument{
+			Text:             imageTextForMode(f, text, mode),
+			ImageMode:        mode,
+			OCRText:          text,
+			OCRTextCharCount: charCount,
+		}
 	}
 
+	return ExtractedDocument{Text: imageDescriptor(f, ""), ImageMode: ImageIngestModeImage}
+}
+
+func imageTextForMode(f DriveFile, ocrText string, mode ImageIngestMode) string {
+	if mode == ImageIngestModeImage {
+		return imageDescriptor(f, ocrText)
+	}
+	return ocrText
+}
+
+func imageDescriptor(f DriveFile, ocrText string) string {
 	name := strings.TrimSpace(f.Name)
 	if name == "" {
 		name = "unnamed-image"
@@ -475,10 +510,14 @@ func extractImageText(f DriveFile, content []byte) ExtractedDocument {
 		mime = "image/unknown"
 	}
 
-	// Image records are routed to the image embedding profile. For now we embed
-	// a stable descriptor when OCR is unavailable or disabled.
+	// Image-only records still need a small text chunk so the record can be
+	// indexed in the existing text chunk table while the visual vector is stored
+	// separately in image_embeddings.
 	text := fmt.Sprintf("image file: %s; mime_type: %s", name, mime)
-	return ExtractedDocument{Text: text}
+	if strings.TrimSpace(ocrText) != "" {
+		text += "; detected_text: " + condensedText(ocrText)
+	}
+	return text
 }
 
 func extractPDF(content []byte) (ExtractedDocument, error) {

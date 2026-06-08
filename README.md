@@ -95,10 +95,30 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```
 
    **Local Development Access:**
+   - Cube AI web UI: https://localhost
    - Traefik Gateway: https://localhost (ports 80/443)
    - All services accessible through Traefik reverse proxy
 
-3. **Get your authentication token**
+3. **Open the web UI**
+
+   Open https://localhost in your browser. Because local development uses a
+   self-signed TLS certificate, your browser may ask you to accept the
+   certificate before continuing.
+
+   Sign in with the default local administrator:
+
+   ```text
+   Username: admin
+   Password: m2N2Lfno
+   ```
+
+   After signing in, select an existing domain or create a new one.
+
+   The UI is included in `make up`; no separate frontend command is required.
+   For frontend development with hot module replacement, follow the
+   [UI development guide](ui/README.md).
+
+4. **Get your authentication token**
 
    All API requests require JWT authentication. Once services are running, obtain a token:
 
@@ -120,7 +140,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    }
    ```
 
-4. **Create a domain**
+5. **Create a domain**
 
    All API requests require a domain ID in the URL path. You can fetch a domain ID from the UI or create one via the API:
 
@@ -162,16 +182,16 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    - `metadata` must be a valid JSON object.
    - Save the `id` value for subsequent API requests.
 
-5. **Verify the installation**
+6. **Verify the installation**
 
-   List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 4):
+   List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 5):
 
    ```bash
    curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
    ```
 
-6. **Make your first AI request**
+7. **Make your first AI request**
 
    ```bash
    curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \

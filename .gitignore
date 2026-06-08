@@ -22,6 +22,8 @@ docker/certs/
 # Filesystem
 *.ext4
 *.backup
+__pycache__/
+*.pyc
 
 # Compiled binaries
 /embedder

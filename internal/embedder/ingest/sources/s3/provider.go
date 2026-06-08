@@ -59,27 +59,7 @@ func (p *sourceProvider) DownloadRecord(
 	rec domain.Record,
 	src domain.Source,
 ) (string, *int, error) {
-	if rec.ExternalID == "" {
-		return "", nil, fmt.Errorf("record %s is missing external_id", rec.ID)
-	}
-
-	var cfg domain.S3Config
-	if err := json.Unmarshal(src.Config, &cfg); err != nil {
-		return "", nil, fmt.Errorf("decode s3 config: %w", err)
-	}
-
-	client, err := newS3Client(cfg)
-	if err != nil {
-		return "", nil, err
-	}
-	bucket := strings.TrimSpace(cfg.Bucket)
-	obj, err := client.GetObject(ctx, bucket, normalizeRclonePath(rec.ExternalID), minio.GetObjectOptions{})
-	if err != nil {
-		return "", nil, err
-	}
-	defer obj.Close()
-
-	body, err := io.ReadAll(obj)
+	body, err := p.DownloadRecordContent(ctx, rec, src)
 	if err != nil {
 		return "", nil, err
 	}
@@ -93,6 +73,38 @@ func (p *sourceProvider) DownloadRecord(
 		return "", nil, err
 	}
 	return doc.Text, doc.PageCount, nil
+}
+
+func (p *sourceProvider) DownloadRecordContent(
+	ctx context.Context,
+	rec domain.Record,
+	src domain.Source,
+) ([]byte, error) {
+	if rec.ExternalID == "" {
+		return nil, fmt.Errorf("record %s is missing external_id", rec.ID)
+	}
+
+	var cfg domain.S3Config
+	if err := json.Unmarshal(src.Config, &cfg); err != nil {
+		return nil, fmt.Errorf("decode s3 config: %w", err)
+	}
+
+	client, err := newS3Client(cfg)
+	if err != nil {
+		return nil, err
+	}
+	bucket := strings.TrimSpace(cfg.Bucket)
+	obj, err := client.GetObject(ctx, bucket, normalizeRclonePath(rec.ExternalID), minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer obj.Close()
+
+	body, err := io.ReadAll(obj)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
 }
 
 // S3BrowseEntry is a normalized object/prefix entry returned by browse previews.

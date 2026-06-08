@@ -60,14 +60,40 @@ func (r *ChunksRepository) KeywordSearchChunks(
 		}
 	}
 
-	likeExprs := make([]string, 0, len(terms))
-	rankExprs := make([]string, 0, len(terms))
+	metadataTerms := metadataSearchTerms(terms)
+	likeExprs := make([]string, 0, len(terms)+len(metadataTerms))
+	rankExprs := make([]string, 0, len(terms)+len(metadataTerms))
 	for _, term := range terms {
 		ph := fmt.Sprintf("$%d", next)
 		next++
 		args = append(args, "%"+term+"%")
 		likeExprs = append(likeExprs, "c.content ILIKE "+ph)
 		rankExprs = append(rankExprs, "CASE WHEN c.content ILIKE "+ph+" THEN 1 ELSE 0 END")
+	}
+	for _, term := range metadataTerms {
+		ph := fmt.Sprintf("$%d", next)
+		next++
+		args = append(args, "%"+term+"%")
+		likeExprs = append(likeExprs,
+			"r.name ILIKE "+ph,
+			"COALESCE(r.description, '') ILIKE "+ph,
+			"COALESCE(r.external_ref, '') ILIKE "+ph,
+			"COALESCE(r.external_url, '') ILIKE "+ph,
+			"COALESCE(r.mime_type, '') ILIKE "+ph,
+			"r.format ILIKE "+ph,
+			"COALESCE(s.name, '') ILIKE "+ph,
+			"s.source_type::text ILIKE "+ph,
+		)
+		rankExprs = append(rankExprs,
+			"CASE WHEN r.name ILIKE "+ph+" THEN 4 ELSE 0 END",
+			"CASE WHEN COALESCE(r.description, '') ILIKE "+ph+" THEN 2 ELSE 0 END",
+			"CASE WHEN COALESCE(r.external_ref, '') ILIKE "+ph+" THEN 1 ELSE 0 END",
+			"CASE WHEN COALESCE(r.external_url, '') ILIKE "+ph+" THEN 1 ELSE 0 END",
+			"CASE WHEN COALESCE(r.mime_type, '') ILIKE "+ph+" THEN 1 ELSE 0 END",
+			"CASE WHEN r.format ILIKE "+ph+" THEN 1 ELSE 0 END",
+			"CASE WHEN COALESCE(s.name, '') ILIKE "+ph+" THEN 2 ELSE 0 END",
+			"CASE WHEN s.source_type::text ILIKE "+ph+" THEN 1 ELSE 0 END",
+		)
 	}
 	where = append(where, "("+strings.Join(likeExprs, " OR ")+")")
 
@@ -219,11 +245,15 @@ keyword_ranked AS (
           AND rec.status = 'indexed'
           AND to_tsvector('english', c.content) @@ websearch_to_tsquery('english', ` + queryPH + `)`)
 		sb.WriteString(recordIDFilter)
+		metadataTerms := metadataSearchTerms(terms)
+
 		sb.WriteString(`
         ORDER BY fts_rank DESC
         LIMIT $3
     ) t
-),
+ )`)
+		if len(metadataTerms) == 0 {
+			sb.WriteString(`,
 rrf AS (
     SELECT COALESCE(v.id, k.id) AS chunk_id,
            COALESCE(1.0 / (60.0 + v.rank::float), 0.0)
@@ -231,13 +261,73 @@ rrf AS (
     FROM vector_ranked v
     FULL OUTER JOIN keyword_ranked k ON k.id = v.id
 )`)
+		} else {
+			sb.WriteString(`,
+metadata_ranked AS (
+    SELECT id, ROW_NUMBER() OVER (ORDER BY metadata_score DESC, updated_at DESC, chunk_index ASC) AS rank
+    FROM (
+        SELECT c.id, rec.updated_at, c.chunk_index,
+               `)
+
+			metadataRankExprs := make([]string, 0, len(metadataTerms)*8)
+			metadataLikeExprs := make([]string, 0, len(metadataTerms)*8)
+			for _, term := range metadataTerms {
+				ph := fmt.Sprintf("$%d", next)
+				next++
+				args = append(args, "%"+strings.ToLower(term)+"%")
+				metadataRankExprs = append(metadataRankExprs,
+					"CASE WHEN lower(rec.name) LIKE "+ph+" THEN 4 ELSE 0 END",
+					"CASE WHEN lower(COALESCE(rec.description, '')) LIKE "+ph+" THEN 2 ELSE 0 END",
+					"CASE WHEN lower(COALESCE(rec.external_ref, '')) LIKE "+ph+" THEN 1 ELSE 0 END",
+					"CASE WHEN lower(COALESCE(rec.external_url, '')) LIKE "+ph+" THEN 1 ELSE 0 END",
+					"CASE WHEN lower(COALESCE(rec.mime_type, '')) LIKE "+ph+" THEN 1 ELSE 0 END",
+					"CASE WHEN lower(rec.format) LIKE "+ph+" THEN 1 ELSE 0 END",
+					"CASE WHEN lower(COALESCE(s.name, '')) LIKE "+ph+" THEN 2 ELSE 0 END",
+					"CASE WHEN lower(s.source_type::text) LIKE "+ph+" THEN 1 ELSE 0 END",
+				)
+				metadataLikeExprs = append(metadataLikeExprs,
+					"lower(rec.name) LIKE "+ph,
+					"lower(COALESCE(rec.description, '')) LIKE "+ph,
+					"lower(COALESCE(rec.external_ref, '')) LIKE "+ph,
+					"lower(COALESCE(rec.external_url, '')) LIKE "+ph,
+					"lower(COALESCE(rec.mime_type, '')) LIKE "+ph,
+					"lower(rec.format) LIKE "+ph,
+					"lower(COALESCE(s.name, '')) LIKE "+ph,
+					"lower(s.source_type::text) LIKE "+ph,
+				)
+			}
+
+			sb.WriteString(strings.Join(metadataRankExprs, " + "))
+			sb.WriteString(` AS metadata_score
+        FROM chunks c
+        JOIN records rec ON rec.id = c.record_id
+        LEFT JOIN sources s ON s.id = rec.source_id
+        WHERE c.domain_id = $1
+          AND rec.status = 'indexed'
+          AND (` + strings.Join(metadataLikeExprs, " OR ") + `)`)
+			sb.WriteString(recordIDFilter)
+			sb.WriteString(`
+        ORDER BY metadata_score DESC, rec.updated_at DESC, c.chunk_index ASC
+        LIMIT $3
+    ) t
+),
+rrf AS (
+    SELECT COALESCE(v.id, k.id, m.id) AS chunk_id,
+           COALESCE(1.0 / (60.0 + v.rank::float), 0.0)
+         + COALESCE(1.0 / (60.0 + k.rank::float), 0.0)
+         + COALESCE(3.0 / (20.0 + m.rank::float), 0.0) AS score
+    FROM vector_ranked v
+    FULL OUTER JOIN keyword_ranked k ON k.id = v.id
+    FULL OUTER JOIN metadata_ranked m ON m.id = COALESCE(v.id, k.id)
+)`)
+		}
 	}
 
 	topKPH := fmt.Sprintf("$%d", next)
 	args = append(args, topK)
 
 	sb.WriteString(`
-SELECT c.content, c.record_id, rec.name, COALESCE(rec.external_url, ''), c.chunk_index
+SELECT c.content, c.record_id, rec.name, COALESCE(rec.external_url, ''), c.chunk_index, rrf.score
 FROM rrf
 JOIN chunks c ON c.id = rrf.chunk_id
 JOIN records rec ON rec.id = c.record_id
@@ -254,9 +344,11 @@ LIMIT `)
 	var results []ChunkSearchResult
 	for rows.Next() {
 		var res ChunkSearchResult
-		if err := rows.Scan(&res.Content, &res.RecordID, &res.RecordName, &res.ExternalURL, &res.ChunkIndex); err != nil {
+		var score float64
+		if err := rows.Scan(&res.Content, &res.RecordID, &res.RecordName, &res.ExternalURL, &res.ChunkIndex, &score); err != nil {
 			return nil, fmt.Errorf("scan chunk: %w", err)
 		}
+		res.Score = &score
 		results = append(results, res)
 	}
 	return results, rows.Err()
@@ -287,4 +379,32 @@ func searchTerms(query string) []string {
 		}
 	}
 	return terms
+}
+
+func metadataSearchTerms(terms []string) []string {
+	seen := make(map[string]struct{}, len(terms)*2)
+	out := make([]string, 0, len(terms)*2)
+	for _, term := range terms {
+		term = strings.ToLower(strings.TrimSpace(term))
+		if len(term) < 3 {
+			continue
+		}
+		addSearchTerm(&out, seen, term)
+		if len(term) >= 5 {
+			addSearchTerm(&out, seen, strings.TrimRight(term, "aeiou"))
+			addSearchTerm(&out, seen, strings.TrimSuffix(term, "s"))
+		}
+	}
+	return out
+}
+
+func addSearchTerm(terms *[]string, seen map[string]struct{}, term string) {
+	if len(term) < 3 {
+		return
+	}
+	if _, ok := seen[term]; ok {
+		return
+	}
+	seen[term] = struct{}{}
+	*terms = append(*terms, term)
 }

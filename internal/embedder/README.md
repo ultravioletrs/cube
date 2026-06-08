@@ -22,9 +22,11 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_EMBEDDING_TEXT_BASE_URL` | Embedding API base URL | `http://ollama:11434` |
 | `EMBEDDER_EMBEDDING_TEXT_MODEL` | Embedding model for text profile | `nomic-embed-text` |
 | `EMBEDDER_EMBEDDING_*` | Profile and routing overrides (text/code/image/custom) | optional |
-| `EMBEDDER_CHUNK_SIZE` | Chunk size | `512` |
+| `EMBEDDER_CHUNK_SIZE` | Chunk size. Large text records automatically disable overlap to reduce embedding work without exceeding local model context limits. | `512` |
 | `EMBEDDER_CHUNK_OVERLAP` | Chunk overlap | `64` |
 | `EMBEDDER_INGEST_*` | Queue polling and concurrency tuning | optional |
+| `EMBEDDER_INGEST_RECORD_TIMEOUT` | Max wall-clock time for one record ingest | `2h` |
+| `EMBEDDER_INGEST_MAX_CHUNKS` | Optional max chunks one record may produce before failing fast (`0` disables) | `0` |
 | `EMBEDDER_OBJECT_STORAGE_PROVIDER` | Storage backend (`s3` or `local`) | `local` |
 | `EMBEDDER_S3_*` | S3/SeaweedFS credentials and endpoint | required for `s3` |
 | `EMBEDDER_UPLOAD_DIR` | Local upload path when provider is `local` | `/tmp/embedder/uploads` |
@@ -40,7 +42,12 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | `EMBEDDER_OCR_PDF_RENDER_BINARY` | PDF renderer binary for OCR fallback | `pdftoppm` |
 | `EMBEDDER_OCR_TIMEOUT` | Per OCR command timeout | `2m` |
 | `EMBEDDER_OCR_MIN_TEXT_CHARS` | Min extracted PDF chars before OCR fallback kicks in | `40` |
+| `EMBEDDER_OCR_IMAGE_OCR_ONLY_MIN_TEXT_CHARS` | Image OCR text size at which image ingest skips visual embedding as a likely scanned text document | `1200` |
 | `EMBEDDER_OCR_MAX_PDF_PAGES` | Max PDF pages rendered for OCR fallback | `20` |
+| `EMBEDDER_IMAGE_EMBEDDING_URL` | Optional visual image embedding sidecar URL | optional |
+| `EMBEDDER_IMAGE_EMBEDDING_MODEL` | Visual embedding model label sent to the sidecar | `openclip-vit-b-32` |
+| `EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS` | Expected visual embedding dimensions | `512` |
+| `EMBEDDER_IMAGE_EMBEDDING_TIMEOUT` | Image embedding request timeout | `2m` |
 | `EMBEDDER_GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID | optional |
 | `EMBEDDER_GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret | optional |
 

@@ -37,6 +37,12 @@ type SourceProvider interface {
 	PrunesStaleRecords() bool
 }
 
+// RawContentProvider is optionally implemented by providers that can return
+// original bytes for non-text processing such as visual image embeddings.
+type RawContentProvider interface {
+	DownloadRecordContent(ctx context.Context, rec domain.Record, src domain.Source) ([]byte, error)
+}
+
 // SourceProviderRegistry stores providers keyed by source type.
 type SourceProviderRegistry struct {
 	providers map[domain.SourceType]SourceProvider

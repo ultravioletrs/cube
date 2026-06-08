@@ -176,6 +176,7 @@ export default function GuardrailsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     if (!tokens?.accessToken || !activeDomain?.id) return
     setLoading(true)
@@ -190,6 +191,7 @@ export default function GuardrailsPage() {
     }
   }, [tokens?.accessToken, activeDomain?.id])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   return (

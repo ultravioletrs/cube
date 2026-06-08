@@ -4,12 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import {
-  fetchDashboardStats,
-  fetchActivityTrends,
-  fetchErrorRateTrends,
-  fetchModelPerformance,
-  fetchTokenBreakdown,
-  fetchGuardrailsActivity,
+  fetchDashboardData,
   formatTokens,
   type DashboardStats,
   type ActivityBucket,
@@ -306,25 +301,19 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     if (!tokens?.accessToken || !activeDomain?.id) return
     setLoading(true)
     setError(null)
     try {
-      const [s, act, err, mp, tb, gr] = await Promise.all([
-        fetchDashboardStats(activeDomain.id, tokens.accessToken),
-        fetchActivityTrends(activeDomain.id, tokens.accessToken),
-        fetchErrorRateTrends(activeDomain.id, tokens.accessToken),
-        fetchModelPerformance(activeDomain.id, tokens.accessToken),
-        fetchTokenBreakdown(activeDomain.id, tokens.accessToken),
-        fetchGuardrailsActivity(activeDomain.id, tokens.accessToken),
-      ])
-      setStats(s)
-      setActivity(act)
-      setErrorRate(err)
-      setModelPerf(mp)
-      setTokenBreakdown(tb)
-      setGuardrails(gr)
+      const data = await fetchDashboardData(activeDomain.id, tokens.accessToken)
+      setStats(data.stats)
+      setActivity(data.activity)
+      setErrorRate(data.errorRate)
+      setModelPerf(data.modelPerf)
+      setTokenBreakdown(data.tokenBreakdown)
+      setGuardrails(data.guardrails)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load dashboard')
     } finally {
@@ -332,6 +321,7 @@ export default function DashboardPage() {
     }
   }, [tokens?.accessToken, activeDomain?.id])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   return (

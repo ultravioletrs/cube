@@ -29,6 +29,7 @@ func (r *recordsRepo) GetByID(ctx context.Context, id, domainID string) (domain.
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -83,6 +84,7 @@ func (r *recordsRepo) List(
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -129,30 +131,33 @@ func scanRecord(row interface {
 },
 ) (domain.Record, error) {
 	var (
-		rec              domain.Record
-		sourceID         pgtype.Text
-		format           string
-		status           string
-		externalID       pgtype.Text
-		externalURL      pgtype.Text
-		externalRef      pgtype.Text
-		mimeType         pgtype.Text
-		description      pgtype.Text
-		chunkCount       pgtype.Int4
-		sizeBytes        pgtype.Int8
-		pageCount        pgtype.Int4
-		sourceVersion    pgtype.Text
-		sourceModifiedAt pgtype.Timestamptz
-		recError         pgtype.Text
-		linkID           pgtype.Text
-		linkName         pgtype.Text
-		linkType         pgtype.Text
-		linkStatus       pgtype.Text
+		rec                 domain.Record
+		sourceID            pgtype.Text
+		format              string
+		status              string
+		externalID          pgtype.Text
+		externalURL         pgtype.Text
+		externalRef         pgtype.Text
+		mimeType            pgtype.Text
+		description         pgtype.Text
+		chunkCount          pgtype.Int4
+		sizeBytes           pgtype.Int8
+		pageCount           pgtype.Int4
+		ingestTotalChunks   pgtype.Int4
+		ingestIndexedChunks pgtype.Int4
+		sourceVersion       pgtype.Text
+		sourceModifiedAt    pgtype.Timestamptz
+		recError            pgtype.Text
+		linkID              pgtype.Text
+		linkName            pgtype.Text
+		linkType            pgtype.Text
+		linkStatus          pgtype.Text
 	)
 	if err := row.Scan(
 		&rec.ID, &rec.DomainID, &rec.UserID, &sourceID, &rec.Name, &format, &status,
 		&externalID, &externalURL, &externalRef, &mimeType,
 		&description, &chunkCount, &sizeBytes, &pageCount,
+		&ingestTotalChunks, &ingestIndexedChunks,
 		&sourceVersion, &sourceModifiedAt, &recError,
 		&rec.CreatedAt, &rec.UpdatedAt,
 		&linkID, &linkName, &linkType, &linkStatus,
@@ -194,6 +199,14 @@ func scanRecord(row interface {
 		n := int(pageCount.Int32)
 		rec.PageCount = &n
 	}
+	if ingestTotalChunks.Valid {
+		n := int(ingestTotalChunks.Int32)
+		rec.IngestTotalChunks = &n
+	}
+	if ingestIndexedChunks.Valid {
+		n := int(ingestIndexedChunks.Int32)
+		rec.IngestIndexedChunks = &n
+	}
 	if sourceVersion.Valid {
 		rec.SourceVersion = sourceVersion.String
 	}
@@ -225,6 +238,7 @@ func (r *recordsRepo) Create(ctx context.Context, rec domain.Record) (domain.Rec
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
+		          ingest_total_chunks, ingest_indexed_chunks,
 		          source_version, source_modified_at, error,
 		          created_at, updated_at,
 		          NULL, NULL, NULL, NULL`
@@ -254,6 +268,7 @@ func (r *recordsRepo) ListQueued(ctx context.Context, limit int) ([]domain.Recor
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -283,14 +298,37 @@ func (r *recordsRepo) ListQueued(ctx context.Context, limit int) ([]domain.Recor
 func (r *recordsRepo) UpdateStatus(ctx context.Context, id string, s domain.RecordStatus, errMsg string) error {
 	if errMsg != "" {
 		_, err := r.pool.Exec(ctx,
-			`UPDATE records SET status=$1, error=$2, updated_at=now() WHERE id=$3`,
+			`UPDATE records
+			 SET status=$1, error=$2, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, updated_at=now()
+			 WHERE id=$3 AND status <> 'cancelled'`,
 			string(s), errMsg, id,
 		)
 		return err
 	}
+	if s == domain.RecordStatusCancelled || s == domain.RecordStatusQueued {
+		_, err := r.pool.Exec(ctx,
+			`UPDATE records
+			 SET status=$1, error=NULL, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, updated_at=now()
+			 WHERE id=$2`,
+			string(s), id,
+		)
+		return err
+	}
 	_, err := r.pool.Exec(ctx,
-		`UPDATE records SET status=$1, error=NULL, updated_at=now() WHERE id=$2`,
+		`UPDATE records
+		 SET status=$1, error=NULL, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, updated_at=now()
+		 WHERE id=$2 AND status <> 'cancelled'`,
 		string(s), id,
+	)
+	return err
+}
+
+func (r *recordsRepo) UpdateIngestProgress(ctx context.Context, id string, indexedChunks, totalChunks int) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE records
+		 SET status='processing', ingest_indexed_chunks=$1, ingest_total_chunks=$2, updated_at=now()
+		 WHERE id=$3`,
+		indexedChunks, totalChunks, id,
 	)
 	return err
 }
@@ -303,9 +341,17 @@ func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res doma
 
 	_, err := r.pool.Exec(ctx,
 		`UPDATE records
-		 SET status='indexed', chunk_count=$1, size_bytes=$2, page_count=$3, error=NULL, updated_at=now()
-		 WHERE id=$4`,
-		res.ChunkCount, res.SizeBytes, pageCount, id,
+		 SET status='indexed',
+		     chunk_count=$1,
+		     size_bytes=$2,
+		     page_count=$3,
+		     ingest_total_chunks=NULL,
+		     ingest_indexed_chunks=NULL,
+		     description=COALESCE(NULLIF($4, ''), description),
+		     error=NULL,
+		     updated_at=now()
+		 WHERE id=$5 AND status <> 'cancelled'`,
+		res.ChunkCount, res.SizeBytes, pageCount, res.Description, id,
 	)
 	return err
 }
@@ -321,6 +367,7 @@ func (r *recordsRepo) UpsertFromSource(ctx context.Context, rec domain.Record) (
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -378,6 +425,7 @@ func (r *recordsRepo) createInTx(ctx context.Context, tx pgx.Tx, rec domain.Reco
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
+		          ingest_total_chunks, ingest_indexed_chunks,
 		          source_version, source_modified_at, error,
 		          created_at, updated_at,
 		          NULL, NULL, NULL, NULL`
@@ -427,11 +475,14 @@ func (r *recordsRepo) updateFromSourceInTx(
 		    chunk_count = $9,
 		    size_bytes = $10,
 		    page_count = $11,
+		    ingest_total_chunks = NULL,
+		    ingest_indexed_chunks = NULL,
 		    updated_at = now()
 		WHERE id = $12
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
+		          ingest_total_chunks, ingest_indexed_chunks,
 		          source_version, source_modified_at, error,
 		          created_at, updated_at,
 		          NULL, NULL, NULL, NULL`

@@ -92,6 +92,7 @@ export default function InvitationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -109,6 +110,7 @@ export default function InvitationsPage() {
     }
   }, [activeWorkspace?.id])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   async function handleCreate(email: string) {

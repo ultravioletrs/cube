@@ -63,7 +63,7 @@ func TestSourceSyncService_NativeProvidersE2E(t *testing.T) {
 			providers := ingest.NewSourceProviderRegistry(provider)
 
 			svc := NewSourceSyncService(sources, records, providers)
-			res, err := svc.Sync(context.Background(), source.ID, source.UserID)
+			res, err := svc.Sync(context.Background(), source.ID, source.DomainID)
 			if err != nil {
 				t.Fatalf("sync failed: %v", err)
 			}
@@ -112,7 +112,7 @@ func TestSourceSyncService_AliasProviderE2E(t *testing.T) {
 	}
 
 	svc := NewSourceSyncService(sources, records, providers)
-	res, err := svc.Sync(context.Background(), source.ID, source.UserID)
+	res, err := svc.Sync(context.Background(), source.ID, source.DomainID)
 	if err != nil {
 		t.Fatalf("sync failed: %v", err)
 	}
@@ -160,15 +160,15 @@ func (s *sourceRepoSyncStub) Create(_ context.Context, src domain.Source) (domai
 	return src, nil
 }
 
-func (s *sourceRepoSyncStub) GetByID(_ context.Context, id, userID string) (domain.Source, error) {
-	if s.source.ID != id || s.source.UserID != userID {
+func (s *sourceRepoSyncStub) GetByID(_ context.Context, id, domainID string) (domain.Source, error) {
+	if s.source.ID != id || s.source.DomainID != domainID {
 		return domain.Source{}, domain.ErrNotFound
 	}
 	return s.source, nil
 }
 
-func (s *sourceRepoSyncStub) List(_ context.Context, userID string, _ domain.Page) (domain.SourcePage, error) {
-	if s.source.UserID != userID {
+func (s *sourceRepoSyncStub) List(_ context.Context, domainID string, _ domain.Page) (domain.SourcePage, error) {
+	if s.source.DomainID != domainID {
 		return domain.SourcePage{Sources: []domain.Source{}, Total: 0}, nil
 	}
 	return domain.SourcePage{Sources: []domain.Source{s.source}, Total: 1}, nil
@@ -195,8 +195,8 @@ func (s *sourceRepoSyncStub) UpdateSyncResult(
 	return s.source, nil
 }
 
-func (s *sourceRepoSyncStub) UpdateConfig(_ context.Context, id, userID string, config json.RawMessage) (domain.Source, error) {
-	if s.source.ID != id || s.source.UserID != userID {
+func (s *sourceRepoSyncStub) UpdateConfig(_ context.Context, id, domainID string, config json.RawMessage) (domain.Source, error) {
+	if s.source.ID != id || s.source.DomainID != domainID {
 		return domain.Source{}, domain.ErrNotFound
 	}
 	s.source.Config = config
@@ -242,6 +242,10 @@ func (r *recordRepoSyncStub) ListQueued(_ context.Context, _ int) ([]domain.Reco
 }
 
 func (r *recordRepoSyncStub) UpdateStatus(_ context.Context, _ string, _ domain.RecordStatus, _ string) error {
+	return nil
+}
+
+func (r *recordRepoSyncStub) UpdateIngestProgress(_ context.Context, _ string, _, _ int) error {
 	return nil
 }
 

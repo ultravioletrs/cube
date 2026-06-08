@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useOutletContext, useLocation } from 'react-router-dom'
-import type { AppContext, AppRecord, ChatMessage, Conversation, MsgSource } from '@/types'
+import type { AppContext, AppRecord, ChatDebug, ChatMessage, Conversation, MsgSource } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
-import { streamChat } from '@/lib/api'
+import { listOllamaModels, streamChat } from '@/lib/api'
 import type { Citation } from '@/lib/api'
-import { loadModelConfig, toBackendModelConfig } from '@/lib/modelConfig'
+import { LLM_MODEL_OPTIONS, loadExternalModelConfig, loadModelConfig, saveModelConfig, toBackendModelConfig } from '@/lib/modelConfig'
+import type { ModelConfig } from '@/lib/modelConfig'
 import { deleteConversation, getConversation, listRecordsBySource, syncSource } from '@/lib/embedder/service'
 
 interface ChatRouteState {
@@ -27,11 +28,51 @@ function formatInlineError(err: string): string {
 function citationToSource(c: Citation): MsgSource {
   return {
     id: `${c.record_id}-${c.chunk_index}`,
+    recordID: c.record_id,
     doc: c.record_name,
     page: c.chunk_index + 1,
     excerpt: c.excerpt,
     url: c.external_url,
   }
+}
+
+function citationCounts(citations: MsgSource[]) {
+  const records = new Set(citations.map(citation => citation.recordID || citation.doc))
+  return { records: records.size, chunks: citations.length }
+}
+
+function formatScore(score?: number) {
+  return typeof score === 'number' ? score.toFixed(4) : 'n/a'
+}
+
+type ModelStatus = 'checking' | 'connected' | 'configured' | 'model-unavailable' | 'provider-unavailable' | 'server-default'
+
+function initialModelStatus(config: ModelConfig): ModelStatus {
+  if (!toBackendModelConfig(config)) return 'server-default'
+  return config.provider === 'local' ? 'checking' : 'configured'
+}
+
+function modelStatusDetails(config: ModelConfig, status: ModelStatus) {
+  const selectedProvider = config.provider === 'local' ? 'Ollama' : config.provider === 'openai' ? 'OpenAI' : 'Anthropic'
+  const provider = status === 'server-default' ? 'Server default' : selectedProvider
+  const model = status === 'server-default' ? '' : config.model
+  const labels: Record<ModelStatus, string> = {
+    checking: 'Checking',
+    connected: 'Connected',
+    configured: 'Configured',
+    'model-unavailable': 'Model unavailable',
+    'provider-unavailable': 'Provider unavailable',
+    'server-default': 'In use',
+  }
+  const colors: Record<ModelStatus, string> = {
+    checking: 'var(--text-dim)',
+    connected: 'var(--accent)',
+    configured: 'var(--accent)',
+    'model-unavailable': '#ffb400',
+    'provider-unavailable': '#ff5050',
+    'server-default': '#ffb400',
+  }
+  return { provider, model, label: labels[status], color: colors[status] }
 }
 
 function renderMarkdown(text: string) {
@@ -54,6 +95,7 @@ function MessageBubble({ msg, onShowSources }: { msg: ChatMessage; onShowSources
       </div>
     )
   }
+  const counts = citationCounts(msg.sources ?? [])
   return (
     <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', alignItems: 'flex-start' }}>
       <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'rgba(0,212,180,0.15)', border: '1px solid rgba(0,212,180,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px' }}>
@@ -70,7 +112,7 @@ function MessageBubble({ msg, onShowSources }: { msg: ChatMessage; onShowSources
               onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(0,212,180,0.07)' }}
             >
               <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><rect x="1" y="1" width="9" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><path d="M4 5h5M4 8h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/></svg>
-              Context · {msg.sources.length}
+              Records · {counts.records} · Chunks · {counts.chunks}
             </button>
           </div>
         )}
@@ -198,6 +240,8 @@ function SourcesPanel({
   canCustomizeSources,
   onToggle,
   citations,
+  debug,
+  debugEnabled,
   selectedSourceID,
   isSyncingSelectedSource,
   onSyncSource,
@@ -208,11 +252,14 @@ function SourcesPanel({
   canCustomizeSources: boolean
   onToggle: (id: string) => void
   citations: MsgSource[]
+  debug?: ChatDebug | null
+  debugEnabled?: boolean
   selectedSourceID?: string
   isSyncingSelectedSource?: boolean
   onSyncSource?: () => void
   visibleSourceSyncNotice?: { kind: 'info' | 'error'; text: string } | null
 }) {
+  const citationSummary = citationCounts(citations)
   return (
     <div style={{ width: '260px', minWidth: '260px', height: '100%', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--sidebar-bg)', overflow: 'hidden' }}>
 
@@ -269,7 +316,7 @@ function SourcesPanel({
           <div style={{ height: '1px', background: 'var(--border)', flexShrink: 0 }} />
           <div style={{ flexShrink: 0, padding: '12px 14px 8px' }}>
             <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
-              CONTEXT · {citations.length}
+              RECORDS · {citationSummary.records} · CHUNKS · {citationSummary.chunks}
             </span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px 12px' }}>
@@ -296,6 +343,49 @@ function SourcesPanel({
           </div>
         </>
       )}
+
+      {debugEnabled && (
+        <>
+          <div style={{ height: '1px', background: 'var(--border)', flexShrink: 0 }} />
+          <div style={{ flexShrink: 0, padding: '12px 14px 8px' }}>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
+              DEBUG · RETRIEVAL
+            </span>
+          </div>
+          <div style={{ flex: citations.length > 0 ? '0 0 45%' : '1', overflowY: 'auto', padding: '0 8px 12px' }}>
+            {debug ? (
+              <>
+                <div style={{ marginBottom: '8px', background: 'rgba(0,212,180,0.04)', border: '1px solid rgba(0,212,180,0.15)', borderRadius: '8px', padding: '9px 10px' }}>
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', marginBottom: '5px', letterSpacing: '0.08em' }}>QUERY</div>
+                  <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.5 }}>{debug.query || 'empty'}</div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)' }}>
+                    <span>topK {debug.top_k}</span>
+                    <span>{debug.retrieval_enabled ? 'retrieval on' : `retrieval skipped${debug.skipped_reason ? `: ${debug.skipped_reason}` : ''}`}</span>
+                    {debug.record_ids && debug.record_ids.length > 0 && <span>scoped records {debug.record_ids.length}</span>}
+                  </div>
+                </div>
+                {debug.prompt_chunks.length === 0 ? (
+                  <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', padding: '8px 4px' }}>No chunks sent to the model.</div>
+                ) : debug.prompt_chunks.map(chunk => (
+                  <div key={`${chunk.record_id}-${chunk.chunk_index}-${chunk.rank}`} style={{ marginBottom: '8px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '5px' }}>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--accent)', flexShrink: 0 }}>#{chunk.rank}</span>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{chunk.record_name}</span>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', flexShrink: 0 }}>s {formatScore(chunk.score)}</span>
+                    </div>
+                    <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', marginBottom: '5px' }}>chunk {chunk.chunk_index}</div>
+                    <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', color: 'var(--text-muted)', lineHeight: 1.6, fontStyle: 'italic' }}>
+                      "{chunk.preview}"
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', padding: '8px 4px' }}>Ask a question to see retrieval details.</div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -306,6 +396,7 @@ export default function ChatPage() {
   const location = useLocation()
   const accessToken = tokens?.accessToken
   const domainID = activeDomain?.id ?? ''
+  const debugEnabled = new URLSearchParams(location.search).get('debug') === '1'
   const routeState = (location.state ?? null) as ChatRouteState | null
   const selectedRecord = routeState?.source
   const selectedSourceID = routeState?.sourceID
@@ -326,18 +417,64 @@ export default function ChatPage() {
   const [manualActiveSources, setManualActiveSources] = useState<string[] | null>(null)
   const [showPanel, setShowPanel] = useState(true)
   const [panelCitations, setPanelCitations] = useState<MsgSource[]>([])
+  const [panelDebug, setPanelDebug] = useState<ChatDebug | null>(null)
+  const [modelConfig, setModelConfig] = useState(loadModelConfig)
+  const [externalProviderConfig] = useState(loadExternalModelConfig)
+  const [modelStatus, setModelStatus] = useState<ModelStatus>(() => initialModelStatus(loadModelConfig()))
+  const [ollamaModels, setOllamaModels] = useState<string[]>([])
+  const [modelMenuOpen, setModelMenuOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const modelMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let active = true
+    listOllamaModels(accessToken ?? '', domainID)
+      .then(models => {
+        if (!active) return
+        setOllamaModels(models)
+        if (modelConfig.provider === 'local') {
+          setModelStatus(models.includes(modelConfig.model) ? 'connected' : 'model-unavailable')
+        }
+      })
+      .catch(() => {
+        if (!active) return
+        setOllamaModels([])
+        if (modelConfig.provider === 'local') setModelStatus('provider-unavailable')
+      })
+    return () => { active = false }
+  }, [accessToken, domainID, modelConfig])
+
+  useEffect(() => {
+    if (!modelMenuOpen) return
+    const closeMenu = (event: MouseEvent) => {
+      if (!modelMenuRef.current?.contains(event.target as Node)) setModelMenuOpen(false)
+    }
+    document.addEventListener('mousedown', closeMenu)
+    return () => document.removeEventListener('mousedown', closeMenu)
+  }, [modelMenuOpen])
 
   // Auto-update panel citations when the last assistant message gets sources.
   useEffect(() => {
     for (let i = chatMessages.length - 1; i >= 0; i--) {
       if (chatMessages[i].role === 'assistant' && (chatMessages[i].sources?.length ?? 0) > 0) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setPanelCitations(chatMessages[i].sources!)
         return
       }
     }
   }, [chatMessages])
+
+  useEffect(() => {
+    if (!debugEnabled) return
+    for (let i = chatMessages.length - 1; i >= 0; i--) {
+      if (chatMessages[i].role === 'assistant' && chatMessages[i].debug) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setPanelDebug(chatMessages[i].debug!)
+        return
+      }
+    }
+  }, [chatMessages, debugEnabled])
 
   const handleSelectConversation = useCallback(async (id: string) => {
     if (!accessToken || loadingConv) return
@@ -351,7 +488,7 @@ export default function ChatPage() {
     } finally {
       setLoadingConv(false)
     }
-  }, [accessToken, loadingConv, setChatMessages, setConversationId])
+  }, [accessToken, domainID, loadingConv, setChatMessages, setConversationId])
 
   const handleDeleteConversation = useCallback(async (id: string) => {
     if (!accessToken) return
@@ -364,7 +501,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error('failed to delete conversation:', err)
     }
-  }, [accessToken, conversationId, clearChatMessages, setConversations])
+  }, [accessToken, domainID, conversationId, clearChatMessages, setConversations])
 
   const scopedSourceState = selectedSourceID && sourceScopeState?.sourceID === selectedSourceID
     ? sourceScopeState
@@ -421,7 +558,7 @@ export default function ChatPage() {
     return () => {
       cancelled = true
     }
-  }, [selectedSourceID, accessToken])
+  }, [selectedSourceID, accessToken, domainID])
 
   async function handleSyncSelectedSource() {
     if (!selectedSourceID || !accessToken || isSyncingSelectedSource) return
@@ -485,6 +622,7 @@ export default function ChatPage() {
     setInput('')
     setLoading(true)
     setRetrievalWarning(null)
+    if (debugEnabled) setPanelDebug(null)
 
     const history: ChatMessage[] = [...chatMessages, { id: Date.now(), role: 'user', content: userContent }]
     setChatMessages(history)
@@ -522,6 +660,12 @@ export default function ChatPage() {
           setChatMessages(prev => prev.map(m =>
             m.id === assistantId ? { ...m, sources } : m
           ))
+        } else if (event.type === 'debug' && event.debug) {
+          setPanelDebug(event.debug)
+          setShowPanel(true)
+          setChatMessages(prev => prev.map(m =>
+            m.id === assistantId ? { ...m, debug: event.debug } : m
+          ))
         } else if (event.type === 'done') {
           setLoading(false)
         } else if (event.type === 'error') {
@@ -535,7 +679,8 @@ export default function ChatPage() {
       },
       controller.signal,
       conversationId,
-      toBackendModelConfig(loadModelConfig()),
+      toBackendModelConfig(modelConfig),
+      debugEnabled,
     ).catch((err) => {
       if (err.name !== 'AbortError') {
         setChatMessages(prev => prev.map(m =>
@@ -546,9 +691,24 @@ export default function ChatPage() {
       }
       setLoading(false)
     })
-  }, [input, loading, chatMessages, setChatMessages, accessToken, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, selectedSourceHasNoIndexedRecords, records, conversationId, setConversationId, setConversations])
+  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, selectedSourceHasNoIndexedRecords, conversationId, setConversationId, setConversations, modelConfig, debugEnabled])
 
   const indexedSources = records.filter(s => s.status === 'indexed')
+  const modelStatusInfo = modelStatusDetails(modelConfig, modelStatus)
+  const configuredExternalProvider = externalProviderConfig?.provider ?? null
+
+  function handleModelSelect(provider: ModelConfig['provider'], model: string) {
+    const next = {
+      ...modelConfig,
+      provider,
+      model,
+      apiKey: provider === 'local' ? modelConfig.apiKey : externalProviderConfig?.apiKey ?? modelConfig.apiKey,
+    }
+    saveModelConfig(next)
+    setModelConfig(next)
+    setModelStatus(initialModelStatus(next))
+    setModelMenuOpen(false)
+  }
 
   function handleToggleSource(id: string) {
     setManualActiveSources(prev => {
@@ -585,6 +745,61 @@ export default function ChatPage() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <div ref={modelMenuRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setModelMenuOpen(open => !open)}
+                title="Select chat model"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 9px', background: modelMenuOpen ? 'rgba(0,212,180,0.07)' : 'transparent', border: `1px solid ${modelMenuOpen ? 'rgba(0,212,180,0.3)' : 'var(--border)'}`, borderRadius: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', maxWidth: '250px', cursor: 'pointer' }}
+              >
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: modelStatusInfo.color, flexShrink: 0 }} />
+                <span style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {modelStatusInfo.provider}{modelStatusInfo.model ? ` · ${modelStatusInfo.model}` : ''}
+                </span>
+                <span style={{ color: modelStatusInfo.color, flexShrink: 0 }}>{modelStatusInfo.label}</span>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ flexShrink: 0 }}>
+                  <path d="M2 3.5l3 3 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {modelMenuOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: '260px', maxHeight: '340px', overflowY: 'auto', padding: '5px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: '0 14px 36px rgba(0,0,0,0.45)', zIndex: 40 }}>
+                  <div style={{ padding: '5px 7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>OLLAMA</div>
+                  {ollamaModels.length > 0 ? ollamaModels.map(model => (
+                    <button
+                      key={model}
+                      onClick={() => handleModelSelect('local', model)}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 8px', background: modelConfig.provider === 'local' && modelConfig.model === model ? 'rgba(0,212,180,0.1)' : 'transparent', border: 'none', borderRadius: '5px', color: modelConfig.provider === 'local' && modelConfig.model === model ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer', textAlign: 'left' }}
+                    >
+                      <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: modelConfig.provider === 'local' && modelConfig.model === model ? 'var(--accent)' : 'var(--text-dim)', flexShrink: 0 }} />
+                      {model}
+                    </button>
+                  )) : (
+                    <div style={{ padding: '7px 8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)' }}>No local models available</div>
+                  )}
+                  {configuredExternalProvider && (
+                    <>
+                      <div style={{ height: '1px', background: 'var(--border)', margin: '5px 2px' }} />
+                      <div style={{ padding: '5px 7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
+                        {configuredExternalProvider.toUpperCase()}
+                      </div>
+                      {LLM_MODEL_OPTIONS[configuredExternalProvider].map(option => (
+                        <button
+                          key={option.value}
+                          onClick={() => handleModelSelect(configuredExternalProvider, option.value)}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '7px', padding: '7px 8px', background: modelConfig.model === option.value ? 'rgba(0,212,180,0.1)' : 'transparent', border: 'none', borderRadius: '5px', color: modelConfig.model === option.value ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', cursor: 'pointer', textAlign: 'left' }}
+                        >
+                          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: modelConfig.model === option.value ? 'var(--accent)' : 'var(--text-dim)', flexShrink: 0 }} />
+                          {option.label}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  <div style={{ height: '1px', background: 'var(--border)', margin: '5px 2px' }} />
+                  <div style={{ padding: '6px 7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '8px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                    Configure providers and API keys in Settings.
+                  </div>
+                </div>
+              )}
+            </div>
             {chatMessages.length > 0 && (
               <button
                 onClick={clearChatMessages}
@@ -720,6 +935,8 @@ export default function ChatPage() {
           canCustomizeSources={canCustomizeSources}
           onToggle={handleToggleSource}
           citations={panelCitations}
+          debug={panelDebug}
+          debugEnabled={debugEnabled}
           selectedSourceID={selectedSourceID}
           isSyncingSelectedSource={isSyncingSelectedSource}
           onSyncSource={() => { void handleSyncSelectedSource() }}

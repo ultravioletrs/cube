@@ -2,8 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 const STORAGE_KEY = 'cube_model_config'
+const EXTERNAL_STORAGE_KEY = 'cube_external_model_config'
 
 export type LLMProvider = 'openai' | 'anthropic' | 'local'
+
+export const LLM_MODEL_OPTIONS: Record<Exclude<LLMProvider, 'local'>, { value: string; label: string }[]> = {
+  openai: [{ value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }, { value: 'o3', label: 'o3 (reasoning)' }],
+  anthropic: [{ value: 'claude-opus-4-5', label: 'Claude Opus 4.5' }, { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' }, { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }],
+}
 
 export interface ModelConfig {
   // UI-level provider selection
@@ -16,9 +22,11 @@ export interface ModelConfig {
   systemPrompt: string
 }
 
+export type ExternalModelConfig = ModelConfig & { provider: Exclude<LLMProvider, 'local'> }
+
 export const DEFAULT_MODEL_CONFIG: ModelConfig = {
   provider: 'local',
-  model: '',
+  model: 'llama3.2:3b',
   apiKey: '',
   temperature: 0.2,
   maxTokens: 1024,
@@ -39,6 +47,21 @@ export function loadModelConfig(): ModelConfig {
 
 export function saveModelConfig(cfg: ModelConfig): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg))
+  if (cfg.provider !== 'local' && cfg.apiKey.trim()) {
+    localStorage.setItem(EXTERNAL_STORAGE_KEY, JSON.stringify(cfg))
+  }
+}
+
+export function loadExternalModelConfig(): ExternalModelConfig | null {
+  try {
+    const raw = localStorage.getItem(EXTERNAL_STORAGE_KEY)
+    if (!raw) return null
+    const config = JSON.parse(raw) as Partial<ModelConfig>
+    if ((config.provider !== 'openai' && config.provider !== 'anthropic') || !config.apiKey?.trim()) return null
+    return { ...DEFAULT_MODEL_CONFIG, ...config, provider: config.provider }
+  } catch {
+    return null
+  }
 }
 
 // Maps the UI provider to the backend provider string and base URL.
@@ -52,6 +75,7 @@ export function toBackendModelConfig(cfg: ModelConfig): {
   max_tokens: number
 } | null {
   if (!cfg.model) return null
+  if (cfg.provider !== 'local' && !cfg.apiKey.trim()) return null
   const providerMap: Record<LLMProvider, string> = {
     openai: 'openai',
     anthropic: 'openai', // Anthropic is OpenAI-compatible

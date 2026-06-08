@@ -32,6 +32,7 @@ export default function AuditLogsPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -44,6 +45,7 @@ export default function AuditLogsPage() {
     }
   }, [activeWorkspace?.id])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   return (

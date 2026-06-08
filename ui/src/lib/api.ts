@@ -1,6 +1,6 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-import type { AppRecord } from '@/types'
+import type { AppRecord, ChatDebug } from '@/types'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -15,12 +15,13 @@ export interface Citation {
   excerpt: string
 }
 
-export type ChatEventType = 'token' | 'citations' | 'error' | 'done' | 'conversation' | 'warning'
+export type ChatEventType = 'token' | 'citations' | 'debug' | 'error' | 'done' | 'conversation' | 'warning'
 
 export interface ChatEvent {
   type: ChatEventType
   content?: string
   citations?: Citation[]
+  debug?: ChatDebug
   error?: string
   conversation_id?: string
 }
@@ -68,6 +69,7 @@ export function streamChat(
   signal?: AbortSignal,
   conversationId?: string | null,
   modelConfig?: BackendModelConfig | null,
+  debug?: boolean,
 ): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -82,6 +84,7 @@ export function streamChat(
       record_ids: recordIDs,
       conversation_id: conversationId ?? undefined,
       model: modelConfig ?? undefined,
+      debug: debug || undefined,
     }),
     signal,
   }).then(async (res) => {
@@ -144,8 +147,11 @@ function toAppRecord(r: Record<string, unknown>): AppRecord {
 }
 
 function mapStatus(s: string): AppRecord['status'] {
+  if (s === 'queued') return 'queued'
+  if (s === 'processing') return 'processing'
   if (s === 'indexed') return 'indexed'
-  if (s === 'error') return 'error'
+  if (s === 'failed') return 'failed'
+  if (s === 'cancelled') return 'cancelled'
   return 'processing'
 }
 
@@ -164,6 +170,27 @@ export async function listOllamaModels(token: string, domainID: string): Promise
   if (!res.ok) throw new Error(`listOllamaModels: ${res.status}`)
   const data = await res.json() as { models: string[] }
   return data.models ?? []
+}
+
+export interface ModelConnectionResult {
+  connected: boolean
+  message: string
+}
+
+export async function testModelConnection(
+  token: string,
+  config: BackendModelConfig,
+): Promise<ModelConnectionResult> {
+  const res = await fetch('/api/v1/models/test-connection', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(config),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null
+    throw new Error(body?.error || `model connection test: ${res.status}`)
+  }
+  return res.json() as Promise<ModelConnectionResult>
 }
 
 export interface GuardrailsStatus {

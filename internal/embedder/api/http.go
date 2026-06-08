@@ -51,6 +51,7 @@ func NewRouter(
 		transport.MountChat(r, chatSvc, conversationsRepo)
 		transport.MountConversations(r, conversationsRepo)
 		transport.MountGuardrails(r, guardrailsCtrl)
+		transport.MountModelConnection(r, ollamaBaseURL)
 	})
 
 	return r

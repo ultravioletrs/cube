@@ -22,6 +22,7 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/embedding"
+	"github.com/ultravioletrs/cube/internal/embedder/imageembedding"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/google"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
@@ -49,6 +50,7 @@ type config struct {
 	rcloneTimeout           time.Duration
 	rclonePreflight         bool
 	extractionConfig        ingest.ExtractionConfig
+	imageEmbeddingConfig    imageEmbeddingConfig
 	embeddingConfig         embedding.Config
 	llmConfig               llm.Config
 	ollamaBaseURL           string
@@ -63,6 +65,15 @@ type config struct {
 	ingestMaxConcurrency    int
 	ingestPollInterval      time.Duration
 	ingestEmbedBatchSize    int
+	ingestRecordTimeout     time.Duration
+	ingestMaxChunks         int
+}
+
+type imageEmbeddingConfig struct {
+	URL        string
+	Model      string
+	Dimensions int
+	Timeout    time.Duration
 }
 
 func loadConfig() config {
@@ -110,16 +121,23 @@ func loadConfig() config {
 		rclonePreflight:         envBool("EMBEDDER_RCLONE_PREFLIGHT", true),
 		extractionConfig: ingest.ExtractionConfig{
 			OCR: ingest.OCRConfig{
-				Enabled:            envBool("EMBEDDER_OCR_ENABLED", false),
-				ImageEnabled:       envBool("EMBEDDER_OCR_IMAGE_ENABLED", true),
-				PDFFallbackEnabled: envBool("EMBEDDER_OCR_PDF_FALLBACK_ENABLED", true),
-				Language:           env("EMBEDDER_OCR_LANG", "eng"),
-				Binary:             env("EMBEDDER_OCR_BINARY", "tesseract"),
-				PDFRenderBinary:    env("EMBEDDER_OCR_PDF_RENDER_BINARY", "pdftoppm"),
-				Timeout:            envDuration("EMBEDDER_OCR_TIMEOUT", 2*time.Minute),
-				MinTextChars:       envInt("EMBEDDER_OCR_MIN_TEXT_CHARS", 40),
-				MaxPDFPages:        envInt("EMBEDDER_OCR_MAX_PDF_PAGES", 20),
+				Enabled:                  envBool("EMBEDDER_OCR_ENABLED", false),
+				ImageEnabled:             envBool("EMBEDDER_OCR_IMAGE_ENABLED", true),
+				PDFFallbackEnabled:       envBool("EMBEDDER_OCR_PDF_FALLBACK_ENABLED", true),
+				Language:                 env("EMBEDDER_OCR_LANG", "eng"),
+				Binary:                   env("EMBEDDER_OCR_BINARY", "tesseract"),
+				PDFRenderBinary:          env("EMBEDDER_OCR_PDF_RENDER_BINARY", "pdftoppm"),
+				Timeout:                  envDuration("EMBEDDER_OCR_TIMEOUT", 2*time.Minute),
+				MinTextChars:             envInt("EMBEDDER_OCR_MIN_TEXT_CHARS", 40),
+				ImageOCROnlyMinTextChars: envInt("EMBEDDER_OCR_IMAGE_OCR_ONLY_MIN_TEXT_CHARS", 1200),
+				MaxPDFPages:              envInt("EMBEDDER_OCR_MAX_PDF_PAGES", 20),
 			},
+		},
+		imageEmbeddingConfig: imageEmbeddingConfig{
+			URL:        env("EMBEDDER_IMAGE_EMBEDDING_URL", ""),
+			Model:      env("EMBEDDER_IMAGE_EMBEDDING_MODEL", "openclip-vit-b-32"),
+			Dimensions: envInt("EMBEDDER_IMAGE_EMBEDDING_DIMENSIONS", 512),
+			Timeout:    envDuration("EMBEDDER_IMAGE_EMBEDDING_TIMEOUT", 2*time.Minute),
 		},
 		embeddingConfig: embeddingConfig,
 		storageConfig: objstore.Config{
@@ -151,6 +169,8 @@ func loadConfig() config {
 		ingestMaxConcurrency: envInt("EMBEDDER_INGEST_MAX_CONCURRENCY", 4),
 		ingestPollInterval:   envDuration("EMBEDDER_INGEST_POLL_INTERVAL", 3*time.Second),
 		ingestEmbedBatchSize: envInt("EMBEDDER_INGEST_EMBED_BATCH_SIZE", 16),
+		ingestRecordTimeout:  envDuration("EMBEDDER_INGEST_RECORD_TIMEOUT", 2*time.Hour),
+		ingestMaxChunks:      envInt("EMBEDDER_INGEST_MAX_CHUNKS", 0),
 	}
 }
 
@@ -227,6 +247,7 @@ func main() {
 	sourcesRepo := postgres.NewSourcesRepository(pool)
 	recordsRepo := postgres.NewRecordsRepository(pool)
 	chunksRepo := postgres.NewChunksRepository(pool)
+	imageEmbeddingsRepo := postgres.NewImageEmbeddingsRepository(pool)
 	conversationsRepo := postgres.NewConversationsRepository(pool)
 	rcloneClient := ingest.NewCommandRcloneClient(cfg.rcloneBinary, cfg.rcloneConfigDir, cfg.rcloneTimeout)
 	sourceProviders := ingest.NewSourceProviderRegistry(
@@ -267,9 +288,30 @@ func main() {
 	worker.SetMaxConcurrent(cfg.ingestMaxConcurrency)
 	worker.SetPollInterval(cfg.ingestPollInterval)
 	worker.SetEmbedBatchSize(cfg.ingestEmbedBatchSize)
+	worker.SetRecordTimeout(cfg.ingestRecordTimeout)
+	worker.SetMaxChunks(cfg.ingestMaxChunks)
+	var imageEmbeddingClient *imageembedding.Client
+	if strings.TrimSpace(cfg.imageEmbeddingConfig.URL) != "" {
+		imageEmbeddingClient = imageembedding.New(
+			cfg.imageEmbeddingConfig.URL,
+			cfg.imageEmbeddingConfig.Model,
+			cfg.imageEmbeddingConfig.Dimensions,
+			cfg.imageEmbeddingConfig.Timeout,
+		)
+		worker.SetImageEmbedding(
+			imageEmbeddingsRepo,
+			imageEmbeddingClient,
+		)
+		slog.Info(
+			"image embeddings enabled",
+			"url", cfg.imageEmbeddingConfig.URL,
+			"model", cfg.imageEmbeddingConfig.Model,
+			"dimensions", cfg.imageEmbeddingConfig.Dimensions,
+		)
+	}
 	go worker.Run(ctx)
 
-	retrieveSvc := service.NewVectorRetrieveService(chunksRepo, embeddingRegistry)
+	retrieveSvc := service.NewMultimodalRetrieveService(chunksRepo, imageEmbeddingsRepo, embeddingRegistry, imageEmbeddingClient)
 
 	// ── LLM client & chat service ─────────────────────────────────────────────
 

@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -57,7 +59,12 @@ func (c *Client) Embed(ctx context.Context, texts []string) ([][]float32, error)
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ollama embed status %d", resp.StatusCode)
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		detail := strings.TrimSpace(string(msg))
+		if detail == "" {
+			return nil, fmt.Errorf("ollama embed status %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("ollama embed status %d: %s", resp.StatusCode, detail)
 	}
 
 	var res response

@@ -86,6 +86,14 @@ func (p *sourceProvider) DownloadRecord(
 	return ingest.DownloadFromRcloneSource(ctx, rec, src)
 }
 
+func (p *sourceProvider) DownloadRecordContent(
+	ctx context.Context,
+	rec domain.Record,
+	src domain.Source,
+) ([]byte, error) {
+	return ingest.DownloadRawFromRcloneSource(ctx, rec, src)
+}
+
 func filterRcloneFilesBySelection(files []ingest.RcloneFile, selectedPaths []string) []ingest.RcloneFile {
 	if len(selectedPaths) == 0 {
 		return files

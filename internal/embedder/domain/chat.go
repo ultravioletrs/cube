@@ -7,7 +7,7 @@ import "context"
 
 // ChatMessage is a single turn in a conversation.
 type ChatMessage struct {
-	Role    string `json:"role"`    // "user" | "assistant"
+	Role    string `json:"role"` // "user" | "assistant"
 	Content string `json:"content"`
 }
 
@@ -26,6 +26,7 @@ type ChatEventType string
 const (
 	ChatEventToken        ChatEventType = "token"
 	ChatEventCitations    ChatEventType = "citations"
+	ChatEventDebug        ChatEventType = "debug"
 	ChatEventError        ChatEventType = "error"
 	ChatEventDone         ChatEventType = "done"
 	ChatEventConversation ChatEventType = "conversation"
@@ -39,8 +40,32 @@ type ChatEvent struct {
 	Type           ChatEventType `json:"type"`
 	Content        string        `json:"content,omitempty"`
 	Citations      []Citation    `json:"citations,omitempty"`
+	Debug          *ChatDebug    `json:"debug,omitempty"`
 	Error          string        `json:"error,omitempty"`
 	ConversationID string        `json:"conversation_id,omitempty"`
+}
+
+// ChatDebug describes the retrieval context used to build the prompt.
+// It is emitted as an optional streaming event and should only be shown in
+// developer/admin UI surfaces.
+type ChatDebug struct {
+	Query            string           `json:"query"`
+	TopK             int              `json:"top_k"`
+	RetrievalEnabled bool             `json:"retrieval_enabled"`
+	SkippedReason    string           `json:"skipped_reason,omitempty"`
+	RecordIDs        []string         `json:"record_ids,omitempty"`
+	PromptChunks     []ChatDebugChunk `json:"prompt_chunks"`
+}
+
+// ChatDebugChunk is one retrieved chunk that was sent to the model.
+type ChatDebugChunk struct {
+	Rank        int      `json:"rank"`
+	RecordID    string   `json:"record_id"`
+	RecordName  string   `json:"record_name"`
+	ExternalURL string   `json:"external_url,omitempty"`
+	ChunkIndex  int      `json:"chunk_index"`
+	Score       *float64 `json:"score,omitempty"`
+	Preview     string   `json:"preview"`
 }
 
 // ModelConfig carries per-request LLM overrides sent by the client.
@@ -69,5 +94,5 @@ type ChatService interface {
 	// streams events to the returned channel.  The channel is closed when the
 	// stream ends (either successfully or after an error event).
 	// modelCfg is optional; nil means use the server-configured default.
-	Chat(ctx context.Context, domainID string, messages []ChatMessage, recordIDs []string, modelCfg *ModelConfig) (<-chan ChatEvent, error)
+	Chat(ctx context.Context, domainID string, messages []ChatMessage, recordIDs []string, modelCfg *ModelConfig, debug bool) (<-chan ChatEvent, error)
 }
