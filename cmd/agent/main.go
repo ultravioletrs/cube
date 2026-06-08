@@ -7,13 +7,13 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
+	"strings"
+	"time"
 
-	"github.com/absmach/certs/sdk"
-	mglog "github.com/absmach/supermq/logger"
-	smqserver "github.com/absmach/supermq/pkg/server"
-	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 	"github.com/ultravioletrs/cocos/pkg/atls"
 	"github.com/ultravioletrs/cocos/pkg/attestation"
 	"github.com/ultravioletrs/cocos/pkg/attestation/azure"
@@ -23,6 +23,8 @@ import (
 	"github.com/ultravioletrs/cocos/pkg/server/http"
 	"github.com/ultravioletrs/cube/agent"
 	"github.com/ultravioletrs/cube/agent/api"
+	"github.com/ultravioletrs/cube/agent/atomcerts"
+	"github.com/ultravioletrs/cube/internal/atom"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -33,17 +35,21 @@ const (
 )
 
 type Config struct {
-	LogLevel      string `env:"UV_CUBE_AGENT_LOG_LEVEL"   envDefault:"info"`
-	InstanceID    string `env:"UV_CUBE_AGENT_INSTANCE_ID" envDefault:""`
-	AgentMaaURL   string `env:"AGENT_MAA_URL"             envDefault:"https://sharedeus2.eus2.attest.azure.net"`
-	AgentOSBuild  string `env:"AGENT_OS_BUILD"            envDefault:"UVC"`
-	AgentOSDistro string `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
-	AgentOSType   string `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
-	Vmpl          uint   `env:"AGENT_VMPL"                envDefault:"2"`
-	CAUrl         string `env:"UV_CUBE_AGENT_CA_URL"      envDefault:""`
-	TargetURL     string `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
-	CertsToken    string `env:"UV_CUBE_AGENT_CERTS_TOKEN" envDefault:""`
-	CVMId         string `env:"UV_CUBE_AGENT_CVM_ID"      envDefault:""`
+	LogLevel       string        `env:"UV_CUBE_AGENT_LOG_LEVEL"   envDefault:"info"`
+	InstanceID     string        `env:"UV_CUBE_AGENT_INSTANCE_ID" envDefault:""`
+	AgentMaaURL    string        `env:"AGENT_MAA_URL"             envDefault:"https://sharedeus2.eus2.attest.azure.net"`
+	AgentOSBuild   string        `env:"AGENT_OS_BUILD"            envDefault:"UVC"`
+	AgentOSDistro  string        `env:"AGENT_OS_DISTRO"           envDefault:"UVC"`
+	AgentOSType    string        `env:"AGENT_OS_TYPE"             envDefault:"UVC"`
+	Vmpl           uint          `env:"AGENT_VMPL"                envDefault:"2"`
+	CAUrl          string        `env:"UV_CUBE_AGENT_CA_URL"      envDefault:""`
+	TargetURL      string        `env:"UV_CUBE_AGENT_TARGET_URL"  envDefault:"http://localhost:11434"`
+	CertsToken     string        `env:"UV_CUBE_AGENT_CERTS_TOKEN" envDefault:""`
+	CVMId          string        `env:"UV_CUBE_AGENT_CVM_ID"      envDefault:""`
+	EntityID       string        `env:"UV_CUBE_AGENT_ENTITY_ID"   envDefault:""`
+	AtomGRPCURL    string        `env:"ATOM_GRPC_URL"             envDefault:"atom:8081"`
+	AtomGraphQLURL string        `env:"ATOM_GRAPHQL_URL"         envDefault:"http://atom:8080/graphql"`
+	AtomTimeout    time.Duration `env:"ATOM_TIMEOUT"       envDefault:"15s"`
 }
 
 func main() {
@@ -52,22 +58,10 @@ func main() {
 		log.Fatalf("failed to load %s configuration : %s", svcName, err)
 	}
 
-	logger, err := mglog.New(os.Stdout, cfg.LogLevel)
-	if err != nil {
-		log.Fatalf("failed to init logger: %s", err.Error())
-	}
-
-	var exitCode int
-	defer mglog.ExitWithError(&exitCode)
+	logger := newLogger(cfg.LogLevel)
 
 	if cfg.InstanceID == "" {
-		if cfg.InstanceID, err = uuid.New().ID(); err != nil {
-			logger.Error(fmt.Sprintf("failed to generate instanceID: %s", err))
-
-			exitCode = 1
-
-			return
-		}
+		cfg.InstanceID = uuid.NewString()
 	}
 
 	ctx := context.Background()
@@ -81,9 +75,7 @@ func main() {
 	}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
 		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
-
-		exitCode = 1
-
+		os.Exit(1)
 		return
 	}
 
@@ -114,9 +106,7 @@ func main() {
 		provider = &attestation.EmptyProvider{}
 	case attestation.VTPM:
 		logger.Info("vTPM attestation is not supported")
-
-		exitCode = 1
-
+		os.Exit(1)
 		return
 	}
 
@@ -127,9 +117,7 @@ func main() {
 	svc, err := agent.New(&config, provider, ccPlatform)
 	if err != nil {
 		logger.Error(fmt.Sprintf("failed to create agent service: %s", err))
-
-		exitCode = 1
-
+		os.Exit(1)
 		return
 	}
 
@@ -139,21 +127,28 @@ func main() {
 	handler := api.MakeHandler(svc, cfg.InstanceID)
 
 	var certProvider atls.CertificateProvider
+	var atomClient *atom.Client
 
 	if ccPlatform != attestation.NoCC {
-		var certsSDK sdk.SDK
-		if cfg.CAUrl != "" {
-			certsSDK = sdk.NewSDK(sdk.Config{
-				CertsURL: cfg.CAUrl,
-			})
-		}
+		entityID := firstNonEmpty(cfg.EntityID, cfg.CVMId)
+		if cfg.CertsToken != "" && entityID != "" {
+			atomClient, err = atom.NewClient(cfg.AtomGRPCURL, cfg.AtomGraphQLURL, cfg.AtomTimeout)
+			if err != nil {
+				logger.Error(fmt.Sprintf("failed to create atom client: %s", err))
+				os.Exit(1)
+				return
+			}
+			defer atomClient.Close()
 
-		certProvider, err = atls.NewProvider(provider, ccPlatform, cfg.CertsToken, cfg.CVMId, certsSDK)
+			certProvider, err = atomcerts.NewProvider(
+				provider, ccPlatform, atomClient, cfg.CertsToken, entityID, 365*24*time.Hour,
+			)
+		} else {
+			certProvider, err = atls.NewProvider(provider, ccPlatform, "", "", nil)
+		}
 		if err != nil {
 			logger.Error(fmt.Sprintf("failed to create certificate provider: %s", err))
-
-			exitCode = 1
-
+			os.Exit(1)
 			return
 		}
 	}
@@ -167,10 +162,28 @@ func main() {
 	})
 
 	g.Go(func() error {
-		return smqserver.StopSignalHandler(ctx, cancel, logger, svcName, httpSvr)
+		return server.StopHandler(ctx, cancel, logger, svcName, httpSvr)
 	})
 
 	if err := g.Wait(); err != nil {
 		logger.Error(fmt.Sprintf("Agent service terminated: %s", err))
 	}
+}
+
+func newLogger(level string) *slog.Logger {
+	var slogLevel slog.Level
+	if err := slogLevel.UnmarshalText([]byte(strings.ToLower(level))); err != nil {
+		slogLevel = slog.LevelInfo
+	}
+
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slogLevel}))
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

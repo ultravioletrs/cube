@@ -5,6 +5,7 @@
 -- from which documents are ingested into the vector store.
 CREATE TABLE IF NOT EXISTS sources (
     id                 UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    domain_id          TEXT        NOT NULL,
     user_id            TEXT        NOT NULL,
     source_type        TEXT        NOT NULL,
     name               TEXT        NOT NULL,
@@ -19,6 +20,8 @@ CREATE TABLE IF NOT EXISTS sources (
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE sources ADD COLUMN IF NOT EXISTS domain_id TEXT;
+CREATE INDEX IF NOT EXISTS sources_domain_id_idx ON sources (domain_id);
 CREATE INDEX IF NOT EXISTS sources_user_id_idx ON sources (user_id);
 
 -- Records represent individual indexed items linked to their source.
@@ -26,6 +29,7 @@ CREATE INDEX IF NOT EXISTS sources_user_id_idx ON sources (user_id);
 -- chain back to the original document in the source system.
 CREATE TABLE IF NOT EXISTS records (
     id                 UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    domain_id          TEXT        NOT NULL,
     user_id            TEXT        NOT NULL,
     source_id          UUID        NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     name               TEXT        NOT NULL,
@@ -47,10 +51,12 @@ CREATE TABLE IF NOT EXISTS records (
     error              TEXT,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- A given external item is indexed only once per user per source.
-    UNIQUE (user_id, source_id, external_id)
+    -- A given external item is indexed only once per workspace per source.
+    UNIQUE (domain_id, source_id, external_id)
 );
 
+ALTER TABLE records ADD COLUMN IF NOT EXISTS domain_id TEXT;
+CREATE INDEX IF NOT EXISTS records_domain_id_idx  ON records (domain_id);
 CREATE INDEX IF NOT EXISTS records_user_id_idx   ON records (user_id);
 CREATE INDEX IF NOT EXISTS records_source_id_idx ON records (source_id);
 
@@ -58,6 +64,7 @@ CREATE INDEX IF NOT EXISTS records_source_id_idx ON records (source_id);
 -- Final schema reflects all previous chunk table alters.
 CREATE TABLE IF NOT EXISTS chunks (
     id          UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    domain_id   TEXT        NOT NULL,
     user_id     TEXT        NOT NULL,
     document_id UUID,
     record_id   UUID        REFERENCES records(id) ON DELETE CASCADE,
@@ -68,5 +75,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE chunks ADD COLUMN IF NOT EXISTS domain_id TEXT;
+CREATE INDEX IF NOT EXISTS chunks_domain_id_idx  ON chunks (domain_id);
 CREATE INDEX IF NOT EXISTS chunks_user_id_idx   ON chunks (user_id);
 CREATE INDEX IF NOT EXISTS chunks_record_id_idx ON chunks (record_id) WHERE record_id IS NOT NULL;

@@ -1,10 +1,10 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { listDomains, createDomain, deleteDomain, toRoute } from '@/lib/platform/service'
-import type { Domain } from '@/lib/platform/service'
+import { listWorkspaces, createWorkspace, disableWorkspace, toRoute } from '@/lib/platform/service'
+import type { Workspace } from '@/lib/platform/service'
 import type { AppContext } from '@/types'
 import UserMenu from '@/components/UserMenu'
 
@@ -25,7 +25,7 @@ function StatusBadge({ status }: { status?: string }) {
   )
 }
 
-function DomainIcon({ name }: { name: string }) {
+function WorkspaceIcon({ name }: { name: string }) {
   return (
     <div style={{ width: '36px', height: '36px', borderRadius: '9px', background: 'rgba(0,212,180,0.12)', border: '1px solid rgba(0,212,180,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '14px', color: 'var(--accent)' }}>
@@ -35,8 +35,10 @@ function DomainIcon({ name }: { name: string }) {
   )
 }
 
-function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCreated: (d: Domain) => void }) {
+function CreateWorkspaceModal({ onClose, onCreated }: { onClose: () => void; onCreated: (d: Workspace) => void }) {
   const { tokens } = useAuth()
+  const nameInputID = useId()
+  const routeInputID = useId()
   const [name, setName] = useState('')
   const [route, setRoute] = useState('')
   const [routeEdited, setRouteEdited] = useState(false)
@@ -59,10 +61,10 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
     setLoading(true)
     setError(null)
     try {
-      const domain = await createDomain(name.trim(), route.trim(), tokens.accessToken)
-      onCreated(domain)
+      const workspace = await createWorkspace(name.trim(), route.trim())
+      onCreated(workspace)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create domain')
+      setError(err instanceof Error ? err.message : 'Failed to create workspace')
     } finally {
       setLoading(false)
     }
@@ -74,18 +76,19 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }} onClick={onClose}>
       <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '14px', padding: '28px', width: '380px', boxShadow: '0 24px 80px rgba(0,0,0,0.5)' }} onClick={e => e.stopPropagation()}>
         <h2 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '18px', color: 'var(--text)', margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-          Create domain
+          Create workspace
         </h2>
         <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)', margin: '0 0 20px' }}>
-          A domain is a workspace that groups your resources.
+          A workspace groups Cube AI records, sources, conversations, and runtime activity.
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div>
-            <label style={{ display: 'block', fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', marginBottom: '5px' }}>
-              Domain name
+            <label htmlFor={nameInputID} style={{ display: 'block', fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', marginBottom: '5px' }}>
+              Workspace name
             </label>
             <input
+              id={nameInputID}
               type="text"
               placeholder="e.g. My Workspace"
               value={name}
@@ -96,10 +99,11 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
           </div>
 
           <div>
-            <label style={{ display: 'block', fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', marginBottom: '5px' }}>
+            <label htmlFor={routeInputID} style={{ display: 'block', fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', marginBottom: '5px' }}>
               Route <span style={{ fontWeight: '400', color: 'var(--text-muted)' }}>(must be unique)</span>
             </label>
             <input
+              id={routeInputID}
               type="text"
               placeholder="e.g. my-workspace"
               value={route}
@@ -136,11 +140,11 @@ function CreateDomainModal({ onClose, onCreated }: { onClose: () => void; onCrea
   )
 }
 
-export default function DomainsPage() {
+export default function WorkspacesPage() {
   const { tokens } = useAuth()
-  const { activeDomain, setActiveDomain } = useOutletContext<AppContext>()
+  const { activeWorkspace, setActiveWorkspace } = useOutletContext<AppContext>()
 
-  const [domains, setDomains] = useState<Domain[]>([])
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -151,10 +155,10 @@ export default function DomainsPage() {
     setLoading(true)
     setLoadError(null)
     try {
-      const list = await listDomains(tokens.accessToken)
-      setDomains(list)
+      const list = await listWorkspaces()
+      setWorkspaces(list)
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load domains')
+      setLoadError(err instanceof Error ? err.message : 'Failed to load workspaces')
     } finally {
       setLoading(false)
     }
@@ -162,34 +166,34 @@ export default function DomainsPage() {
 
   useEffect(() => { void load() }, [load])
 
-  function handleSelect(domain: Domain) {
-    const id = domain.id ?? ''
+  function handleSelect(workspace: Workspace) {
+    const id = workspace.id ?? ''
     if (!id) return
-    setActiveDomain({
+    setActiveWorkspace({
       id,
-      name: domain.name ?? '',
-      route: domain.route,
-      status: domain.status as string | undefined,
+      name: workspace.name ?? '',
+      route: workspace.route ?? undefined,
+      status: workspace.status as string | undefined,
     })
   }
 
-  async function handleDelete(domain: Domain) {
+  async function handleDelete(workspace: Workspace) {
     if (!tokens?.accessToken) return
-    if (!window.confirm(`Delete domain "${domain.name}"? This cannot be undone.`)) return
+    if (!window.confirm(`Disable workspace "${workspace.name}"?`)) return
     setActionError(null)
     try {
-      await deleteDomain(domain.id ?? '', tokens.accessToken)
-      setDomains(prev => prev.filter(d => d.id !== domain.id))
-      if (activeDomain?.id === domain.id) setActiveDomain(null)
+      await disableWorkspace(workspace.id ?? '')
+      setWorkspaces(prev => prev.filter(d => d.id !== workspace.id))
+      if (activeWorkspace?.id === workspace.id) setActiveWorkspace(null)
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Failed to delete domain')
+      setActionError(err instanceof Error ? err.message : 'Failed to delete workspace')
     }
   }
 
-  function handleCreated(domain: Domain) {
-    setDomains(prev => [domain, ...prev])
+  function handleCreated(workspace: Workspace) {
+    setWorkspaces(prev => [workspace, ...prev])
     setShowCreate(false)
-    handleSelect(domain)
+    handleSelect(workspace)
   }
 
   return (
@@ -198,7 +202,7 @@ export default function DomainsPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div>
           <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '20px', color: 'var(--text)', margin: '0 0 2px', letterSpacing: '-0.02em' }}>
-            Domains
+            Workspaces
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
             Workspaces that organize your resources
@@ -212,7 +216,7 @@ export default function DomainsPage() {
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
-            New domain
+            New workspace
           </button>
           <UserMenu />
         </div>
@@ -238,7 +242,7 @@ export default function DomainsPage() {
           </div>
         )}
 
-        {!loading && !loadError && domains.length === 0 && (
+        {!loading && !loadError && workspaces.length === 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '300px', gap: '12px' }}>
             <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="22" height="22" viewBox="0 0 20 20" fill="none">
@@ -247,23 +251,23 @@ export default function DomainsPage() {
                 <path d="M2.5 10h15" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
-            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>No domains yet</p>
+            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>No workspaces yet</p>
             <button
               onClick={() => setShowCreate(true)}
               style={{ padding: '7px 16px', background: 'var(--accent)', border: 'none', borderRadius: '8px', color: '#070c16', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
             >
-              Create your first domain
+              Create your first workspace
             </button>
           </div>
         )}
 
-        {!loading && !loadError && domains.length > 0 && (
+        {!loading && !loadError && workspaces.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
-            {domains.map(domain => {
-              const isActive = activeDomain?.id === domain.id
+            {workspaces.map(workspace => {
+              const isActive = activeWorkspace?.id === workspace.id
               return (
                 <div
-                  key={domain.id}
+                  key={workspace.id}
                   style={{
                     background: isActive ? 'rgba(0,212,180,0.05)' : 'var(--card-bg)',
                     border: `1px solid ${isActive ? 'rgba(0,212,180,0.3)' : 'var(--border)'}`,
@@ -275,19 +279,19 @@ export default function DomainsPage() {
                     cursor: 'pointer',
                     transition: 'border-color 0.15s ease, background 0.15s ease',
                   }}
-                  onClick={() => handleSelect(domain)}
+                  onClick={() => handleSelect(workspace)}
                   onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(255,255,255,0.12)' }}
                   onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <DomainIcon name={domain.name ?? '?'} />
+                    <WorkspaceIcon name={workspace.name ?? '?'} />
                     <div style={{ flex: 1, overflow: 'hidden' }}>
                       <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '14px', color: 'var(--text)', margin: '0 0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {domain.name}
+                        {workspace.name}
                       </p>
-                      {domain.route && (
+                      {workspace.route && (
                         <p style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', margin: 0 }}>
-                          {domain.route}
+                          {workspace.route}
                         </p>
                       )}
                     </div>
@@ -301,19 +305,19 @@ export default function DomainsPage() {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <StatusBadge status={domain.status as string | undefined} />
+                    <StatusBadge status={workspace.status as string | undefined} />
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <button
-                        onClick={e => { e.stopPropagation(); handleSelect(domain) }}
+                        onClick={e => { e.stopPropagation(); handleSelect(workspace) }}
                         style={{ padding: '4px 10px', border: `1px solid ${isActive ? 'rgba(0,212,180,0.4)' : 'var(--border)'}`, borderRadius: '6px', background: isActive ? 'rgba(0,212,180,0.1)' : 'transparent', color: isActive ? 'var(--accent)' : 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}
                       >
                         {isActive ? 'Active' : 'Select'}
                       </button>
                       <button
-                        onClick={e => { e.stopPropagation(); void handleDelete(domain) }}
+                        onClick={e => { e.stopPropagation(); void handleDelete(workspace) }}
                         style={{ padding: '4px 10px', border: '1px solid rgba(255,80,80,0.3)', borderRadius: '6px', background: 'transparent', color: '#ff5050', fontFamily: 'Space Grotesk, sans-serif', fontSize: '11px', fontWeight: '600', cursor: 'pointer' }}
                       >
-                        Delete
+                        Disable
                       </button>
                     </div>
                   </div>
@@ -325,7 +329,7 @@ export default function DomainsPage() {
       </div>
 
       {showCreate && (
-        <CreateDomainModal
+        <CreateWorkspaceModal
           onClose={() => setShowCreate(false)}
           onCreated={handleCreated}
         />

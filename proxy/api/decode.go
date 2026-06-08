@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"strconv"
 
-	mgauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/go-chi/chi/v5"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy/endpoint"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
@@ -23,13 +23,13 @@ var (
 )
 
 func decodeGetAttestationPolicyRequest(ctx context.Context, r *http.Request) (any, error) {
-	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
-	if !ok {
+	session, err := decodeSession(ctx)
+	if err != nil {
 		return nil, errUnauthorized
 	}
 
 	if domainID := chi.URLParam(r, "domainID"); domainID != "" {
-		session.DomainID = domainID
+		session.TenantID = domainID
 	}
 
 	return endpoint.GetAttestationPolicyRequest{
@@ -56,9 +56,9 @@ func encodeGetAttestationPolicyResponse(ctx context.Context, w http.ResponseWrit
 }
 
 func decodeUpdateAttestationPolicyRequest(ctx context.Context, r *http.Request) (any, error) {
-	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
-	if !ok {
-		return nil, errUnauthorized
+	session, err := decodeSession(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	body, err := io.ReadAll(r.Body)
@@ -90,9 +90,9 @@ func encodeUpdateAttestationPolicyResponse(ctx context.Context, w http.ResponseW
 }
 
 func decodeCreateRouteRequest(ctx context.Context, r *http.Request) (any, error) {
-	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
-	if !ok {
-		return nil, errUnauthorized
+	session, err := decodeSession(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	var route router.RouteRule
@@ -125,9 +125,9 @@ func encodeCreateRouteResponse(ctx context.Context, w http.ResponseWriter, respo
 }
 
 func decodeGetRouteRequest(ctx context.Context, r *http.Request) (any, error) {
-	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
-	if !ok {
-		return nil, errUnauthorized
+	session, err := decodeSession(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	name := r.PathValue("name")
@@ -168,9 +168,9 @@ func encodeGetRouteResponse(ctx context.Context, w http.ResponseWriter, response
 }
 
 func decodeUpdateRouteRequest(ctx context.Context, r *http.Request) (any, error) {
-	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
-	if !ok {
-		return nil, errUnauthorized
+	session, err := decodeSession(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	name := r.PathValue("name")
@@ -209,9 +209,9 @@ func encodeUpdateRouteResponse(ctx context.Context, w http.ResponseWriter, respo
 }
 
 func decodeDeleteRouteRequest(ctx context.Context, r *http.Request) (any, error) {
-	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
-	if !ok {
-		return nil, errUnauthorized
+	session, err := decodeSession(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	name := r.PathValue("name")
@@ -246,9 +246,9 @@ func encodeDeleteRouteResponse(ctx context.Context, w http.ResponseWriter, respo
 }
 
 func decodeListRoutesRequest(ctx context.Context, r *http.Request) (any, error) {
-	session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
-	if !ok {
-		return nil, errUnauthorized
+	session, err := decodeSession(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	offsetStr := r.URL.Query().Get("offset")
@@ -307,4 +307,13 @@ func encodeListRoutesResponse(ctx context.Context, w http.ResponseWriter, respon
 		"limit":  resp.Limit,
 		"routes": routes,
 	})
+}
+
+func decodeSession(ctx context.Context) (cubeauth.Session, error) {
+	session, ok := cubeauth.SessionFromContext(ctx)
+	if !ok {
+		return cubeauth.Session{}, errUnauthorized
+	}
+
+	return session, nil
 }

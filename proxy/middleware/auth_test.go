@@ -7,205 +7,241 @@ import (
 	"context"
 	"testing"
 
-	"github.com/absmach/supermq/pkg/authn"
-	"github.com/absmach/supermq/pkg/authz"
-	authzmocks "github.com/absmach/supermq/pkg/authz/mocks"
-	"github.com/absmach/supermq/pkg/policies"
 	"github.com/stretchr/testify/mock"
+	"github.com/ultravioletrs/cube/internal/atom"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/middleware"
 	"github.com/ultravioletrs/cube/proxy/mocks"
 )
 
+type authzChecker struct {
+	requests []atom.CheckRequest
+}
+
+func (a *authzChecker) Check(_ context.Context, _ string, req atom.CheckRequest) error {
+	a.requests = append(a.requests, req)
+	return nil
+}
+
 func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name               string
-		path               string
-		method             string
-		expectedPermission string
-		isSuperAdminCheck  bool
+		name           string
+		path           string
+		method         string
+		expectedAction string
+		expectCheck    bool
 	}{
 		{
-			name:               "Membership Permission (Default)",
-			path:               "/random/path",
-			method:             "GET",
-			expectedPermission: "membership",
+			name:           "Membership Permission (Default)",
+			path:           "/random/path",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "Audit Log Permission",
-			path:               "/audit/logs",
-			method:             "GET",
-			expectedPermission: "audit_log_permission",
+			name:           "Audit Log Permission",
+			path:           "/audit/logs",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Chat Completions",
-			path:               "/v1/chat/completions",
-			method:             "POST",
-			expectedPermission: "llm_chat_completions_permission",
+			name:           "LLM Chat Completions",
+			path:           "/v1/chat/completions",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Chat (Ollama)",
-			path:               "/api/chat",
-			method:             "POST",
-			expectedPermission: "llm_chat_completions_permission",
+			name:           "LLM Chat (Ollama)",
+			path:           "/api/chat",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Completions",
-			path:               "/v1/completions",
-			method:             "POST",
-			expectedPermission: "llm_completions_permission",
+			name:           "LLM Completions",
+			path:           "/v1/completions",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Generate (Ollama)",
-			path:               "/api/generate",
-			method:             "POST",
-			expectedPermission: "llm_completions_permission",
+			name:           "LLM Generate (Ollama)",
+			path:           "/api/generate",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Embeddings (OpenAI)",
-			path:               "/v1/embeddings",
-			method:             "POST",
-			expectedPermission: "llm_embeddings_permission",
+			name:           "LLM Embeddings (OpenAI)",
+			path:           "/v1/embeddings",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Embeddings (Ollama)",
-			path:               "/api/embeddings",
-			method:             "POST",
-			expectedPermission: "llm_embeddings_permission",
+			name:           "LLM Embeddings (Ollama)",
+			path:           "/api/embeddings",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Read Models (OpenAI)",
-			path:               "/v1/models",
-			method:             "GET",
-			expectedPermission: "llm_read_permission",
+			name:           "LLM Read Models (OpenAI)",
+			path:           "/v1/models",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "LLM Tags (Ollama)",
-			path:               "/api/tags",
-			method:             "GET",
-			expectedPermission: "llm_read_permission",
+			name:           "LLM Tags (Ollama)",
+			path:           "/api/tags",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:              "SuperAdmin Pull",
-			path:              "/api/pull",
-			method:            "POST",
-			isSuperAdminCheck: true,
+			name:           "Manage Pull",
+			path:           "/api/pull",
+			method:         "POST",
+			expectedAction: "manage",
+			expectCheck:    true,
 		},
 		{
-			name:              "SuperAdmin Delete",
-			path:              "/api/delete",
-			method:            "DELETE",
-			isSuperAdminCheck: true,
+			name:           "Manage Delete",
+			path:           "/api/delete",
+			method:         "DELETE",
+			expectedAction: "manage",
+			expectCheck:    true,
 		},
 		{
-			name:              "SuperAdmin Delete Model (OpenAI)",
-			path:              "/v1/models/some-model",
-			method:            "DELETE",
-			isSuperAdminCheck: true,
+			name:           "Manage Delete Model (OpenAI)",
+			path:           "/v1/models/some-model",
+			method:         "DELETE",
+			expectedAction: "manage",
+			expectCheck:    true,
 		},
 		{
-			name:              "Guardrails Admin Configs Modify",
-			path:              "/guardrails/configs",
-			method:            "POST",
-			isSuperAdminCheck: true,
+			name:           "Guardrails Admin Configs Modify",
+			path:           "/guardrails/configs",
+			method:         "POST",
+			expectedAction: "manage",
+			expectCheck:    true,
 		},
 		{
-			name:              "Guardrails Admin Reload",
-			path:              "/guardrails/reload",
-			method:            "POST",
-			isSuperAdminCheck: true,
+			name:           "Guardrails Admin Reload",
+			path:           "/guardrails/reload",
+			method:         "POST",
+			expectedAction: "manage",
+			expectCheck:    true,
 		},
 		{
-			name:               "Guardrails View Configs",
-			path:               "/guardrails/configs",
-			method:             "GET",
-			expectedPermission: "membership",
+			name:           "Guardrails View Configs",
+			path:           "/guardrails/configs",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "Guardrails View Versions",
-			path:               "/guardrails/versions",
-			method:             "GET",
-			expectedPermission: "membership",
+			name:           "Guardrails View Versions",
+			path:           "/guardrails/versions",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:              "Guardrails Modify Versions",
-			path:              "/guardrails/versions",
-			method:            "POST",
-			isSuperAdminCheck: true,
+			name:           "Guardrails Modify Versions",
+			path:           "/guardrails/versions",
+			method:         "POST",
+			expectedAction: "manage",
+			expectCheck:    true,
 		},
 		{
-			name:               "Regular Read Model (OpenAI)",
-			path:               "/v1/models/some-model",
-			method:             "GET",
-			expectedPermission: "llm_read_permission",
+			name:           "Regular Read Model (OpenAI)",
+			path:           "/v1/models/some-model",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "Transcription",
-			path:               "/v1/audio/transcriptions",
-			method:             "POST",
-			expectedPermission: "llm_transcription_permission",
+			name:           "Transcription",
+			path:           "/v1/audio/transcriptions",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "Translation",
-			path:               "/v1/audio/translations",
-			method:             "POST",
-			expectedPermission: "llm_translation_permission",
+			name:           "Translation",
+			path:           "/v1/audio/translations",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "Tokenizer (Utility)",
-			path:               "/tokenize",
-			method:             "POST",
-			expectedPermission: "llm_utility_permission",
+			name:           "Tokenizer (Utility)",
+			path:           "/tokenize",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "Pooling",
-			path:               "/pooling",
-			method:             "POST",
-			expectedPermission: "llm_pooling_permission",
+			name:           "Pooling",
+			path:           "/pooling",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "Classification",
-			path:               "/classify",
-			method:             "POST",
-			expectedPermission: "llm_classification_permission",
+			name:           "Classification",
+			path:           "/classify",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "Scoring",
-			path:               "/score",
-			method:             "POST",
-			expectedPermission: "llm_scoring_permission",
+			name:           "Scoring",
+			path:           "/score",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "Rerank",
-			path:               "/rerank",
-			method:             "POST",
-			expectedPermission: "llm_rerank_permission",
+			name:           "Rerank",
+			path:           "/rerank",
+			method:         "POST",
+			expectedAction: "execute",
+			expectCheck:    true,
 		},
 		{
-			name:               "Ollama PS",
-			path:               "/api/ps",
-			method:             "GET",
-			expectedPermission: "llm_read_permission",
+			name:           "Ollama PS",
+			path:           "/api/ps",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "Ollama Version",
-			path:               "/api/version",
-			method:             "GET",
-			expectedPermission: "llm_read_permission",
+			name:           "Ollama Version",
+			path:           "/api/version",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "Ollama System",
-			path:               "/api/system",
-			method:             "GET",
-			expectedPermission: "llm_read_permission",
+			name:           "Ollama System",
+			path:           "/api/system",
+			method:         "GET",
+			expectedAction: "read",
+			expectCheck:    true,
 		},
 		{
-			name:               "Root Path (Health Check)",
-			path:               "/",
-			method:             "GET",
-			expectedPermission: "",
+			name:        "Root Path (Health Check)",
+			path:        "/",
+			method:      "GET",
+			expectCheck: false,
 		},
 	}
 
@@ -216,40 +252,35 @@ func TestAuthMiddleware_ProxyRequest(t *testing.T) {
 			svc := new(mocks.Service)
 			svc.On("ProxyRequest", mock.Anything, mock.Anything, tc.path).Return(nil)
 
-			auth := new(authzmocks.Authorization)
-			auth.On("Authorize", mock.Anything, mock.MatchedBy(func(req authz.PolicyReq) bool {
-				if tc.isSuperAdminCheck {
-					if req.Permission != policies.AdminPermission {
-						return false
-					}
-
-					if req.ObjectType != policies.PlatformType {
-						return false
-					}
-
-					return true
-				}
-
-				if req.Permission != tc.expectedPermission {
-					return false
-				}
-
-				if req.ObjectType != "domain" {
-					return false
-				}
-
-				return true
-			}), mock.Anything).Return(nil)
+			auth := &authzChecker{}
 
 			authMiddleware := middleware.AuthMiddleware(auth)(svc)
 
 			// Inject method into context manually as the transport would
 			ctx := context.WithValue(context.Background(), proxy.MethodContextKey, tc.method)
-			session := &authn.Session{DomainID: "domain1", UserID: "user1", DomainUserID: "domainUser1"}
+			session := &cubeauth.Session{TenantID: "tenant1", EntityID: "entity1", Token: "token"}
 
 			err := authMiddleware.ProxyRequest(ctx, session, tc.path)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
+			}
+			if !tc.expectCheck {
+				if len(auth.requests) != 0 {
+					t.Fatalf("expected no authorization check, got %d", len(auth.requests))
+				}
+				return
+			}
+			if len(auth.requests) == 0 {
+				t.Fatal("expected authorization check")
+			}
+			if got := auth.requests[0].Action; got != tc.expectedAction {
+				t.Fatalf("expected action %q, got %q", tc.expectedAction, got)
+			}
+			if got := auth.requests[0].ObjectKind; got != "tenant" {
+				t.Fatalf("expected object kind tenant, got %q", got)
+			}
+			if got := auth.requests[0].ObjectID; got != "tenant1" {
+				t.Fatalf("expected object ID tenant1, got %q", got)
 			}
 		})
 	}

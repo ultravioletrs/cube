@@ -14,10 +14,7 @@ CUBE_AGENT_LICENSE_FILES = LICENSE
 CUBE_AGENT_CPE_ID_VENDOR = ultraviolet
 
 CUBE_AGENT_LDFLAGS = \
-	-s -w \
-	-X 'github.com/absmach/supermq.BuildTime=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')' \
-	-X 'github.com/absmach/supermq.Version=$(CUBE_AGENT_VERSION)' \
-	-X 'github.com/absmach/supermq.Commit=$(CUBE_AGENT_VERSION)'
+	-s -w
 
 CUBE_AGENT_BUILD_TARGETS = cmd/agent
 

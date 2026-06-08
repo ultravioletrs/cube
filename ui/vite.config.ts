@@ -5,6 +5,8 @@ import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+const cubeProxyTarget = process.env['CUBE_PROXY_TARGET'] ?? 'http://localhost:8900'
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
 
@@ -16,38 +18,21 @@ export default defineConfig({
 
   server: {
     proxy: {
-      '/users': {
-        target: process.env['MG_USERS_PROXY_TARGET'] ?? 'https://localhost',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/domains': {
-        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/invitations': {
-        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/journal': {
-        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
-        changeOrigin: true,
-        secure: false,
-      },
       '/proxy': {
-        target: process.env['MG_DOMAINS_PROXY_TARGET'] ?? 'https://localhost',
+        target: cubeProxyTarget,
         changeOrigin: true,
         secure: false,
+        rewrite: path => path.replace(/^\/proxy/, ''),
       },
-      '/api/v1/chat': {
-        target: process.env['EMBEDDER_PROXY_TARGET'] ?? 'http://localhost:8082',
+      '^/[0-9a-fA-F-]{36}/': {
+        target: cubeProxyTarget,
         changeOrigin: true,
+        secure: false,
       },
       '/api': {
-        target: process.env['EMBEDDER_PROXY_TARGET'] ?? 'http://localhost:8082',
+        target: cubeProxyTarget,
         changeOrigin: true,
+        secure: false,
       },
     },
   },

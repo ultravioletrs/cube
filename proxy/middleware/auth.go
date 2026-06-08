@@ -5,70 +5,52 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/absmach/supermq/pkg/authn"
-	"github.com/absmach/supermq/pkg/authz"
-	svcerr "github.com/absmach/supermq/pkg/errors/service"
-	"github.com/absmach/supermq/pkg/policies"
+	"github.com/ultravioletrs/cube/internal/atom"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
 const (
-	userType   = "user"
-	usersKind  = "users"
-	domainType = "domain"
-
-	membershipPerm         = "membership"
-	llmChatCompletionsPerm = "llm_chat_completions_permission"
-	llmCompletionsPerm     = "llm_completions_permission"
-	llmEmbeddingsPerm      = "llm_embeddings_permission"
-	llmReadPerm            = "llm_read_permission"
-	llmTranscriptionPerm   = "llm_transcription_permission"
-	llmTranslationPerm     = "llm_translation_permission"
-	llmUtilityPerm         = "llm_utility_permission"
-	llmPoolingPerm         = "llm_pooling_permission"
-	llmClassificationPerm  = "llm_classification_permission"
-	llmScoringPerm         = "llm_scoring_permission"
-	llmRerankPerm          = "llm_rerank_permission"
-	auditLogPerm           = "audit_log_permission"
+	actionRead    = "read"
+	actionExecute = "execute"
+	actionManage  = "manage"
 )
 
+var ErrAuthorization = errors.New("authorization denied")
+
+type AuthzChecker interface {
+	Check(ctx context.Context, callerToken string, req atom.CheckRequest) error
+}
+
 type authMiddleware struct {
-	authz authz.Authorization
+	authz AuthzChecker
 	next  proxy.Service
 }
 
-// AuthMiddleware adds authorization checks to the service.
-func AuthMiddleware(auth authz.Authorization) func(proxy.Service) proxy.Service {
+func AuthMiddleware(authz AuthzChecker) func(proxy.Service) proxy.Service {
 	return func(next proxy.Service) proxy.Service {
 		return &authMiddleware{
-			authz: auth,
+			authz: authz,
 			next:  next,
 		}
 	}
 }
 
-func (am *authMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
-	isAdminPath, err := am.checkAdminPaths(ctx, session, path)
-	if err != nil {
+func (am *authMiddleware) ProxyRequest(ctx context.Context, session *cubeauth.Session, path string) error {
+	if err := am.checkAdminPaths(ctx, session, path); err != nil {
 		return err
 	}
 
-	if isAdminPath {
-		return am.next.ProxyRequest(ctx, session, path)
-	}
-
-	// Health check / Connection check - if session is valid (which it is if we are here), allow root path
 	if path == "/" {
 		return am.next.ProxyRequest(ctx, session, path)
 	}
 
-	permission := determinePermission(path)
-
-	if err := am.authorize(ctx, session, session.DomainID, permission); err != nil {
+	if err := am.authorize(ctx, session, determineAction(path)); err != nil {
 		return err
 	}
 
@@ -79,115 +61,101 @@ func (am *authMiddleware) Secure() string {
 	return am.next.Secure()
 }
 
-// GetAttestationPolicy implements proxy.Service.
-// GetAttestationPolicy implements proxy.Service.
-func (am *authMiddleware) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
-	if session.DomainID == "" {
-		return nil, svcerr.ErrAuthorization
+func (am *authMiddleware) GetAttestationPolicy(ctx context.Context, session *cubeauth.Session) ([]byte, error) {
+	if session.TenantID == "" {
+		return nil, ErrAuthorization
 	}
-
+	if err := am.authorize(ctx, session, actionRead); err != nil {
+		return nil, err
+	}
 	return am.next.GetAttestationPolicy(ctx, session)
 }
 
-// UpdateAttestationPolicy implements proxy.Service.
-func (am *authMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
-	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+func (am *authMiddleware) UpdateAttestationPolicy(
+	ctx context.Context, session *cubeauth.Session, policy []byte,
+) error {
+	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return err
 	}
-
 	return am.next.UpdateAttestationPolicy(ctx, session, policy)
 }
 
-// CreateRoute implements proxy.Service.
 func (am *authMiddleware) CreateRoute(
-	ctx context.Context, session *authn.Session, route *router.RouteRule,
+	ctx context.Context, session *cubeauth.Session, route *router.RouteRule,
 ) (*router.RouteRule, error) {
-	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return nil, err
 	}
-
 	return am.next.CreateRoute(ctx, session, route)
 }
 
-// UpdateRoute implements proxy.Service.
 func (am *authMiddleware) UpdateRoute(
-	ctx context.Context, session *authn.Session, name string, route *router.RouteRule,
+	ctx context.Context, session *cubeauth.Session, name string, route *router.RouteRule,
 ) (*router.RouteRule, error) {
-	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return nil, err
 	}
-
 	return am.next.UpdateRoute(ctx, session, name, route)
 }
 
-// DeleteRoute implements proxy.Service.
-func (am *authMiddleware) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
-	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+func (am *authMiddleware) DeleteRoute(ctx context.Context, session *cubeauth.Session, name string) error {
+	if err := am.authorize(ctx, session, actionManage); err != nil {
 		return err
 	}
-
 	return am.next.DeleteRoute(ctx, session, name)
 }
 
-// GetRoute implements proxy.Service.
 func (am *authMiddleware) GetRoute(
-	ctx context.Context, session *authn.Session, name string,
+	ctx context.Context, session *cubeauth.Session, name string,
 ) (*router.RouteRule, error) {
-	// Routes are considered administrative - require super admin
-	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+	if err := am.authorize(ctx, session, actionRead); err != nil {
 		return nil, err
 	}
-
 	return am.next.GetRoute(ctx, session, name)
 }
 
-// ListRoutes implements proxy.Service.
 func (am *authMiddleware) ListRoutes(
-	ctx context.Context, session *authn.Session, offset, limit uint64,
+	ctx context.Context, session *cubeauth.Session, offset, limit uint64,
 ) ([]router.RouteRule, uint64, error) {
-	// Routes are considered administrative - require super admin
-	if err := am.checkSuperAdmin(ctx, session.UserID); err != nil {
+	if err := am.authorize(ctx, session, actionRead); err != nil {
 		return nil, 0, err
 	}
-
 	return am.next.ListRoutes(ctx, session, offset, limit)
 }
 
-func (am *authMiddleware) checkSuperAdmin(ctx context.Context, adminID string) error {
-	if err := am.authz.Authorize(ctx, authz.PolicyReq{
-		SubjectType: policies.UserType,
-		Subject:     adminID,
-		Permission:  policies.AdminPermission,
-		ObjectType:  policies.PlatformType,
-		Object:      policies.SuperMQObject,
-	}, nil); err != nil {
+func (am *authMiddleware) authorize(ctx context.Context, session *cubeauth.Session, action string) error {
+	if am.authz == nil {
+		return ErrAuthorization
+	}
+	req := atom.CheckRequest{
+		SubjectID: session.EntityID,
+		Action:    action,
+		Context: map[string]string{
+			"cube_service": "proxy",
+		},
+	}
+	if session.TenantID != "" {
+		req.ObjectKind = "tenant"
+		req.ObjectID = session.TenantID
+	}
+	if err := am.authz.Check(ctx, session.Token, req); err != nil {
 		return err
 	}
-
 	return nil
 }
 
-func (am *authMiddleware) authorize(ctx context.Context, session *authn.Session, domainID, permission string) error {
-	req := authz.PolicyReq{
-		Domain:      domainID,
-		SubjectType: userType,
-		SubjectKind: usersKind,
-		Subject:     session.DomainUserID,
-		Permission:  permission,
-		ObjectType:  domainType,
-		Object:      domainID,
-	}
-
-	return am.authz.Authorize(ctx, req, nil)
-}
-
-func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Session, path string) (bool, error) {
-	superAdminPaths := []string{
+func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *cubeauth.Session, path string) error {
+	adminPaths := []string{
 		"/api/pull",
 		"/api/push",
 		"/api/create",
 		"/api/copy",
 		"/api/delete",
+	}
+	for _, p := range adminPaths {
+		if strings.Contains(path, p) {
+			return am.authorize(ctx, session, actionManage)
+		}
 	}
 
 	guardrailsAdminPaths := []string{
@@ -195,60 +163,43 @@ func (am *authMiddleware) checkAdminPaths(ctx context.Context, session *authn.Se
 		"/guardrails/versions",
 		"/guardrails/reload",
 	}
-
-	for _, p := range superAdminPaths {
-		if strings.Contains(path, p) {
-			return true, am.checkSuperAdmin(ctx, session.UserID)
-		}
-	}
-
 	for _, p := range guardrailsAdminPaths {
 		if strings.Contains(path, p) {
 			if ctx.Value(proxy.MethodContextKey) != http.MethodGet || strings.Contains(path, "/guardrails/reload") {
-				return true, am.checkSuperAdmin(ctx, session.UserID)
+				return am.authorize(ctx, session, actionManage)
 			}
 		}
 	}
 
-	// OpenAI/vLLM delete model check
-	if strings.Contains(path, "/v1/models/") && ctx.Value(proxy.MethodContextKey) == "DELETE" {
-		return true, am.checkSuperAdmin(ctx, session.UserID)
+	if strings.Contains(path, "/v1/models/") && ctx.Value(proxy.MethodContextKey) == http.MethodDelete {
+		return am.authorize(ctx, session, actionManage)
 	}
-
-	return false, nil
+	return nil
 }
 
-func determinePermission(path string) string {
+func determineAction(path string) string {
 	switch {
 	case strings.Contains(path, "/audit/") || strings.HasSuffix(path, "/audit"):
-		return auditLogPerm
-	case strings.Contains(path, "/v1/chat/completions") || strings.Contains(path, "/api/chat"):
-		return llmChatCompletionsPerm
-	case strings.Contains(path, "/v1/completions") || strings.Contains(path, "/api/generate"):
-		return llmCompletionsPerm
-	case strings.Contains(path, "/v1/embeddings") || strings.Contains(path, "/api/embeddings"):
-		return llmEmbeddingsPerm
+		return actionRead
 	case strings.Contains(path, "/v1/models") || strings.Contains(path, "/api/tags") ||
-		strings.Contains(path, "/api/show"):
-		return llmReadPerm
-	case strings.Contains(path, "/api/ps") || strings.Contains(path, "/api/version") ||
-		strings.Contains(path, "/api/system"):
-		return llmReadPerm
-	case strings.Contains(path, "/v1/audio/transcriptions"):
-		return llmTranscriptionPerm
-	case strings.Contains(path, "/v1/audio/translations"):
-		return llmTranslationPerm
-	case strings.Contains(path, "/tokenize") || strings.Contains(path, "/detokenize"):
-		return llmUtilityPerm
-	case strings.Contains(path, "/pooling"):
-		return llmPoolingPerm
-	case strings.Contains(path, "/classify"):
-		return llmClassificationPerm
-	case strings.Contains(path, "/score"):
-		return llmScoringPerm
-	case strings.Contains(path, "/rerank"):
-		return llmRerankPerm
+		strings.Contains(path, "/api/show") || strings.Contains(path, "/api/ps") ||
+		strings.Contains(path, "/api/version") || strings.Contains(path, "/api/system"):
+		return actionRead
+	case strings.Contains(path, "/v1/chat/completions") ||
+		strings.Contains(path, "/api/chat") ||
+		strings.Contains(path, "/v1/completions") ||
+		strings.Contains(path, "/api/generate") ||
+		strings.Contains(path, "/v1/embeddings") ||
+		strings.Contains(path, "/api/embeddings") ||
+		strings.Contains(path, "/v1/audio/transcriptions") ||
+		strings.Contains(path, "/v1/audio/translations") ||
+		strings.Contains(path, "/tokenize") ||
+		strings.Contains(path, "/detokenize") ||
+		strings.Contains(path, "/pooling") ||
+		strings.Contains(path, "/classify") ||
+		strings.Contains(path, "/score") ||
+		strings.Contains(path, "/rerank"):
+		return actionExecute
 	}
-
-	return membershipPerm
+	return actionRead
 }

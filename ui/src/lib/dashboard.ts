@@ -3,10 +3,18 @@
 
 const AUDIT_INDEX = 'cube-audit-*'
 
+function authHeaders(token: string, domainID?: string): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (domainID) headers['X-Domain-Id'] = domainID
+  return headers
+}
+
 async function auditSearch(domainID: string, token: string, body: object): Promise<unknown> {
   const res = await fetch(`/proxy/${domainID}/audit/${AUDIT_INDEX}/_search`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    credentials: 'omit',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token, domainID) },
     body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(`OpenSearch error: ${res.status}`)
@@ -39,8 +47,9 @@ export async function fetchDashboardStats(domainID: string, token: string): Prom
   }
 
   const [convRes, osData] = await Promise.all([
-    fetch('/api/v1/conversations', {
-      headers: { Authorization: `Bearer ${token}` },
+    fetch(`/${domainID}/api/v1/conversations`, {
+      credentials: 'omit',
+      headers: authHeaders(token, domainID),
     }),
     auditSearch(domainID, token, osBody),
   ])

@@ -1,11 +1,13 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useEffect } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
 import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG } from '@/lib/modelConfig'
 import type { LLMProvider } from '@/lib/modelConfig'
 import { getGuardrailsStatus, listOllamaModels, setGuardrailsEnabled } from '@/lib/api'
+import type { AppContext } from '@/types'
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -90,7 +92,9 @@ const embModels: Record<string, { value: string; label: string }[]> = {
 
 export default function ConfigPage() {
   const { tokens } = useAuth()
+  const { activeDomain } = useOutletContext<AppContext>()
   const accessToken = tokens?.accessToken ?? ''
+  const domainID = activeDomain?.id ?? ''
 
   const [llmProvider, setLlmProvider] = useState<LLMProvider>(DEFAULT_MODEL_CONFIG.provider)
   const [llmModel, setLlmModel] = useState(DEFAULT_MODEL_CONFIG.model)
@@ -112,17 +116,17 @@ export default function ConfigPage() {
   const [guardrailsLoading, setGuardrailsLoading] = useState(false)
 
   useEffect(() => {
-    if (!tokens?.accessToken) return
-    getGuardrailsStatus(tokens.accessToken)
+    if (!tokens?.accessToken || !domainID) return
+    getGuardrailsStatus(tokens.accessToken, domainID)
       .then(s => { setGuardrailsEnabledState(s.enabled); setGuardrailsConfigured(s.configured) })
       .catch(() => {})
-  }, [tokens?.accessToken])
+  }, [tokens?.accessToken, domainID])
 
   const handleGuardrailsToggle = async (v: boolean) => {
-    if (!tokens?.accessToken || !guardrailsConfigured || guardrailsLoading) return
+    if (!tokens?.accessToken || !domainID || !guardrailsConfigured || guardrailsLoading) return
     setGuardrailsLoading(true)
     try {
-      const s = await setGuardrailsEnabled(tokens.accessToken, v)
+      const s = await setGuardrailsEnabled(tokens.accessToken, v, domainID)
       setGuardrailsEnabledState(s.enabled)
     } catch { /* ignore */ } finally {
       setGuardrailsLoading(false)
@@ -141,9 +145,9 @@ export default function ConfigPage() {
   }, [])
 
   useEffect(() => {
-    if (llmProvider !== 'local') return
+    if (llmProvider !== 'local' || !domainID) return
     setOllamaLoading(true)
-    listOllamaModels(accessToken, '')
+    listOllamaModels(accessToken, domainID)
       .then(models => {
         setOllamaModels(models)
         // Auto-select the first model if none is currently set
@@ -151,7 +155,7 @@ export default function ConfigPage() {
       })
       .catch(() => { setOllamaModels([]) })
       .finally(() => { setOllamaLoading(false) })
-  }, [llmProvider, accessToken])
+  }, [llmProvider, accessToken, domainID])
 
   const handleProviderChange = (p: string) => {
     const provider = p as LLMProvider

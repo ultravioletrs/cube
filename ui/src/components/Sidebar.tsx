@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { ATTESTATION_ENABLED } from '@/lib/features'
-import type { ActiveDomain } from '@/types'
+import type { ActiveWorkspace } from '@/types'
 
 const CubeAILogo = () => (
   <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
@@ -20,7 +20,10 @@ interface NavItem {
   label: string
   path: string
   icon: React.ReactNode
+  external?: boolean
 }
+
+const ATOM_UI_URL = import.meta.env.VITE_ATOM_UI_URL ?? '/atom'
 
 const overviewItems: NavItem[] = [
   {
@@ -93,9 +96,9 @@ const aiItems: NavItem[] = [
 
 const platformItems: NavItem[] = [
   {
-    id: 'domains',
-    label: 'Domains',
-    path: '/domains',
+    id: 'workspaces',
+    label: 'Workspaces',
+    path: '/workspaces',
     icon: (
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
         <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.5" />
@@ -110,9 +113,10 @@ const platformItems: NavItem[] = [
     path: '/members',
     icon: (
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-        <circle cx="8" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M2 17c0-3.314 2.686-6 6-6s6 2.686 6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M14 8c1.657 0 3 1.343 3 3M17 17c0-2.21-1.343-4-3-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="7" cy="6" r="3" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M2.5 17c.6-3 2.2-4.5 4.5-4.5s3.9 1.5 4.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <circle cx="14" cy="7" r="2" stroke="currentColor" strokeWidth="1.5" opacity="0.7" />
+        <path d="M12.5 13c1.8.2 3 1.5 3.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7" />
       </svg>
     ),
   },
@@ -122,8 +126,9 @@ const platformItems: NavItem[] = [
     path: '/invitations',
     icon: (
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-        <rect x="2" y="5" width="16" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M2 7l8 5 8-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <rect x="3" y="5" width="14" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M4 6l6 5 6-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M15 3v4M13 5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     ),
   },
@@ -133,9 +138,20 @@ const platformItems: NavItem[] = [
     path: '/audit-logs',
     icon: (
       <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-        <path d="M3 5h14M3 10h14M3 15h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <circle cx="15.5" cy="15.5" r="2.5" stroke="currentColor" strokeWidth="1.5" />
-        <path d="M17.5 17.5l1.5 1.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M5 3h8l2 2v12H5V3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M13 3v3h3M8 9h5M8 12h5M8 15h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    ),
+  },
+  {
+    id: 'advanced-identity-access',
+    label: 'Advanced IAM',
+    path: ATOM_UI_URL,
+    external: true,
+    icon: (
+      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+        <path d="M10 2.5l6.5 3v4.8c0 3.6-2.7 6.9-6.5 7.9-3.8-1-6.5-4.3-6.5-7.9V5.5l6.5-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+        <path d="M7.5 10.2l1.7 1.7 3.4-3.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     ),
   },
@@ -185,10 +201,17 @@ function NavGroup({ label, items, currentPath }: { label: string; items: NavItem
 function NavButton({ item, active }: { item: NavItem; active: boolean }) {
   const navigate = useNavigate()
   const [hovered, setHovered] = useState(false)
+  const handleClick = () => {
+    if (item.external) {
+      window.open(item.path, '_blank', 'noopener,noreferrer')
+      return
+    }
+    navigate(item.path)
+  }
 
   return (
     <button
-      onClick={() => navigate(item.path)}
+      onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -216,7 +239,7 @@ function NavButton({ item, active }: { item: NavItem; active: boolean }) {
   )
 }
 
-function DomainBadge({ activeDomain, onClick }: { activeDomain: { name: string } | null; onClick: () => void }) {
+function WorkspaceBadge({ activeWorkspace, onClick }: { activeWorkspace: { name: string } | null; onClick: () => void }) {
   const [hovered, setHovered] = useState(false)
 
   return (
@@ -224,7 +247,7 @@ function DomainBadge({ activeDomain, onClick }: { activeDomain: { name: string }
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title="Switch domain"
+      title="Switch workspace"
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -242,15 +265,15 @@ function DomainBadge({ activeDomain, onClick }: { activeDomain: { name: string }
     >
       <div style={{ width: '20px', height: '20px', borderRadius: '5px', background: 'var(--accent)', opacity: 0.85, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '10px', color: '#070c16' }}>
-          {activeDomain ? activeDomain.name[0].toUpperCase() : '?'}
+          {activeWorkspace ? activeWorkspace.name[0].toUpperCase() : '?'}
         </span>
       </div>
       <div style={{ flex: 1, overflow: 'hidden' }}>
         <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {activeDomain ? activeDomain.name : 'No domain'}
+          {activeWorkspace ? activeWorkspace.name : 'No workspace'}
         </p>
         <p style={{ margin: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)' }}>
-          {activeDomain ? 'workspace' : 'select domain →'}
+          {activeWorkspace ? 'workspace' : 'select workspace'}
         </p>
       </div>
     </button>
@@ -322,7 +345,7 @@ function UserMenuInline() {
   )
 }
 
-export default function Sidebar({ activeDomain }: { activeDomain: ActiveDomain | null }) {
+export default function Sidebar({ activeWorkspace }: { activeWorkspace: ActiveWorkspace | null }) {
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -339,10 +362,10 @@ export default function Sidebar({ activeDomain }: { activeDomain: ActiveDomain |
         </span>
       </button>
 
-      {/* Domain switcher */}
-      <DomainBadge
-        activeDomain={activeDomain}
-        onClick={() => navigate('/domains')}
+      {/* Workspace switcher */}
+      <WorkspaceBadge
+        activeWorkspace={activeWorkspace}
+        onClick={() => navigate('/workspaces')}
       />
 
       {/* Navigation */}

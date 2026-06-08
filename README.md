@@ -130,7 +130,7 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
      -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
      -d '{
        "name": "Magistrala",
-       "route": "magistrala1",
+       "route": "cube-workspace-1",
        "tags": ["absmach", "IoT"],
        "metadata": {
          "region": "EU"
@@ -143,8 +143,8 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    ```json
    {
      "id": "d7f9b3b8-4f7e-4f44-8d47-1a6e5e6f7a2b",
-     "name": "Magistrala",
-     "route": "magistrala",
+     "name": "Cube Workspace",
+     "route": "cube-workspace",
      "tags": ["absmach", "IoT"],
      "metadata": {
        "region": "EU"
@@ -286,8 +286,8 @@ curl -ksSiX POST https://localhost/domains \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
   -d '{
-    "name": "Magistrala",
-    "route": "magistrala1",
+    "name": "Cube Workspace",
+    "route": "cube-workspace-1",
     "tags": ["absmach", "IoT"],
     "metadata": {
       "region": "EU"

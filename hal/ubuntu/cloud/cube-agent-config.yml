@@ -152,7 +152,7 @@ write_files:
     permissions: '0755'
 
   # TLS certificate generation script (for development/testing)
-  - path: /usr/local/bin/generate-cube-certs.sh
+  - path: /usr/local/bin/generate-atom-dev-certs.sh
     content: |
       #!/bin/bash
       # Generate self-signed certificates for Cube Agent
@@ -242,7 +242,7 @@ runcmd:
 
   # Generate self-signed certificates (for development)
   # Comment out for production if using real certificates
-  - /usr/local/bin/generate-cube-certs.sh
+  - /usr/local/bin/generate-atom-dev-certs.sh
 
   # Set up Ollama directories
   - mkdir -p /var/lib/ollama

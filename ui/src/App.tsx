@@ -9,7 +9,7 @@ import RecordsPage from '@/pages/RecordsPage'
 import SourcesPage from '@/pages/SourcesPage'
 import ChatPage from '@/pages/ChatPage'
 import ConfigPage from '@/pages/ConfigPage'
-import DomainsPage from '@/pages/DomainsPage'
+import WorkspacesPage from '@/pages/WorkspacesPage'
 import MembersPage from '@/pages/MembersPage'
 import InvitationsPage from '@/pages/InvitationsPage'
 import AuditLogsPage from '@/pages/AuditLogsPage'
@@ -89,7 +89,8 @@ export default function App() {
         <Route path="/sources" element={<SourcesPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/config" element={<ConfigPage />} />
-        <Route path="/domains" element={<DomainsPage />} />
+        <Route path="/workspaces" element={<WorkspacesPage />} />
+        <Route path="/domains" element={<Navigate to="/workspaces" replace />} />
         <Route path="/members" element={<MembersPage />} />
         <Route path="/invitations" element={<InvitationsPage />} />
         <Route path="/audit-logs" element={<AuditLogsPage />} />

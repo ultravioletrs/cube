@@ -8,8 +8,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"time"
 
-	"github.com/absmach/supermq/pkg/postgres"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jmoiron/sqlx"
+	migrate "github.com/rubenv/sql-migrate"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
@@ -17,10 +21,47 @@ import (
 var _ proxy.Repository = (*repository)(nil)
 
 type repository struct {
-	db postgres.Database
+	db *sqlx.DB
 }
 
-func NewRepository(db postgres.Database) proxy.Repository {
+type Config struct {
+	Host        string `env:"HOST"          envDefault:"localhost"`
+	Port        string `env:"PORT"          envDefault:"5432"`
+	User        string `env:"USER"          envDefault:"cube"`
+	Pass        string `env:"PASS"          envDefault:"cube"`
+	Name        string `env:"NAME"          envDefault:"postgres"`
+	SSLMode     string `env:"SSL_MODE"      envDefault:"disable"`
+	SSLCert     string `env:"SSL_CERT"      envDefault:""`
+	SSLKey      string `env:"SSL_KEY"       envDefault:""`
+	SSLRootCert string `env:"SSL_ROOT_CERT" envDefault:""`
+}
+
+func Setup(cfg Config) (*sqlx.DB, error) {
+	dsn := fmt.Sprintf(
+		"host=%s port=%s user=%s dbname=%s password=%s sslmode=%s sslcert=%s sslkey=%s sslrootcert=%s",
+		cfg.Host, cfg.Port, cfg.User, cfg.Name, cfg.Pass, cfg.SSLMode, cfg.SSLCert, cfg.SSLKey, cfg.SSLRootCert,
+	)
+	db, err := sqlx.Open("pgx", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open proxy db: %w", err)
+	}
+	db.SetConnMaxLifetime(time.Hour)
+	db.SetConnMaxIdleTime(time.Minute)
+	db.SetMaxIdleConns(10)
+	db.SetMaxOpenConns(20)
+
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("ping proxy db: %w", err)
+	}
+	if _, err := migrate.Exec(db.DB, "postgres", Migration(), migrate.Up); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate proxy db: %w", err)
+	}
+	return db, nil
+}
+
+func NewRepository(db *sqlx.DB) proxy.Repository {
 	return &repository{db: db}
 }
 

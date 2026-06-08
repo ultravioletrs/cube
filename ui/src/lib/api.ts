@@ -25,11 +25,23 @@ export interface ChatEvent {
   conversation_id?: string
 }
 
+function authHeaders(token: string, domainID?: string): Record<string, string> {
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (domainID) headers['X-Domain-Id'] = domainID
+  return headers
+}
+
+function runtimePath(path: string, domainID: string): string {
+  return domainID ? `/${domainID}${path}` : path
+}
+
 // listRecords fetches the domain's records from the embedder API.
 export async function listRecords(token: string, domainID: string): Promise<AppRecord[]> {
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
-  if (domainID) headers['X-Domain-Id'] = domainID
-  const res = await fetch('/api/v1/records', { headers })
+  const res = await fetch(runtimePath('/api/v1/records', domainID), {
+    credentials: 'omit',
+    headers: authHeaders(token, domainID),
+  })
   if (!res.ok) throw new Error(`listRecords: ${res.status}`)
   const data = await res.json()
   return (data.records ?? []).map(toAppRecord)
@@ -59,11 +71,11 @@ export function streamChat(
 ): Promise<void> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
+    ...authHeaders(token, domainID),
   }
-  if (domainID) headers['X-Domain-Id'] = domainID
-  return fetch('/api/v1/chat', {
+  return fetch(runtimePath('/api/v1/chat', domainID), {
     method: 'POST',
+    credentials: 'omit',
     headers,
     body: JSON.stringify({
       messages,
@@ -145,9 +157,10 @@ function formatBytes(bytes: number): string {
 
 // listOllamaModels fetches the locally available Ollama models from the embedder proxy.
 export async function listOllamaModels(token: string, domainID: string): Promise<string[]> {
-  const headers: Record<string, string> = { Authorization: `Bearer ${token}` }
-  if (domainID) headers['X-Domain-Id'] = domainID
-  const res = await fetch('/api/v1/models/ollama', { headers })
+  const res = await fetch(runtimePath('/api/v1/models/ollama', domainID), {
+    credentials: 'omit',
+    headers: authHeaders(token, domainID),
+  })
   if (!res.ok) throw new Error(`listOllamaModels: ${res.status}`)
   const data = await res.json() as { models: string[] }
   return data.models ?? []
@@ -158,18 +171,20 @@ export interface GuardrailsStatus {
   configured: boolean
 }
 
-export async function getGuardrailsStatus(token: string): Promise<GuardrailsStatus> {
-  const res = await fetch('/api/v1/guardrails', {
-    headers: { Authorization: `Bearer ${token}` },
+export async function getGuardrailsStatus(token: string, domainID = ''): Promise<GuardrailsStatus> {
+  const res = await fetch(runtimePath('/api/v1/guardrails', domainID), {
+    credentials: 'omit',
+    headers: authHeaders(token, domainID),
   })
   if (!res.ok) throw new Error(`guardrails status: ${res.status}`)
   return res.json() as Promise<GuardrailsStatus>
 }
 
-export async function setGuardrailsEnabled(token: string, enabled: boolean): Promise<GuardrailsStatus> {
-  const res = await fetch('/api/v1/guardrails', {
+export async function setGuardrailsEnabled(token: string, enabled: boolean, domainID = ''): Promise<GuardrailsStatus> {
+  const res = await fetch(runtimePath('/api/v1/guardrails', domainID), {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    credentials: 'omit',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token, domainID) },
     body: JSON.stringify({ enabled }),
   })
   if (!res.ok) throw new Error(`guardrails update: ${res.status}`)

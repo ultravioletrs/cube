@@ -1,9 +1,8 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
-# Dynamic Traefik Configuration for Cube Services
+# Dynamic Traefik Configuration for Cube + ATOM.
 
-# HTTP Middlewares
 [http.middlewares.retry-middleware.retry]
   attempts = 4
   initialInterval = "100ms"
@@ -12,40 +11,11 @@
   frameDeny = true
   browserXssFilter = true
 
-[http.middlewares.strip-auth-health-prefix-middleware.stripPrefix]
-  prefixes = ["/auth"]
-
-[http.middlewares.strip-users-health-prefix-middleware.stripPrefix]
-  prefixes = ["/users"]
-
 [http.middlewares.strip-proxy-prefix-middleware.stripPrefix]
   prefixes = ["/proxy"]
 
-[http.middlewares.strip-domains-health-prefix-middleware.stripPrefix]
-  prefixes = ["/domains"]
-
-# HTTP Services
-[http.services.seaweedfs.loadBalancer]
-  [[http.services.seaweedfs.loadBalancer.servers]]
-    url = "http://magistrala-seaweedfs-s3:8333"
-
-[http.services.users.loadBalancer]
-  [[http.services.users.loadBalancer.servers]]
-    url = "http://supermq-users:9002"
-  [http.services.users.loadBalancer.healthCheck]
-    scheme = "http"
-    path = "/health"
-    interval = "10s"
-    timeout = "10s"
-
-[http.services.auth.loadBalancer]
-  [[http.services.auth.loadBalancer.servers]]
-    url = "http://supermq-auth:8189"
-  [http.services.auth.loadBalancer.healthCheck]
-    scheme = "http"
-    path = "/health"
-    interval = "10s"
-    timeout = "10s"
+[http.middlewares.strip-atom-prefix-middleware.stripPrefix]
+  prefixes = ["/atom"]
 
 [http.services.proxy.loadBalancer]
   [[http.services.proxy.loadBalancer.servers]]
@@ -58,111 +28,63 @@
 
 [http.services.ui.loadBalancer]
   [[http.services.ui.loadBalancer.servers]]
-    url = "http://cube-ui:6193"
+    url = "http://cube-ui:5173"
   [http.services.ui.loadBalancer.healthCheck]
     scheme = "http"
     path = "/health"
     interval = "10s"
     timeout = "10s"
 
-[http.services.domains.loadBalancer]
-  [[http.services.domains.loadBalancer.servers]]
-    url = "http://supermq-domains:9003"
-  [http.services.domains.loadBalancer.healthCheck]
+[http.services.atom.loadBalancer]
+  [[http.services.atom.loadBalancer.servers]]
+    url = "http://atom:8080"
+  [http.services.atom.loadBalancer.healthCheck]
     scheme = "http"
     path = "/health"
     interval = "10s"
     timeout = "10s"
 
-# HTTP Routers
-[http.routers.users-health]
-  rule = "Path(`/users/health`)"
-  entryPoints = ["websecure"]
-  service = "users"
-  middlewares = ["strip-users-health-prefix-middleware", "retry-middleware", "headers-middleware"]
-  priority = 10
+[http.services.atom-ui.loadBalancer]
+  [[http.services.atom-ui.loadBalancer.servers]]
+    url = "http://atom-ui:3000"
 
-[http.routers.auth-health]
-  rule = "Path(`/auth/health`)"
+[http.routers.cube-ui-bff]
+  rule = "PathPrefix(`/ui`)"
   entryPoints = ["websecure"]
-  service = "auth"
-  middlewares = ["strip-auth-health-prefix-middleware", "retry-middleware", "headers-middleware"]
-  priority = 10
+  service = "proxy"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 20
 
 [http.routers.proxy]
   rule = "PathPrefix(`/proxy`)"
   entryPoints = ["websecure"]
   service = "proxy"
   middlewares = ["strip-proxy-prefix-middleware", "retry-middleware", "headers-middleware"]
+  priority = 19
+
+[http.routers.cube-runtime]
+  rule = "PathPrefix(`/api`) || PathRegexp(`^/[a-f0-9-]+/api`) || PathRegexp(`^/[a-f0-9-]+/attestation`) || PathRegexp(`^/[a-f0-9-]+/guardrails`)"
+  entryPoints = ["websecure"]
+  service = "proxy"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 18
+
+[http.routers.atom-certs]
+  rule = "PathPrefix(`/certs`)"
+  entryPoints = ["websecure"]
+  service = "atom"
+  middlewares = ["retry-middleware", "headers-middleware"]
+  priority = 15
+
+[http.routers.atom-ui]
+  rule = "PathPrefix(`/atom`)"
+  entryPoints = ["websecure"]
+  service = "atom-ui"
+  middlewares = ["strip-atom-prefix-middleware", "retry-middleware", "headers-middleware"]
   priority = 10
-
-[http.routers.users-entities]
-  rule = "PathRegexp(`^/(groups|channels|domains)/(.+)/users`) || PathRegexp(`^/(channels|users)/(.+)/groups`)"
-  entryPoints = ["websecure"]
-  service = "users"
-  middlewares = ["retry-middleware", "headers-middleware"]
-  priority = 9
-
-[http.routers.users]
-  rule = "PathPrefix(`/users`) || PathPrefix(`/password`) || Path(`/health`) || PathPrefix(`/groups`) || PathPrefix(`/oauth`)"
-  entryPoints = ["websecure"]
-  service = "users"
-  middlewares = ["retry-middleware", "headers-middleware"]
-  priority = 8
-
-[http.routers.auth-entities]
-  rule = "PathRegexp(`^/users/(.+)/domains`)"
-  entryPoints = ["websecure"]
-  service = "auth"
-  middlewares = ["retry-middleware", "headers-middleware"]
-  priority = 9
-
-[http.routers.auth]
-  rule = "PathPrefix(`/policies`) || PathPrefix(`/keys`) || PathPrefix(`/pats`)"
-  entryPoints = ["websecure"]
-  service = "auth"
-  middlewares = ["retry-middleware", "headers-middleware"]
-  priority = 8
-
-[http.routers.domains-health]
-  rule = "Path(`/domains/health`)"
-  entryPoints = ["websecure"]
-  service = "domains"
-  middlewares = ["strip-domains-health-prefix-middleware", "retry-middleware", "headers-middleware"]
-  priority = 10
-
-[http.routers.domains]
-  rule = "PathPrefix(`/domains`) || PathPrefix(`/invitations`)"
-  entryPoints = ["websecure"]
-  service = "domains"
-  middlewares = ["retry-middleware", "headers-middleware"]
-  priority = 8
-
-[http.routers.seaweedfs]
-  rule = "PathPrefix(`/mg-ui-images`)"
-  entryPoints = ["websecure"]
-  service = "seaweedfs"
-  middlewares = ["retry-middleware"]
-  priority = 10
-
-[http.services.journal.loadBalancer]
-  [[http.services.journal.loadBalancer.servers]]
-    url = "http://supermq-journal:9011"
-  [http.services.journal.loadBalancer.healthCheck]
-    scheme = "http"
-    path = "/health"
-    interval = "10s"
-    timeout = "10s"
-
-[http.routers.journal]
-  rule = "PathPrefix(`/journal`) || PathRegexp(`^/[a-f0-9-]+/journal`)"
-  entryPoints = ["websecure"]
-  service = "journal"
-  middlewares = ["retry-middleware", "headers-middleware"]
-  priority = 9
 
 [http.routers.ui]
-  rule = "PathPrefix(`/`) || PathPrefix(`/api`)"
+  rule = "PathPrefix(`/`)"
   entryPoints = ["websecure"]
   service = "ui"
   middlewares = ["retry-middleware", "headers-middleware"]

@@ -7,8 +7,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/absmach/supermq/pkg/authn"
 	"github.com/go-kit/kit/endpoint"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
@@ -40,7 +40,7 @@ func MakeEndpoints(s proxy.Service) Endpoints {
 }
 
 type ProxyRequestRequest struct {
-	Session  authn.Session
+	Session  cubeauth.Session
 	DomainID string
 	Path     string
 }
@@ -67,7 +67,7 @@ func MakeProxyRequestEndpoint(s proxy.Service) endpoint.Endpoint {
 }
 
 type GetAttestationPolicyRequest struct {
-	Session *authn.Session
+	Session *cubeauth.Session
 }
 
 type GetAttestationPolicyResponse struct {
@@ -93,7 +93,7 @@ func MakeGetAttestationPolicyEndpoint(s proxy.Service) endpoint.Endpoint {
 }
 
 type UpdateAttestationPolicyRequest struct {
-	Session *authn.Session
+	Session *cubeauth.Session
 	Policy  []byte
 }
 
@@ -119,7 +119,7 @@ func MakeUpdateAttestationPolicyEndpoint(s proxy.Service) endpoint.Endpoint {
 }
 
 type CreateRouteRequest struct {
-	Session *authn.Session
+	Session *cubeauth.Session
 	Route   *router.RouteRule
 }
 
@@ -146,7 +146,7 @@ func MakeCreateRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 }
 
 type GetRouteRequest struct {
-	Session *authn.Session
+	Session *cubeauth.Session
 	Name    string
 }
 
@@ -173,7 +173,7 @@ func MakeGetRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 }
 
 type UpdateRouteRequest struct {
-	Session *authn.Session
+	Session *cubeauth.Session
 	Name    string
 	Route   *router.RouteRule
 }
@@ -201,7 +201,7 @@ func MakeUpdateRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 }
 
 type DeleteRouteRequest struct {
-	Session *authn.Session
+	Session *cubeauth.Session
 	Name    string
 }
 
@@ -227,7 +227,7 @@ func MakeDeleteRouteEndpoint(s proxy.Service) endpoint.Endpoint {
 }
 
 type ListRoutesRequest struct {
-	Session *authn.Session
+	Session *cubeauth.Session
 	Offset  uint64
 	Limit   uint64
 }

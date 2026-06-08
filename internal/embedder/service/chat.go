@@ -15,23 +15,24 @@ import (
 )
 
 type chatService struct {
-	retrieve   domain.VectorRetrieveService
-	llm        llm.Client
-	reranker   llm.Reranker // nil = disabled
-	topK       int
-	defaultCfg llm.Config
-	factory    llm.ClientFactory // builds a client from a per-request config
+	retrieve      domain.VectorRetrieveService
+	llm           llm.Client
+	reranker      llm.Reranker // nil = disabled
+	topK          int
+	defaultCfg    llm.Config
+	ollamaBaseURL string
+	factory       llm.ClientFactory // builds a client from a per-request config
 }
 
 // NewChatService returns a ChatService that retrieves context chunks then
 // streams the LLM response.  reranker may be nil to skip re-ranking.
 // factory is called to build a temporary client when the request overrides
 // the server-default model; it may be nil if per-request overrides are not needed.
-func NewChatService(retrieve domain.VectorRetrieveService, llmClient llm.Client, reranker llm.Reranker, topK int, defaultCfg llm.Config, factory llm.ClientFactory) domain.ChatService {
+func NewChatService(retrieve domain.VectorRetrieveService, llmClient llm.Client, reranker llm.Reranker, topK int, defaultCfg llm.Config, ollamaBaseURL string, factory llm.ClientFactory) domain.ChatService {
 	if topK <= 0 {
 		topK = 15
 	}
-	return &chatService{retrieve: retrieve, llm: llmClient, reranker: reranker, topK: topK, defaultCfg: defaultCfg, factory: factory}
+	return &chatService{retrieve: retrieve, llm: llmClient, reranker: reranker, topK: topK, defaultCfg: defaultCfg, ollamaBaseURL: ollamaBaseURL, factory: factory}
 }
 
 func (s *chatService) Chat(ctx context.Context, domainID string, messages []domain.ChatMessage, recordIDs []string, modelCfg *domain.ModelConfig) (<-chan domain.ChatEvent, error) {
@@ -40,10 +41,18 @@ func (s *chatService) Chat(ctx context.Context, domainID string, messages []doma
 	if modelCfg != nil && modelCfg.Model != "" && s.factory != nil {
 		baseURL := modelCfg.BaseURL
 		if baseURL == "" {
-			baseURL = s.defaultCfg.BaseURL
+			if strings.EqualFold(modelCfg.Provider, "ollama") || strings.EqualFold(modelCfg.Provider, "local") {
+				baseURL = s.ollamaBaseURL
+			} else {
+				baseURL = s.defaultCfg.BaseURL
+			}
+		}
+		provider := modelCfg.Provider
+		if provider == "" {
+			provider = s.defaultCfg.Provider
 		}
 		llmClient = s.factory(llm.Config{
-			Provider:    modelCfg.Provider,
+			Provider:    provider,
 			BaseURL:     baseURL,
 			Model:       modelCfg.Model,
 			APIKey:      modelCfg.APIKey,

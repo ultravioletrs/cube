@@ -19,15 +19,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/absmach/supermq"
-	api "github.com/absmach/supermq/api/http"
-	mgauthn "github.com/absmach/supermq/pkg/authn"
 	"github.com/go-chi/chi/v5"
 	kitendpoint "github.com/go-kit/kit/endpoint"
 	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/ultravioletrs/cube/agent/audit"
+	"github.com/ultravioletrs/cube/internal/atom"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/endpoint"
 	"github.com/ultravioletrs/cube/proxy/router"
@@ -46,9 +45,7 @@ func MakeHandler(
 	svc proxy.Service,
 	instanceID string,
 	auditSvc audit.Service,
-	authn mgauthn.AuthNMiddleware,
-	domainAuthn mgauthn.AuthNMiddleware,
-	idp supermq.IDProvider,
+	atomClient *atom.Client,
 	proxyTransport http.RoundTripper,
 	rter *router.Router,
 ) http.Handler {
@@ -56,42 +53,42 @@ func MakeHandler(
 
 	mux := chi.NewRouter()
 
-	mux.Get("/health", supermq.Health("cube-proxy", instanceID))
+	mux.Get("/health", healthHandler("cube-proxy", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	// Route management endpoints (public, requires authentication)
-	mux.Post("/api/routes", authn.Middleware()(kithttp.NewServer(
+	mux.Post("/api/routes", withAtomSession(atomClient, false, kithttp.NewServer(
 		endpoints.CreateRoute,
 		decodeCreateRouteRequest,
 		encodeCreateRouteResponse,
 	)).ServeHTTP)
 
-	mux.Get("/api/routes", authn.Middleware()(kithttp.NewServer(
+	mux.Get("/api/routes", withAtomSession(atomClient, false, kithttp.NewServer(
 		endpoints.ListRoutes,
 		decodeListRoutesRequest,
 		encodeListRoutesResponse,
 	)).ServeHTTP)
 
-	mux.Get("/api/routes/{name}", authn.Middleware()(kithttp.NewServer(
+	mux.Get("/api/routes/{name}", withAtomSession(atomClient, false, kithttp.NewServer(
 		endpoints.GetRoute,
 		decodeGetRouteRequest,
 		encodeGetRouteResponse,
 	)).ServeHTTP)
 
-	mux.Put("/api/routes/{name}", authn.Middleware()(kithttp.NewServer(
+	mux.Put("/api/routes/{name}", withAtomSession(atomClient, false, kithttp.NewServer(
 		endpoints.UpdateRoute,
 		decodeUpdateRouteRequest,
 		encodeUpdateRouteResponse,
 	)).ServeHTTP)
 
-	mux.Delete("/api/routes/{name}", authn.Middleware()(kithttp.NewServer(
+	mux.Delete("/api/routes/{name}", withAtomSession(atomClient, false, kithttp.NewServer(
 		endpoints.DeleteRoute,
 		decodeDeleteRouteRequest,
 		encodeDeleteRouteResponse,
 	)).ServeHTTP)
 
 	mux.Route("/{domainID}", func(r chi.Router) {
-		r.Use(domainAuthn.Middleware(), api.RequestIDMiddleware(idp))
+		r.Use(withAtomSessionMiddleware(atomClient, true), requestIDMiddleware)
 		r.Use(auditSvc.Middleware)
 
 		r.Get("/attestation/policy", kithttp.NewServer(
@@ -105,7 +102,7 @@ func MakeHandler(
 		r.Handle("/*", makeProxyHandler(endpoints.ProxyRequest, proxyTransport, rter))
 	})
 
-	mux.Post("/attestation/policy", authn.Middleware()(kithttp.NewServer(
+	mux.Post("/attestation/policy", withAtomSession(atomClient, false, kithttp.NewServer(
 		endpoints.UpdateAttestationPolicy,
 		decodeUpdateAttestationPolicyRequest,
 		encodeUpdateAttestationPolicyResponse,
@@ -121,7 +118,7 @@ func makeProxyHandler(
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := context.WithValue(r.Context(), proxy.MethodContextKey, r.Method)
 
-		session, ok := ctx.Value(mgauthn.SessionKey).(mgauthn.Session)
+		session, ok := cubeauth.SessionFromContext(ctx)
 		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 
@@ -143,8 +140,79 @@ func makeProxyHandler(
 			return
 		}
 
-		serveReverseProxy(w, r, transport, rter)
+		serveReverseProxy(w, r, transport, rter, session)
 	}
+}
+
+func healthHandler(service, instanceID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status":      "pass",
+			"service":     service,
+			"instance_id": instanceID,
+		})
+	}
+}
+
+func withAtomSession(atomClient *atom.Client, usePathTenant bool, next http.Handler) http.Handler {
+	return withAtomSessionMiddleware(atomClient, usePathTenant)(next)
+}
+
+func withAtomSessionMiddleware(atomClient *atom.Client, usePathTenant bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := sessionToken(r)
+			if token == "" {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "missing session"})
+				return
+			}
+
+			session, err := atomClient.Authenticate(r.Context(), token)
+			if err != nil {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid session"})
+				return
+			}
+			session.Token = token
+
+			if usePathTenant {
+				if tenantID := chi.URLParam(r, "domainID"); tenantID != "" {
+					session.TenantID = tenantID
+				}
+			}
+
+			next.ServeHTTP(w, r.WithContext(cubeauth.WithSession(r.Context(), session)))
+		})
+	}
+}
+
+func sessionToken(r *http.Request) string {
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+		token := strings.TrimSpace(authHeader[len("Bearer "):])
+		if token != "" {
+			return token
+		}
+	}
+
+	return ""
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", ContentType)
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+func requestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := r.Header.Get("X-Request-Id")
+		if requestID == "" {
+			requestID = uuid.NewString()
+		}
+		w.Header().Set("X-Request-Id", requestID)
+		r.Header.Set("X-Request-Id", requestID)
+		next.ServeHTTP(w, r)
+	})
 }
 
 // copyAttestationHeaders copies attestation and TLS-related headers from the upstream response
@@ -205,7 +273,7 @@ func singleJoiningSlash(a, b string) string {
 }
 
 func serveReverseProxy(
-	w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router,
+	w http.ResponseWriter, r *http.Request, transport http.RoundTripper, rter *router.Router, session cubeauth.Session,
 ) {
 	rule, err := rter.DetermineTarget(r)
 	if err != nil {
@@ -239,7 +307,7 @@ func serveReverseProxy(
 		Transport: transport,
 		Rewrite: func(req *httputil.ProxyRequest) {
 			domainID := chi.URLParam(req.In, "domainID")
-			prepareProxyRequest(req.Out, target, rule, domainID, stripPrefix)
+			prepareProxyRequest(req.Out, target, rule, domainID, stripPrefix, session)
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			copyAttestationHeaders(w, resp)
@@ -255,7 +323,9 @@ func serveReverseProxy(
 	prxy.ServeHTTP(w, r)
 }
 
-func prepareProxyRequest(req *http.Request, target *url.URL, rule *router.RouteRule, domainID, stripPrefix string) {
+func prepareProxyRequest(
+	req *http.Request, target *url.URL, rule *router.RouteRule, domainID, stripPrefix string, session cubeauth.Session,
+) {
 	if domainID != "" {
 		if err := uuid.Validate(domainID); err == nil {
 			prefix := "/" + domainID
@@ -270,6 +340,9 @@ func prepareProxyRequest(req *http.Request, target *url.URL, rule *router.RouteR
 			// with the correct domain path prefix.
 			req.Header.Set("X-Domain-Id", domainID)
 		}
+	}
+	if session.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+session.Token)
 	}
 
 	if stripPrefix != "" {

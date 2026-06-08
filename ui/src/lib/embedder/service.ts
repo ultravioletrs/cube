@@ -206,10 +206,14 @@ export interface GoogleDriveBrowseResult {
   requestedScope?: string
 }
 
-const embedderURL = import.meta.env.VITE_EMBEDDER_URL ?? window.location.origin
+const embedderURL = import.meta.env.VITE_CUBE_PROXY_URL ?? import.meta.env.VITE_EMBEDDER_URL ?? window.location.origin
 
-function buildURL(path: string): string {
-  return new URL(path, embedderURL).toString()
+function buildURL(path: string, domainID = ''): string {
+  const normalizedDomain = domainID.trim()
+  const proxyPath = normalizedDomain && path.startsWith('/api/')
+    ? `/${encodeURIComponent(normalizedDomain)}${path}`
+    : path
+  return new URL(proxyPath, embedderURL).toString()
 }
 
 function formatDate(value: string): string {
@@ -348,17 +352,30 @@ function domainInit(domainID: string, init?: RequestInit): RequestInit {
 }
 
 function authHeaders(token: string, domainID: string): Record<string, string> {
-  const h: Record<string, string> = { Authorization: `Bearer ${token}` }
+  const h: Record<string, string> = {}
+  if (token) h.Authorization = `Bearer ${token}`
   if (domainID) h['X-Domain-ID'] = domainID
   return h
 }
 
+function headerValue(headers: HeadersInit | undefined, name: string): string {
+  if (!headers) return ''
+  if (headers instanceof Headers) return headers.get(name) ?? ''
+  if (Array.isArray(headers)) {
+    return headers.find(([key]) => key.toLowerCase() === name.toLowerCase())?.[1] ?? ''
+  }
+  const record = headers as Record<string, string>
+  return record[name] ?? record[name.toLowerCase()] ?? ''
+}
+
 async function apiJSON<T>(path: string, token: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(buildURL(path), {
+  const domainID = headerValue(init?.headers, 'X-Domain-ID')
+  const res = await fetch(buildURL(path, domainID), {
     ...init,
+    credentials: 'omit',
     headers: {
-      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      ...authHeaders(token, domainID),
       ...(init?.headers ?? {}),
     },
   })
@@ -605,8 +622,9 @@ export async function updateGoogleSourceSelection(
 }
 
 export async function deleteSource(token: string, domainID: string, sourceID: string): Promise<void> {
-  const res = await fetch(buildURL(`/api/v1/sources/${sourceID}`), {
+  const res = await fetch(buildURL(`/api/v1/sources/${sourceID}`, domainID), {
     method: 'DELETE',
+    credentials: 'omit',
     headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
@@ -615,8 +633,9 @@ export async function deleteSource(token: string, domainID: string, sourceID: st
 }
 
 export async function deleteRecord(token: string, domainID: string, recordID: string): Promise<void> {
-  const res = await fetch(buildURL(`/api/v1/records/${recordID}`), {
+  const res = await fetch(buildURL(`/api/v1/records/${recordID}`, domainID), {
     method: 'DELETE',
+    credentials: 'omit',
     headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
@@ -625,8 +644,9 @@ export async function deleteRecord(token: string, domainID: string, recordID: st
 }
 
 export async function retryRecordIngest(token: string, domainID: string, recordID: string): Promise<void> {
-  const res = await fetch(buildURL(`/api/v1/records/${recordID}/retry`), {
+  const res = await fetch(buildURL(`/api/v1/records/${recordID}/retry`, domainID), {
     method: 'POST',
+    credentials: 'omit',
     headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
@@ -646,8 +666,9 @@ export async function uploadRecordFile(
   if (name?.trim()) formData.append('name', name.trim())
   if (sourceID?.trim()) formData.append('source_id', sourceID.trim())
 
-  const res = await fetch(buildURL('/api/v1/records/upload'), {
+  const res = await fetch(buildURL('/api/v1/records/upload', domainID), {
     method: 'POST',
+    credentials: 'omit',
     headers: authHeaders(token, domainID),
     body: formData,
   })
@@ -688,8 +709,9 @@ export async function getConversation(
 }
 
 export async function deleteConversation(token: string, domainID: string, id: string): Promise<void> {
-  const res = await fetch(buildURL(`/api/v1/conversations/${id}`), {
+  const res = await fetch(buildURL(`/api/v1/conversations/${id}`, domainID), {
     method: 'DELETE',
+    credentials: 'omit',
     headers: authHeaders(token, domainID),
   })
   if (!res.ok) {
@@ -699,12 +721,13 @@ export async function deleteConversation(token: string, domainID: string, id: st
 
 export async function retrieveChat(
   token: string,
+  domainID: string,
   query: string,
   recordIDs: string[],
   sourceIDs: string[] = [],
   topK = 5,
 ): Promise<ChatMatch[]> {
-  const data = await apiJSON<ChatResponseDTO>('/api/v1/chat', token, {
+  const data = await apiJSON<ChatResponseDTO>('/api/v1/chat', token, domainInit(domainID, {
     method: 'POST',
     body: JSON.stringify({
       query,
@@ -712,7 +735,7 @@ export async function retrieveChat(
       source_ids: sourceIDs,
       top_k: topK,
     }),
-  })
+  }))
 
   return data.matches.map(m => ({
     chunkID: m.chunk_id,

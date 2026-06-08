@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package atom.v1;
+
+option go_package = "github.com/ultravioletrs/cube/proto/atom/v1;atomv1";
+
+service AuthzService {
+  rpc Check(CheckRequest) returns (CheckResponse);
+}
+
+service AuthService {
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
+}
+
+service CertificateService {
+  rpc ResolveCertificate(ResolveCertificateRequest) returns (ResolveCertificateResponse);
+  rpc RevokeEntityCertificates(RevokeEntityCertificatesRequest) returns (RevokeEntityCertificatesResponse);
+}
+
+message CheckRequest {
+  string subject_id = 1;
+  string action = 2;
+  string resource_id = 3;
+  map<string, string> context = 4;
+  string object_kind = 5;
+  string object_id = 6;
+}
+
+message CheckResponse {
+  bool allowed = 1;
+  string reason = 2;
+}
+
+message AuthenticateRequest {
+  string token = 1;
+}
+
+message AuthenticateResponse {
+  string entity_id = 1;
+  string tenant_id = 2;
+  string session_id = 3;
+}
+
+message ResolveCertificateRequest {
+  string serial_number = 1;
+  string fingerprint_sha256 = 2;
+}
+
+message ResolveCertificateResponse {
+  string entity_id = 1;
+  string tenant_id = 2;
+  string credential_id = 3;
+  string expires_at = 4;
+}
+
+message RevokeEntityCertificatesRequest {
+  string entity_id = 1;
+  string reason = 2;
+}
+
+message RevokeEntityCertificatesResponse {
+  uint64 revoked = 1;
+}

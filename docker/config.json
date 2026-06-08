@@ -65,6 +65,21 @@
         "atls": false
       },
       {
+        "name": "embedder-api",
+        "target_url": "http://cube-embedder:8082",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "^(/[^/]+)?/api/v1/(records|sources|conversations|retrieve|chat|models|guardrails)(/.*)?$",
+            "is_regex": true
+          }
+        ],
+        "priority": 18,
+        "enabled": true,
+        "event_type": "embedder_request",
+        "atls": false
+      },
+      {
         "name": "guardrails-admin",
         "target_url": "http://guardrails:8001/guardrails",
         "matchers": [

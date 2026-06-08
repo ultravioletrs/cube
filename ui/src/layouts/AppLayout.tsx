@@ -5,11 +5,12 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from '@/components/Sidebar'
 import { useAuth } from '@/hooks/useAuth'
 import { listConversations, listRecords, listSources } from '@/lib/embedder/service'
-import type { ActiveDomain, AppContext, AppRecord, ChatMessage, Conversation, DriveSource } from '@/types'
+import type { ActiveWorkspace, AppContext, AppRecord, ChatMessage, Conversation, DriveSource } from '@/types'
 
 const CHAT_KEY = 'cube_chat'
 const CONV_KEY = 'cube_conv_id'
-const DOMAIN_KEY = 'cube_active_domain'
+const TENANT_KEY = 'cube_active_tenant'
+const LEGACY_DOMAIN_KEY = 'cube_active_domain'
 
 function loadChatMessages(): ChatMessage[] {
   try {
@@ -28,10 +29,10 @@ export default function AppLayout() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(loadChatMessages)
   const [conversationId, setConversationId] = useState<string | null>(() => localStorage.getItem(CONV_KEY))
-  const [activeDomain, setActiveDomain] = useState<ActiveDomain | null>(() => {
+  const [activeWorkspace, setActiveWorkspace] = useState<ActiveWorkspace | null>(() => {
     try {
-      const raw = localStorage.getItem(DOMAIN_KEY)
-      return raw ? (JSON.parse(raw) as ActiveDomain) : null
+      const raw = localStorage.getItem(TENANT_KEY) ?? localStorage.getItem(LEGACY_DOMAIN_KEY)
+      return raw ? (JSON.parse(raw) as ActiveWorkspace) : null
 
     } catch {
       return null
@@ -46,21 +47,21 @@ export default function AppLayout() {
     localStorage.removeItem(CONV_KEY)
   }, [])
 
-  const domainID = activeDomain?.id ?? ''
+  const workspaceID = activeWorkspace?.id ?? ''
 
   useEffect(() => {
-    // Clear stale data from the previous domain immediately so pages never
-    // briefly show records that belong to a different domain.
+    // Clear stale data from the previous workspace immediately so pages never
+    // briefly show records that belong to a different workspace.
     setRecords([])
     setDriveSources([])
     setConversations([])
 
-    if (!tokens?.accessToken || !domainID) return
+    if (!tokens?.accessToken || !workspaceID) return
 
     let cancelled = false
     const token = tokens.accessToken
 
-    Promise.all([listRecords(token, domainID), listSources(token, domainID)])
+    Promise.all([listRecords(token, workspaceID), listSources(token, workspaceID)])
       .then(([recs, srcs]) => {
         if (cancelled) return
         setRecords(recs)
@@ -68,12 +69,12 @@ export default function AppLayout() {
       })
       .catch((err: unknown) => console.error('failed to load records/sources:', err))
 
-    listConversations(token, domainID)
+    listConversations(token, workspaceID)
       .then(convs => { if (!cancelled) setConversations(convs) })
       .catch((err: unknown) => console.error('failed to load conversations:', err))
 
     return () => { cancelled = true }
-  }, [tokens?.accessToken, domainID])
+  }, [tokens?.accessToken, workspaceID])
 
   useEffect(() => {
     if (persistTimer.current !== null) clearTimeout(persistTimer.current)
@@ -94,18 +95,36 @@ export default function AppLayout() {
   }, [conversationId])
 
   useEffect(() => {
-    if (activeDomain) {
-      localStorage.setItem(DOMAIN_KEY, JSON.stringify(activeDomain))
+    if (activeWorkspace) {
+      localStorage.setItem(TENANT_KEY, JSON.stringify(activeWorkspace))
+      localStorage.removeItem(LEGACY_DOMAIN_KEY)
     } else {
-      localStorage.removeItem(DOMAIN_KEY)
+      localStorage.removeItem(TENANT_KEY)
+      localStorage.removeItem(LEGACY_DOMAIN_KEY)
     }
-  }, [activeDomain])
+  }, [activeWorkspace])
 
-  const context: AppContext = { records, setRecords, driveSources, setDriveSources, chatMessages, setChatMessages, clearChatMessages, conversationId, setConversationId, conversations, setConversations, activeDomain, setActiveDomain }
+  const context: AppContext = {
+    records,
+    setRecords,
+    driveSources,
+    setDriveSources,
+    chatMessages,
+    setChatMessages,
+    clearChatMessages,
+    conversationId,
+    setConversationId,
+    conversations,
+    setConversations,
+    activeWorkspace,
+    setActiveWorkspace,
+    activeDomain: activeWorkspace,
+    setActiveDomain: setActiveWorkspace,
+  }
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
-      <Sidebar activeDomain={activeDomain} />
+      <Sidebar activeWorkspace={activeWorkspace} />
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <Outlet context={context} />
       </main>

@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/absmach/supermq/pkg/authn"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 )
 
 type contextKey string
@@ -68,10 +68,10 @@ type Event struct {
 	EventType string    `json:"event_type"`
 
 	// Authentication & Authorization
-	Session         authn.Session `json:"session,omitzero"`
-	AuthMethod      string        `json:"auth_method,omitempty"`
-	AttestationType string        `json:"attestation_type,omitempty"`
-	AttestationOK   bool          `json:"attestation_ok,omitempty"`
+	Session         cubeauth.Session `json:"session,omitzero"`
+	AuthMethod      string           `json:"auth_method,omitempty"`
+	AttestationType string           `json:"attestation_type,omitempty"`
+	AttestationOK   bool             `json:"attestation_ok,omitempty"`
 
 	// Request details
 	Method    string            `json:"method"`
@@ -275,7 +275,7 @@ func (am *Middleware) ExtractEventType(headers http.Header) string {
 func (am *Middleware) createAuditEvent(
 	r *http.Request,
 	capture *responseCapture,
-	session *authn.Session,
+	session *cubeauth.Session,
 	traceID, requestID string,
 	start time.Time,
 	upstreamDuration time.Duration,
@@ -668,7 +668,7 @@ func (am *Middleware) logAuditEvent(ctx context.Context, event *Event) {
 		slog.String("request_id", event.RequestID),
 		slog.Time("timestamp", event.Timestamp),
 		slog.String("event_type", event.EventType),
-		slog.String("user_id", event.Session.UserID),
+		slog.String("user_id", event.Session.EntityID),
 		slog.String("method", event.Method),
 		slog.String("path", event.Path),
 		slog.String("endpoint", event.Endpoint),
@@ -786,10 +786,10 @@ func (am *Middleware) shouldCaptureBody(r *http.Request) bool {
 	return r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodPatch
 }
 
-func (am *Middleware) extractUserInfo(r *http.Request) authn.Session {
-	session, ok := r.Context().Value(authn.SessionKey).(authn.Session)
+func (am *Middleware) extractUserInfo(r *http.Request) cubeauth.Session {
+	session, ok := cubeauth.SessionFromContext(r.Context())
 	if !ok {
-		return authn.Session{}
+		return cubeauth.Session{}
 	}
 
 	return session

@@ -7,15 +7,13 @@ volumes:
   cube-embedder-db-volume:
   cube-embedder-upload-volume:
   cube-guardrails-db-volume:
-  cube-certs-db-volume:
-  openbao-data:
-  openbao-ca:
-  magistrala-ui-backend-db-volume:
 
 services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
+    profiles:
+      - cloud
     restart: unless-stopped
     command: tunnel run
     environment:
@@ -26,9 +24,9 @@ services:
     image: opensearchproject/opensearch:2.11.0
     container_name: opensearch
     environment:
-      - discovery.type=single-node
-      - plugins.security.disabled=true
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      discovery.type: single-node
+      plugins.security.disabled: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
     ports:
       - "9200:9200"
       - "9600:9600"
@@ -44,7 +42,7 @@ services:
       retries: 5
 
   opensearch-init:
-    image: curlimages/curl:latest
+    image: curlimages/curl:8.17.0
     container_name: opensearch-init
     depends_on:
       opensearch:
@@ -54,14 +52,7 @@ services:
     volumes:
       - ./opensearch-index-template.json:/tmp/index-template.json:ro
     command: >
-      sh -c '
-        echo "Creating index template for audit logs...";
-        curl -X PUT "http://opensearch:9200/_index_template/cube-audit-template" -H "Content-Type: application/json" -d @/tmp/index-template.json;
-        
-        echo "";
-        echo "OpenSearch setup complete!";
-        curl -s "http://opensearch:9200/_cat/indices?v";
-      '
+      sh -c 'curl -fsS -X PUT "http://opensearch:9200/_index_template/cube-audit-template" -H "Content-Type: application/json" -d @/tmp/index-template.json'
     restart: "no"
 
   fluent-bit:
@@ -86,9 +77,9 @@ services:
     container_name: cube-guardrails-db
     restart: on-failure
     environment:
-      POSTGRES_USER: ${UV_GUARDRAILS_DB_USER}
-      POSTGRES_PASSWORD: ${UV_GUARDRAILS_DB_PASS}
-      POSTGRES_DB: ${UV_GUARDRAILS_DB_NAME}
+      POSTGRES_USER: ${UV_GUARDRAILS_DB_USER:-guardrails}
+      POSTGRES_PASSWORD: ${UV_GUARDRAILS_DB_PASS:-guardrails}
+      POSTGRES_DB: ${UV_GUARDRAILS_DB_NAME:-guardrails}
     networks:
       - cube-network
     volumes:
@@ -97,24 +88,33 @@ services:
   cube-guardrails:
     container_name: guardrails
     image: ghcr.io/ultravioletrs/cube/guardrails:latest
+    user: root
+    command:
+      - sh
+      - -c
+      - |
+        if ! python -c 'import dataclasses_json' >/dev/null 2>&1; then
+          pip install --no-cache-dir dataclasses-json==0.6.7
+        fi
+        exec su guardrails -s /bin/sh -c 'uvicorn main:app --host "$${UVICORN_HOST:-0.0.0.0}" --port "$${UVICORN_PORT:-8001}" --log-level "$${UVICORN_LOG_LEVEL:-info}"'
     networks:
       - cube-network
     restart: unless-stopped
     depends_on:
       - cube-guardrails-db
     environment:
-      - PYTHONPATH=/app
-      - UVICORN_HOST=0.0.0.0
-      - UVICORN_PORT=8001
-      - UVICORN_LOG_LEVEL=info
-      - TRANSFORMERS_CACHE=/app/cache
-      - HF_HOME=/app/cache
-      - XDG_CACHE_HOME=/app/cache
-      - UV_GUARDRAILS_DB_HOST=${UV_GUARDRAILS_DB_HOST}
-      - UV_GUARDRAILS_DB_PORT=${UV_GUARDRAILS_DB_PORT}
-      - UV_GUARDRAILS_DB_USER=${UV_GUARDRAILS_DB_USER}
-      - UV_GUARDRAILS_DB_PASS=${UV_GUARDRAILS_DB_PASS}
-      - UV_GUARDRAILS_DB_NAME=${UV_GUARDRAILS_DB_NAME}
+      PYTHONPATH: /app
+      UVICORN_HOST: 0.0.0.0
+      UVICORN_PORT: 8001
+      UVICORN_LOG_LEVEL: info
+      TRANSFORMERS_CACHE: /app/cache
+      HF_HOME: /app/cache
+      XDG_CACHE_HOME: /app/cache
+      UV_GUARDRAILS_DB_HOST: ${UV_GUARDRAILS_DB_HOST:-cube-guardrails-db}
+      UV_GUARDRAILS_DB_PORT: ${UV_GUARDRAILS_DB_PORT:-5432}
+      UV_GUARDRAILS_DB_USER: ${UV_GUARDRAILS_DB_USER:-guardrails}
+      UV_GUARDRAILS_DB_PASS: ${UV_GUARDRAILS_DB_PASS:-guardrails}
+      UV_GUARDRAILS_DB_NAME: ${UV_GUARDRAILS_DB_NAME:-guardrails}
     volumes:
       - ../guardrails/rails:/app/rails:ro
     healthcheck:
@@ -124,15 +124,8 @@ services:
       retries: 3
       start_period: 40s
     labels:
-      - "logging=guardrails"
-      - "service=guardrails"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "guardrails|{{.Name}}"
+      logging: "guardrails"
+      service: "guardrails"
 
   cube-agent:
     container_name: cube-agent
@@ -142,517 +135,206 @@ services:
     networks:
       - cube-network
     environment:
-      UV_CUBE_AGENT_LOG_LEVEL: ${UV_CUBE_AGENT_LOG_LEVEL}
-      UV_CUBE_AGENT_HOST: ${UV_CUBE_AGENT_HOST}
-      UV_CUBE_AGENT_PORT: ${UV_CUBE_AGENT_PORT}
-      UV_CUBE_AGENT_SERVER_CERT: ${UV_CUBE_AGENT_SERVER_CERT}
-      UV_CUBE_AGENT_SERVER_KEY: ${UV_CUBE_AGENT_SERVER_KEY}
-      UV_CUBE_AGENT_INSTANCE_ID: ${UV_CUBE_AGENT_INSTANCE_ID}
-      UV_CUBE_AGENT_TARGET_URL: ${UV_CUBE_AGENT_TARGET_URL}
-      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
-      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
-      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
-    labels:
-      # Labels for log parsing
-      logging: "cube-agent"
-      service: "agent"
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "cube-agent|{{.Name}}"
+      UV_CUBE_AGENT_LOG_LEVEL: ${UV_CUBE_AGENT_LOG_LEVEL:-info}
+      UV_CUBE_AGENT_HOST: ${UV_CUBE_AGENT_HOST:-0.0.0.0}
+      UV_CUBE_AGENT_PORT: ${UV_CUBE_AGENT_PORT:-8901}
+      UV_CUBE_AGENT_SERVER_CERT: ${UV_CUBE_AGENT_SERVER_CERT:-}
+      UV_CUBE_AGENT_SERVER_KEY: ${UV_CUBE_AGENT_SERVER_KEY:-}
+      UV_CUBE_AGENT_INSTANCE_ID: ${UV_CUBE_AGENT_INSTANCE_ID:-}
+      UV_CUBE_AGENT_TARGET_URL: ${UV_CUBE_AGENT_TARGET_URL:-http://ollama:11434}
+      UV_CUBE_AGENT_CERTS_TOKEN: ${UV_CUBE_AGENT_CERTS_TOKEN:-}
+      UV_CUBE_AGENT_ENTITY_ID: ${UV_CUBE_AGENT_ENTITY_ID:-}
+      ATOM_GRPC_URL: ${ATOM_GRPC_URL:-atom:8081}
+      ATOM_GRAPHQL_URL: ${ATOM_GRAPHQL_URL:-http://atom:8080/graphql}
+      ATOM_TIMEOUT: ${ATOM_TIMEOUT:-15s}
     depends_on:
       - fluent-bit
+      - atom
     ports:
-      - ${UV_CUBE_AGENT_PORT}:${UV_CUBE_AGENT_PORT}
+      - ${UV_CUBE_AGENT_PORT:-8901}:${UV_CUBE_AGENT_PORT:-8901}
+    labels:
+      logging: "cube-agent"
+      service: "agent"
 
   cube-proxy-db:
     image: postgres:16.1-alpine
     container_name: cube-proxy-db
     restart: on-failure
     environment:
-      POSTGRES_USER: ${UV_CUBE_PROXY_DB_USER}
-      POSTGRES_PASSWORD: ${UV_CUBE_PROXY_DB_PASS}
-      POSTGRES_DB: ${UV_CUBE_PROXY_DB_NAME}
+      POSTGRES_USER: ${UV_CUBE_PROXY_DB_USER:-cube}
+      POSTGRES_PASSWORD: ${UV_CUBE_PROXY_DB_PASS:-cube}
+      POSTGRES_DB: ${UV_CUBE_PROXY_DB_NAME:-cube-proxy}
     networks:
       - cube-network
     volumes:
       - cube-proxy-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   cube-embedder-db:
     image: pgvector/pgvector:pg16
     container_name: cube-embedder-db
     restart: on-failure
     environment:
-      POSTGRES_USER: ${EMBEDDER_DB_USER}
-      POSTGRES_PASSWORD: ${EMBEDDER_DB_PASS}
-      POSTGRES_DB: ${EMBEDDER_DB_NAME}
+      POSTGRES_USER: ${EMBEDDER_DB_USER:-veda}
+      POSTGRES_PASSWORD: ${EMBEDDER_DB_PASS:-veda}
+      POSTGRES_DB: ${EMBEDDER_DB_NAME:-veda}
     networks:
       - cube-network
     volumes:
       - cube-embedder-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   cube-embedder:
     container_name: cube-embedder
-    image: cube-embedder-local:latest
+    image: ghcr.io/ultravioletrs/cube/embedder:latest
     restart: on-failure
     networks:
       - cube-network
     depends_on:
-      - auth
-      - cube-embedder-db
-      - magistrala-seaweedfs-s3
+      atom:
+        condition: service_started
+      cube-embedder-db:
+        condition: service_healthy
     environment:
-      EMBEDDER_HTTP_ADDR: ${EMBEDDER_HTTP_ADDR}
-      EMBEDDER_DB_URL: postgres://${EMBEDDER_DB_USER}:${EMBEDDER_DB_PASS}@${EMBEDDER_DB_HOST}:${EMBEDDER_DB_PORT}/${EMBEDDER_DB_NAME}?sslmode=disable
-      EMBEDDER_AUTH_GRPC_URL: ${EMBEDDER_AUTH_GRPC_URL}
-      EMBEDDER_GOOGLE_OAUTH_CLIENT_ID: ${SMQ_GOOGLE_CLIENT_ID}
-      EMBEDDER_GOOGLE_OAUTH_CLIENT_SECRET: ${SMQ_GOOGLE_CLIENT_SECRET}
-      EMBEDDER_EMBEDDING_DEFAULT_PROFILE: ${EMBEDDER_EMBEDDING_DEFAULT_PROFILE}
-      EMBEDDER_EMBEDDING_PROFILE_BY_SOURCE_TYPE: ${EMBEDDER_EMBEDDING_PROFILE_BY_SOURCE_TYPE}
-      EMBEDDER_EMBEDDING_PROFILE_BY_RECORD_FORMAT: ${EMBEDDER_EMBEDDING_PROFILE_BY_RECORD_FORMAT}
-      EMBEDDER_EMBEDDING_TEXT_PROVIDER: ${EMBEDDER_EMBEDDING_TEXT_PROVIDER}
-      EMBEDDER_EMBEDDING_TEXT_BASE_URL: ${EMBEDDER_EMBEDDING_TEXT_BASE_URL}
-      EMBEDDER_EMBEDDING_TEXT_MODEL: ${EMBEDDER_EMBEDDING_TEXT_MODEL}
-      EMBEDDER_EMBEDDING_TEXT_DIMENSIONS: ${EMBEDDER_EMBEDDING_TEXT_DIMENSIONS}
-      EMBEDDER_EMBEDDING_TEXT_API_KEY: ${EMBEDDER_EMBEDDING_TEXT_API_KEY}
-      EMBEDDER_EMBEDDING_CODE_PROVIDER: ${EMBEDDER_EMBEDDING_CODE_PROVIDER}
-      EMBEDDER_EMBEDDING_CODE_BASE_URL: ${EMBEDDER_EMBEDDING_CODE_BASE_URL}
-      EMBEDDER_EMBEDDING_CODE_MODEL: ${EMBEDDER_EMBEDDING_CODE_MODEL}
-      EMBEDDER_EMBEDDING_CODE_DIMENSIONS: ${EMBEDDER_EMBEDDING_CODE_DIMENSIONS}
-      EMBEDDER_EMBEDDING_CODE_API_KEY: ${EMBEDDER_EMBEDDING_CODE_API_KEY}
-      EMBEDDER_EMBEDDING_IMAGE_PROVIDER: ${EMBEDDER_EMBEDDING_IMAGE_PROVIDER}
-      EMBEDDER_EMBEDDING_IMAGE_BASE_URL: ${EMBEDDER_EMBEDDING_IMAGE_BASE_URL}
-      EMBEDDER_EMBEDDING_IMAGE_MODEL: ${EMBEDDER_EMBEDDING_IMAGE_MODEL}
-      EMBEDDER_EMBEDDING_IMAGE_DIMENSIONS: ${EMBEDDER_EMBEDDING_IMAGE_DIMENSIONS}
-      EMBEDDER_EMBEDDING_IMAGE_API_KEY: ${EMBEDDER_EMBEDDING_IMAGE_API_KEY}
-      EMBEDDER_EMBEDDING_PROFILES: ${EMBEDDER_EMBEDDING_PROFILES}
-      EMBEDDER_EMBEDDING_SELECTION: ${EMBEDDER_EMBEDDING_SELECTION}
-      EMBEDDER_CHUNK_SIZE: ${EMBEDDER_CHUNK_SIZE}
-      EMBEDDER_CHUNK_OVERLAP: ${EMBEDDER_CHUNK_OVERLAP}
-      EMBEDDER_INGEST_BATCH_SIZE: ${EMBEDDER_INGEST_BATCH_SIZE}
-      EMBEDDER_INGEST_MAX_CONCURRENCY: ${EMBEDDER_INGEST_MAX_CONCURRENCY}
-      EMBEDDER_INGEST_POLL_INTERVAL: ${EMBEDDER_INGEST_POLL_INTERVAL}
-      EMBEDDER_INGEST_EMBED_BATCH_SIZE: ${EMBEDDER_INGEST_EMBED_BATCH_SIZE}
-      EMBEDDER_OBJECT_STORAGE_PROVIDER: ${EMBEDDER_OBJECT_STORAGE_PROVIDER}
-      EMBEDDER_OBJECT_STORAGE_PREFIX: ${EMBEDDER_OBJECT_STORAGE_PREFIX}
-      EMBEDDER_S3_ENDPOINT: ${EMBEDDER_S3_ENDPOINT}
-      EMBEDDER_S3_REGION: ${EMBEDDER_S3_REGION}
-      EMBEDDER_S3_BUCKET: ${EMBEDDER_S3_BUCKET}
-      EMBEDDER_S3_ACCESS_KEY_ID: ${EMBEDDER_S3_ACCESS_KEY_ID}
-      EMBEDDER_S3_SECRET_ACCESS_KEY: ${EMBEDDER_S3_SECRET_ACCESS_KEY}
-      EMBEDDER_S3_USE_SSL: ${EMBEDDER_S3_USE_SSL}
-      EMBEDDER_S3_PATH_STYLE: ${EMBEDDER_S3_PATH_STYLE}
-      EMBEDDER_S3_ENSURE_BUCKET: ${EMBEDDER_S3_ENSURE_BUCKET}
-      EMBEDDER_UPLOAD_DIR: ${EMBEDDER_UPLOAD_DIR}
+      EMBEDDER_HTTP_ADDR: ${EMBEDDER_HTTP_ADDR:-:8082}
+      EMBEDDER_DB_URL: postgres://${EMBEDDER_DB_USER:-veda}:${EMBEDDER_DB_PASS:-veda}@cube-embedder-db:5432/${EMBEDDER_DB_NAME:-veda}?sslmode=disable
+      EMBEDDER_AUTH_GRPC_URL: ${EMBEDDER_AUTH_GRPC_URL:-atom:8081}
+      EMBEDDER_GOOGLE_OAUTH_CLIENT_ID: ${EMBEDDER_GOOGLE_OAUTH_CLIENT_ID:-}
+      EMBEDDER_GOOGLE_OAUTH_CLIENT_SECRET: ${EMBEDDER_GOOGLE_OAUTH_CLIENT_SECRET:-}
+      EMBEDDER_EMBEDDING_DEFAULT_PROFILE: ${EMBEDDER_EMBEDDING_DEFAULT_PROFILE:-text}
+      EMBEDDER_EMBEDDING_PROFILE_BY_SOURCE_TYPE: '${EMBEDDER_EMBEDDING_PROFILE_BY_SOURCE_TYPE:-{}}'
+      EMBEDDER_EMBEDDING_PROFILE_BY_RECORD_FORMAT: '${EMBEDDER_EMBEDDING_PROFILE_BY_RECORD_FORMAT:-{"text":"text","md":"text","pdf":"text","docx":"text","link":"text","code":"code","image":"image"}}'
+      EMBEDDER_EMBEDDING_TEXT_PROVIDER: ${EMBEDDER_EMBEDDING_TEXT_PROVIDER:-ollama}
+      EMBEDDER_EMBEDDING_TEXT_BASE_URL: ${EMBEDDER_EMBEDDING_TEXT_BASE_URL:-http://ollama:11434}
+      EMBEDDER_EMBEDDING_TEXT_MODEL: ${EMBEDDER_EMBEDDING_TEXT_MODEL:-nomic-embed-text:v1.5}
+      EMBEDDER_EMBEDDING_TEXT_DIMENSIONS: ${EMBEDDER_EMBEDDING_TEXT_DIMENSIONS:-768}
+      EMBEDDER_EMBEDDING_TEXT_API_KEY: ${EMBEDDER_EMBEDDING_TEXT_API_KEY:-}
+      EMBEDDER_EMBEDDING_CODE_PROVIDER: ${EMBEDDER_EMBEDDING_CODE_PROVIDER:-ollama}
+      EMBEDDER_EMBEDDING_CODE_BASE_URL: ${EMBEDDER_EMBEDDING_CODE_BASE_URL:-http://ollama:11434}
+      EMBEDDER_EMBEDDING_CODE_MODEL: ${EMBEDDER_EMBEDDING_CODE_MODEL:-nomic-embed-text:v1.5}
+      EMBEDDER_EMBEDDING_CODE_DIMENSIONS: ${EMBEDDER_EMBEDDING_CODE_DIMENSIONS:-768}
+      EMBEDDER_EMBEDDING_CODE_API_KEY: ${EMBEDDER_EMBEDDING_CODE_API_KEY:-}
+      EMBEDDER_EMBEDDING_IMAGE_PROVIDER: ${EMBEDDER_EMBEDDING_IMAGE_PROVIDER:-ollama}
+      EMBEDDER_EMBEDDING_IMAGE_BASE_URL: ${EMBEDDER_EMBEDDING_IMAGE_BASE_URL:-http://ollama:11434}
+      EMBEDDER_EMBEDDING_IMAGE_MODEL: ${EMBEDDER_EMBEDDING_IMAGE_MODEL:-nomic-embed-text:v1.5}
+      EMBEDDER_EMBEDDING_IMAGE_DIMENSIONS: ${EMBEDDER_EMBEDDING_IMAGE_DIMENSIONS:-768}
+      EMBEDDER_EMBEDDING_IMAGE_API_KEY: ${EMBEDDER_EMBEDDING_IMAGE_API_KEY:-}
+      EMBEDDER_EMBEDDING_PROFILES: '${EMBEDDER_EMBEDDING_PROFILES:-}'
+      EMBEDDER_EMBEDDING_SELECTION: '${EMBEDDER_EMBEDDING_SELECTION:-}'
+      EMBEDDER_OBJECT_STORAGE_PROVIDER: ${EMBEDDER_OBJECT_STORAGE_PROVIDER:-local}
+      EMBEDDER_OBJECT_STORAGE_PREFIX: ${EMBEDDER_OBJECT_STORAGE_PREFIX:-uploads}
+      EMBEDDER_UPLOAD_DIR: ${EMBEDDER_UPLOAD_DIR:-/tmp/embedder/uploads}
+      EMBEDDER_LOG_LEVEL: ${EMBEDDER_LOG_LEVEL:-info}
+      EMBEDDER_OLLAMA_BASE_URL: ${EMBEDDER_OLLAMA_BASE_URL:-http://ollama:11434}
+      EMBEDDER_LLM_PROVIDER: ${EMBEDDER_LLM_PROVIDER:-ollama}
+      EMBEDDER_LLM_BASE_URL: ${EMBEDDER_LLM_BASE_URL:-http://ollama:11434}
+      EMBEDDER_LLM_MODEL: ${EMBEDDER_LLM_MODEL:-llama3.2:3b}
+      EMBEDDER_LLM_API_KEY: ${EMBEDDER_LLM_API_KEY:-}
+      EMBEDDER_GUARDRAILS_URL: ${EMBEDDER_GUARDRAILS_URL:-http://guardrails:8001}
       EMBEDDER_RCLONE_BINARY: /usr/bin/rclone
       EMBEDDER_RCLONE_CONFIG_DIR: /etc/cube/rclone
-      EMBEDDER_RCLONE_TIMEOUT: 2m
+      EMBEDDER_RCLONE_TIMEOUT: ${EMBEDDER_RCLONE_TIMEOUT:-2m}
       EMBEDDER_RCLONE_PREFLIGHT: "false"
-      EMBEDDER_OCR_ENABLED: ${EMBEDDER_OCR_ENABLED}
-      EMBEDDER_OCR_IMAGE_ENABLED: ${EMBEDDER_OCR_IMAGE_ENABLED}
-      EMBEDDER_OCR_PDF_FALLBACK_ENABLED: ${EMBEDDER_OCR_PDF_FALLBACK_ENABLED}
-      EMBEDDER_OCR_LANG: ${EMBEDDER_OCR_LANG}
-      EMBEDDER_OCR_BINARY: ${EMBEDDER_OCR_BINARY}
-      EMBEDDER_OCR_PDF_RENDER_BINARY: ${EMBEDDER_OCR_PDF_RENDER_BINARY}
-      EMBEDDER_OCR_TIMEOUT: ${EMBEDDER_OCR_TIMEOUT}
-      EMBEDDER_OCR_MIN_TEXT_CHARS: ${EMBEDDER_OCR_MIN_TEXT_CHARS}
-      EMBEDDER_OCR_MAX_PDF_PAGES: ${EMBEDDER_OCR_MAX_PDF_PAGES}
-      EMBEDDER_LOG_LEVEL: ${EMBEDDER_LOG_LEVEL}
-      EMBEDDER_LLM_PROVIDER: ${EMBEDDER_LLM_PROVIDER}
-      EMBEDDER_LLM_BASE_URL: ${EMBEDDER_LLM_BASE_URL}
-      EMBEDDER_LLM_MODEL: ${EMBEDDER_LLM_MODEL}
-      EMBEDDER_LLM_API_KEY: ${EMBEDDER_LLM_API_KEY}
-      EMBEDDER_CHAT_TOP_K: ${EMBEDDER_CHAT_TOP_K}
-      EMBEDDER_GUARDRAILS_URL: ${EMBEDDER_GUARDRAILS_URL:-http://guardrails:8001}
-      EMBEDDER_RCLONE_PREFLIGHT: "false"
-      EMBEDDER_RERANKER_MODEL: ${EMBEDDER_RERANKER_MODEL}
-      EMBEDDER_RERANKER_BASE_URL: ${EMBEDDER_RERANKER_BASE_URL}
+      EMBEDDER_OCR_ENABLED: ${EMBEDDER_OCR_ENABLED:-false}
+      EMBEDDER_OCR_IMAGE_ENABLED: ${EMBEDDER_OCR_IMAGE_ENABLED:-true}
+      EMBEDDER_OCR_PDF_FALLBACK_ENABLED: ${EMBEDDER_OCR_PDF_FALLBACK_ENABLED:-true}
+      EMBEDDER_CHAT_TOP_K: ${EMBEDDER_CHAT_TOP_K:-8}
+      EMBEDDER_CHUNK_SIZE: ${EMBEDDER_CHUNK_SIZE:-512}
+      EMBEDDER_CHUNK_OVERLAP: ${EMBEDDER_CHUNK_OVERLAP:-64}
+      EMBEDDER_INGEST_BATCH_SIZE: ${EMBEDDER_INGEST_BATCH_SIZE:-20}
+      EMBEDDER_INGEST_MAX_CONCURRENCY: ${EMBEDDER_INGEST_MAX_CONCURRENCY:-4}
+      EMBEDDER_INGEST_POLL_INTERVAL: ${EMBEDDER_INGEST_POLL_INTERVAL:-3s}
+      EMBEDDER_INGEST_EMBED_BATCH_SIZE: ${EMBEDDER_INGEST_EMBED_BATCH_SIZE:-16}
     volumes:
       - cube-embedder-upload-volume:/tmp/embedder/uploads
-      - type: bind
-        source: ./rclone
-        target: /etc/cube/rclone
-        read_only: true
+      - ./rclone:/etc/cube/rclone:ro
     ports:
-      - ${EMBEDDER_PORT}:${EMBEDDER_PORT}
+      - ${EMBEDDER_PORT:-8082}:8082
 
   cube-proxy:
     container_name: cube-proxy
     image: ghcr.io/ultravioletrs/cube/proxy:latest
     restart: on-failure
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        labels: "logging,service"
-        tag: "cube-proxy|{{.Name}}"
     networks:
       - cube-network
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
-      - auth
-      - cube-proxy-db
-      - fluent-bit
-      - openbao
+      atom:
+        condition: service_started
+      cube-proxy-db:
+        condition: service_healthy
+      cube-agent:
+        condition: service_started
+      fluent-bit:
+        condition: service_started
     environment:
-      UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL}
-      UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL}
-      UV_CUBE_PROXY_HOST: ${UV_CUBE_PROXY_HOST}
-      UV_CUBE_PROXY_PORT: ${UV_CUBE_PROXY_PORT}
-      UV_CUBE_PROXY_SERVER_CERT: ${UV_CUBE_PROXY_SERVER_CERT}
-      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY}
-      SMQ_SEND_TELEMETRY: ${SMQ_SEND_TELEMETRY}
-      UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID}
-      UV_CUBE_PROXY_ROUTER_CONFIG: ${UV_CUBE_PROXY_ROUTER_CONFIG}
-      SMQ_JAEGER_URL: ${SMQ_JAEGER_URL}
-      SMQ_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
-      SMQ_AUTH_GRPC_URL: ${SMQ_AUTH_GRPC_URL}
-      SMQ_AUTH_GRPC_TIMEOUT: ${SMQ_AUTH_GRPC_TIMEOUT}
-      SMQ_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
-      SMQ_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
-      SMQ_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
-      UV_CUBE_PROXY_DB_HOST: ${UV_CUBE_PROXY_DB_HOST}
-      UV_CUBE_PROXY_DB_PORT: ${UV_CUBE_PROXY_DB_PORT}
-      UV_CUBE_PROXY_DB_USER: ${UV_CUBE_PROXY_DB_USER}
-      UV_CUBE_PROXY_DB_PASS: ${UV_CUBE_PROXY_DB_PASS}
-      UV_CUBE_PROXY_DB_NAME: ${UV_CUBE_PROXY_DB_NAME}
-      SMQ_ALLOW_UNVERIFIED_USER: ${SMQ_ALLOW_UNVERIFIED_USER}
-      UV_CUBE_PROXY_SERVER_WRITE_TIMEOUT: ${UV_CUBE_PROXY_SERVER_WRITE_TIMEOUT}
-      UV_CUBE_PROXY_SERVER_READ_TIMEOUT: ${UV_CUBE_PROXY_SERVER_READ_TIMEOUT}
-      UV_CUBE_PROXY_DB_SSL_MODE: ${UV_CUBE_PROXY_DB_SSL_MODE}
-      UV_CUBE_PROXY_DB_SSL_CERT: ${UV_CUBE_PROXY_DB_SSL_CERT}
-      UV_CUBE_PROXY_DB_SSL_KEY: ${UV_CUBE_PROXY_DB_SSL_KEY}
-      UV_CUBE_PROXY_DB_SSL_ROOT_CERT: ${UV_CUBE_PROXY_DB_SSL_ROOT_CERT}
-      # Agent mTLS Configuration (optional - only set when certs are provided)
-      UV_CUBE_AGENT_CLIENT_CERT: ${UV_CUBE_AGENT_CLIENT_CERT:+/etc/cube/agent-certs/client.crt}
-      UV_CUBE_AGENT_CLIENT_KEY: ${UV_CUBE_AGENT_CLIENT_KEY:+/etc/cube/agent-certs/client.key}
-      UV_CUBE_AGENT_SERVER_CA_CERTS: /etc/cube/openbao-ca/ca.pem
-      UV_CUBE_AGENT_ATTESTED_TLS: ${UV_CUBE_AGENT_ATTESTED_TLS}
-      UV_CUBE_AGENT_ATTESTATION_POLICY: ${UV_CUBE_AGENT_ATTESTATION_POLICY:+/etc/cube/attestation-policy.json}
+      UV_CUBE_PROXY_LOG_LEVEL: ${UV_CUBE_PROXY_LOG_LEVEL:-info}
+      UV_CUBE_AGENT_URL: ${UV_CUBE_AGENT_URL:-http://cube-agent:8901}
+      UV_CUBE_PROXY_HOST: ${UV_CUBE_PROXY_HOST:-0.0.0.0}
+      UV_CUBE_PROXY_PORT: ${UV_CUBE_PROXY_PORT:-8900}
+      UV_CUBE_PROXY_SERVER_CERT: ${UV_CUBE_PROXY_SERVER_CERT:-}
+      UV_CUBE_PROXY_SERVER_KEY: ${UV_CUBE_PROXY_SERVER_KEY:-}
+      UV_CUBE_PROXY_INSTANCE_ID: ${UV_CUBE_PROXY_INSTANCE_ID:-}
+      UV_CUBE_PROXY_ROUTER_CONFIG: ${UV_CUBE_PROXY_ROUTER_CONFIG:-/etc/cube/proxy/config.json}
+      ATOM_GRPC_URL: ${ATOM_GRPC_URL:-atom:8081}
+      ATOM_GRAPHQL_URL: ${ATOM_GRAPHQL_URL:-http://atom:8080/graphql}
+      ATOM_TIMEOUT: ${ATOM_TIMEOUT:-15s}
+      UV_CUBE_PROXY_DB_HOST: ${UV_CUBE_PROXY_DB_HOST:-cube-proxy-db}
+      UV_CUBE_PROXY_DB_PORT: ${UV_CUBE_PROXY_DB_PORT:-5432}
+      UV_CUBE_PROXY_DB_USER: ${UV_CUBE_PROXY_DB_USER:-cube}
+      UV_CUBE_PROXY_DB_PASS: ${UV_CUBE_PROXY_DB_PASS:-cube}
+      UV_CUBE_PROXY_DB_NAME: ${UV_CUBE_PROXY_DB_NAME:-cube-proxy}
+      UV_CUBE_PROXY_DB_SSL_MODE: ${UV_CUBE_PROXY_DB_SSL_MODE:-disable}
+      UV_CUBE_PROXY_SERVER_WRITE_TIMEOUT: ${UV_CUBE_PROXY_SERVER_WRITE_TIMEOUT:-10s}
+      UV_CUBE_PROXY_SERVER_READ_TIMEOUT: ${UV_CUBE_PROXY_SERVER_READ_TIMEOUT:-10s}
+      UV_CUBE_AGENT_SERVER_CA_CERTS: ${UV_CUBE_AGENT_SERVER_CA_CERTS:-/etc/cube/atom-certs/root-ca.crt}
+      UV_CUBE_AGENT_ATTESTED_TLS: ${UV_CUBE_AGENT_ATTESTED_TLS:-false}
+      UV_CUBE_AGENT_ATTESTATION_POLICY: ${UV_CUBE_AGENT_ATTESTATION_POLICY:-}
     volumes:
-      - type: bind
-        source: ./config.json
-        target: /etc/cube/proxy/config.json
-        read_only: true
-      # Auth gRPC client certificates
-      - type: bind
-        source: ${SMQ_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
-        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_CERT:+.crt}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${SMQ_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
-        target: /auth-grpc-client${SMQ_AUTH_GRPC_CLIENT_KEY:+.key}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${SMQ_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
-        target: /auth-grpc-server-ca${SMQ_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
-        bind:
-          create_host_path: true
-      # Agent mTLS client certificates (optional)
-      - type: bind
-        source: ${UV_CUBE_AGENT_CLIENT_CERT:-ssl/certs/dummy/client_cert}
-        target: /etc/cube/agent-certs/client${UV_CUBE_AGENT_CLIENT_CERT:+.crt}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${UV_CUBE_AGENT_CLIENT_KEY:-ssl/certs/dummy/client_key}
-        target: /etc/cube/agent-certs/client${UV_CUBE_AGENT_CLIENT_KEY:+.key}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${UV_CUBE_AGENT_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
-        target: /etc/cube/agent-certs/ca${UV_CUBE_AGENT_SERVER_CA_CERTS:+.crt}
-        bind:
-          create_host_path: true
-      # Attestation policy
-      - type: bind
-        source: ${UV_CUBE_AGENT_ATTESTATION_POLICY:-./attestation-policy.json}
-        target: /etc/cube/attestation-policy.json
-        read_only: true
-      # OpenBao CA chain for verifying agent certificates
-      - openbao-ca:/etc/cube/openbao-ca:ro
+      - ./config.json:/etc/cube/proxy/config.json:ro
+      - ./certs:/etc/cube/atom-certs:ro
     ports:
-      - ${UV_CUBE_PROXY_PORT}:${UV_CUBE_PROXY_PORT}
+      - ${UV_CUBE_PROXY_PORT:-8900}:${UV_CUBE_PROXY_PORT:-8900}
     labels:
       logging: "cube-proxy"
       service: "proxy"
 
-  cube-certs:
-    image: ghcr.io/absmach/certs:${AM_CERTS_RELEASE_TAG}
-    container_name: cube-certs
-    depends_on:
-      - openbao
-      - cube-certs-db
-      - auth
-      - domains
-    restart: always
-    networks:
-      - cube-network
-    ports:
-      - ${AM_CERTS_HTTP_PORT}:${AM_CERTS_HTTP_PORT}
-    environment:
-      AM_CERTS_LOG_LEVEL: ${AM_CERTS_LOG_LEVEL}
-      AM_CERTS_HTTP_HOST: ${AM_CERTS_HTTP_HOST}
-      AM_CERTS_HTTP_PORT: ${AM_CERTS_HTTP_PORT}
-      AM_CERTS_GRPC_HOST: ${AM_CERTS_GRPC_HOST}
-      AM_CERTS_GRPC_PORT: ${AM_CERTS_GRPC_PORT}
-      AM_JAEGER_URL: ${SMQ_JAEGER_URL}
-      AM_JAEGER_TRACE_RATIO: ${SMQ_JAEGER_TRACE_RATIO}
-      AM_CERTS_OPENBAO_HOST: ${AM_CERTS_OPENBAO_HOST}
-      AM_CERTS_OPENBAO_APP_ROLE: ${AM_CERTS_OPENBAO_APP_ROLE}
-      AM_CERTS_OPENBAO_APP_SECRET: ${AM_CERTS_OPENBAO_APP_SECRET}
-      AM_CERTS_OPENBAO_NAMESPACE: ${AM_CERTS_OPENBAO_NAMESPACE}
-      AM_CERTS_OPENBAO_PKI_PATH: ${AM_CERTS_OPENBAO_PKI_PATH}
-      AM_CERTS_OPENBAO_ROLE: ${AM_CERTS_OPENBAO_ROLE}
-      AM_CERTS_DB_HOST: ${AM_CERTS_DB_HOST}
-      AM_CERTS_DB_PORT: ${AM_CERTS_DB_PORT}
-      AM_CERTS_DB_USER: ${AM_CERTS_DB_USER}
-      AM_CERTS_DB_PASS: ${AM_CERTS_DB_PASS}
-      AM_CERTS_DB: ${AM_CERTS_DB}
-      AM_CERTS_DB_SSL_MODE: ${AM_CERTS_DB_SSL_MODE}
-      AM_AUTH_GRPC_URL: ${SMQ_AUTH_GRPC_URL}
-      AM_AUTH_GRPC_TIMEOUT: ${SMQ_AUTH_GRPC_TIMEOUT}
-      # Auth gRPC client certificates - only set if using mTLS
-      ${SMQ_AUTH_GRPC_CLIENT_CERT:+AM_AUTH_GRPC_CLIENT_CERT: ${SMQ_AUTH_GRPC_CLIENT_CERT}}
-      ${SMQ_AUTH_GRPC_CLIENT_KEY:+AM_AUTH_GRPC_CLIENT_KEY: ${SMQ_AUTH_GRPC_CLIENT_KEY}}
-      ${SMQ_AUTH_GRPC_CLIENT_CA_CERTS:+AM_AUTH_GRPC_SERVER_CA_CERTS: ${SMQ_AUTH_GRPC_CLIENT_CA_CERTS}}
-      AM_DOMAINS_GRPC_URL: ${SMQ_DOMAINS_GRPC_URL}
-      AM_DOMAINS_GRPC_TIMEOUT: ${SMQ_DOMAINS_GRPC_TIMEOUT}
-      # Domains gRPC client certificates - only set if using mTLS
-      ${SMQ_DOMAINS_GRPC_CLIENT_CERT:+AM_DOMAINS_GRPC_CLIENT_CERT: ${SMQ_DOMAINS_GRPC_CLIENT_CERT}}
-      ${SMQ_DOMAINS_GRPC_CLIENT_KEY:+AM_DOMAINS_GRPC_CLIENT_KEY: ${SMQ_DOMAINS_GRPC_CLIENT_KEY}}
-      ${SMQ_DOMAINS_GRPC_SERVER_CA_CERTS:+AM_DOMAINS_GRPC_SERVER_CA_CERTS: ${SMQ_DOMAINS_GRPC_SERVER_CA_CERTS}}
-      AM_CERTS_SECRET: ${UV_CUBE_AGENT_CERTS_TOKEN}
-
-  cube-certs-db:
-    image: postgres:16.2-alpine
-    container_name: cube-certs-db
-    restart: on-failure
-    networks:
-      - cube-network
-    command: postgres -c "max_connections=${AM_CERTS_DB_MAX_CONNECTIONS}"
-    environment:
-      POSTGRES_USER: ${AM_CERTS_DB_USER}
-      POSTGRES_PASSWORD: ${AM_CERTS_DB_PASS}
-      POSTGRES_DB: ${AM_CERTS_DB}
-    volumes:
-      - cube-certs-db-volume:/var/lib/postgresql/data
-
-  openbao:
-    image: openbao/openbao:2.4.0
-    container_name: certs-openbao
-    restart: on-failure
-    networks:
-      - cube-network
-    environment:
-      - BAO_ADDR=http://127.0.0.1:8200
-      - OPENBAO_BASE_URL=${AM_CERTS_OPENBAO_HOST}
-      - BAO_LOG_LEVEL=info
-      - AM_CERTS_OPENBAO_PKI_ROLE=${AM_CERTS_OPENBAO_ROLE}
-      - AM_CERTS_OPENBAO_APP_ROLE=${AM_CERTS_OPENBAO_APP_ROLE}
-      - AM_CERTS_OPENBAO_APP_SECRET=${AM_CERTS_OPENBAO_APP_SECRET}
-      - AM_CERTS_OPENBAO_SECRET_ID_TTL=${AM_CERTS_OPENBAO_SECRET_ID_TTL}
-      - AM_CERTS_OPENBAO_NAMESPACE=${AM_CERTS_OPENBAO_NAMESPACE}
-      - AM_CERTS_OPENBAO_PKI_CA_CN=${AM_CERTS_OPENBAO_PKI_CA_CN}
-      - AM_CERTS_OPENBAO_PKI_CA_OU=${AM_CERTS_OPENBAO_PKI_CA_OU}
-      - AM_CERTS_OPENBAO_PKI_CA_O=${AM_CERTS_OPENBAO_PKI_CA_O}
-      - AM_CERTS_OPENBAO_PKI_CA_C=${AM_CERTS_OPENBAO_PKI_CA_C}
-      - AM_CERTS_OPENBAO_PKI_CA_L=${AM_CERTS_OPENBAO_PKI_CA_L}
-      - AM_CERTS_OPENBAO_PKI_CA_ST=${AM_CERTS_OPENBAO_PKI_CA_ST}
-      - AM_CERTS_OPENBAO_PKI_CA_ADDR=${AM_CERTS_OPENBAO_PKI_CA_ADDR}
-      - AM_CERTS_OPENBAO_PKI_CA_PO=${AM_CERTS_OPENBAO_PKI_CA_PO}
-      - AM_CERTS_OPENBAO_PKI_CA_DNS_NAMES=${AM_CERTS_OPENBAO_PKI_CA_DNS_NAMES}
-      - AM_CERTS_OPENBAO_PKI_CA_IP_ADDRESSES=${AM_CERTS_OPENBAO_PKI_CA_IP_ADDRESSES}
-      - AM_CERTS_OPENBAO_PKI_CA_URI_SANS=${AM_CERTS_OPENBAO_PKI_CA_URI_SANS}
-      - AM_CERTS_OPENBAO_PKI_CA_EMAIL_ADDRESSES=${AM_CERTS_OPENBAO_PKI_CA_EMAIL_ADDRESSES}
-      - AM_CERTS_OPENBAO_UNSEAL_KEY_1=${AM_CERTS_OPENBAO_UNSEAL_KEY_1}
-      - AM_CERTS_OPENBAO_UNSEAL_KEY_2=${AM_CERTS_OPENBAO_UNSEAL_KEY_2}
-      - AM_CERTS_OPENBAO_UNSEAL_KEY_3=${AM_CERTS_OPENBAO_UNSEAL_KEY_3}
-      - AM_CERTS_OPENBAO_ROOT_TOKEN=${AM_CERTS_OPENBAO_ROOT_TOKEN}
-    cap_add:
-      - IPC_LOCK
-    mem_swappiness: 0
-    volumes:
-      - openbao-data:/opt/openbao/data
-      - openbao-ca:/opt/openbao/ca
-      - ./openbao-entrypoint.sh:/entrypoint.sh
-    entrypoint: /bin/sh
-    command: /entrypoint.sh
-
   ui:
-    image: ghcr.io/absmach/magistrala/ui-cube-ai:${MG_RELEASE_TAG}
+    build:
+      context: ../ui
+      dockerfile: Dockerfile.dev
     container_name: cube-ui
-    restart: always
+    restart: unless-stopped
     depends_on:
-      - auth
-      - users
-      - domains
-    networks:
-      - cube-network
-    environment:
-      PORT: ${UI_PORT}
-      MG_DOMAINS_URL: ${SMQ_DOMAINS_URL}
-      MG_USERS_URL: ${SMQ_USERS_URL}
-      MG_BACKEND_URL: ${MG_BACKEND_URL}
-      MG_AUTH_URL: ${SMQ_AUTH_URL}
-      MG_UI_IMAGE_URL: ${MG_UI_IMAGE_URL}
-      MG_UI_BASE_PATH: ${UV_CUBE_UI_BASE_PATH}
-      MG_NEXTAUTH_BASE_PATH: ${MG_NEXTAUTH_BASE_PATH}
-      MG_UI_TYPE: cube-ai
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-      NEXTAUTH_URL: ${NEXTAUTH_URL}
-      MG_HOST_URL: ${MG_HOST_URL}
-      MG_UI_BASEURL: ${MG_UI_BASEURL}
-      MG_ACCESS_TOKEN_EXPIRY: ${SMQ_AUTH_ACCESS_TOKEN_DURATION}
-      MG_REFRESH_TOKEN_EXPIRY: ${SMQ_AUTH_REFRESH_TOKEN_DURATION}
-      MG_UI_SMTP_HOST: ${SMQ_EMAIL_HOST}
-      MG_UI_SMTP_PORT: ${SMQ_EMAIL_PORT}
-      MG_UI_SMTP_SECURE: ${MG_UI_SMTP_SECURE}
-      MG_UI_SUPPORT_FROM: ${SMQ_EMAIL_FROM_ADDRESS}
-      MG_SUPPORT_EMAIL: ${SMQ_EMAIL_USERNAME}
-      MG_SUPPORT_EMAIL_PASS: ${SMQ_EMAIL_PASSWORD}
-      MG_GOOGLE_CLIENT_ID: ${SMQ_GOOGLE_CLIENT_ID}
-      MG_GOOGLE_CLIENT_SECRET: ${SMQ_GOOGLE_CLIENT_SECRET}
-      MG_GOOGLE_REDIRECT_URL: ${SMQ_GOOGLE_REDIRECT_URL}
-      MG_GOOGLE_STATE: ${SMQ_GOOGLE_STATE}
-      MG_MAILCHIMP_API_KEY: ${MG_MAILCHIMP_API_KEY}
-      MG_MAILCHIMP_SERVER_PREFIX: ${MG_MAILCHIMP_SERVER_PREFIX}
-      MG_MAILCHIMP_AUDIENCE_ID: ${MG_MAILCHIMP_AUDIENCE_ID}
-      MG_UI_ALLOW_UNVERIFIED_USER: ${SMQ_ALLOW_UNVERIFIED_USER}
-      MG_UI_DOCKER_ACCEPT_EULA: ${UV_CUBE_UI_DOCKER_ACCEPT_EULA}
-      CUBE_AI_PROXY_URL: ${CUBE_AI_PROXY_URL}
-      OLLAMA_BASE_URL: ${UV_CUBE_UI_LLM_BASE_URL}
-      OLLAMA_DEFAULT_MODEL: ${UV_CUBE_UI_LLM_DEFAULT_MODEL}
-      GUARDRAILS_BASE_URL: ${GUARDRAILS_BASE_URL}
-
-  magistrala-backend:
-    image: ghcr.io/absmach/magistrala/ui-backend:${MG_RELEASE_TAG}
-    container_name: magistrala-backend
-    restart: on-failure
-    networks:
-      - cube-network
-    environment:
-      MG_BACKEND_LOG_LEVEL: ${MG_BACKEND_LOG_LEVEL}
-      MG_BACKEND_HTTP_HOST: ${MG_BACKEND_HTTP_HOST}
-      MG_BACKEND_HTTP_PORT: ${MG_BACKEND_HTTP_PORT}
-      MG_BACKEND_HTTP_SERVER_CERT: ${MG_BACKEND_HTTP_SERVER_CERT}
-      MG_BACKEND_HTTP_SERVER_KEY: ${MG_BACKEND_HTTP_SERVER_KEY}
-      MG_BACKEND_DB_HOST: ${MG_BACKEND_DB_HOST}
-      MG_BACKEND_DB_PORT: ${MG_BACKEND_DB_PORT}
-      MG_BACKEND_DB_USER: ${MG_BACKEND_DB_USER}
-      MG_BACKEND_DB_PASS: ${MG_BACKEND_DB_PASS}
-      MG_BACKEND_DB_NAME: ${MG_BACKEND_DB_NAME}
-      MG_BACKEND_DB_SSL_MODE: ${MG_BACKEND_DB_SSL_MODE}
-      MG_BACKEND_DB_SSL_CERT: ${MG_BACKEND_DB_SSL_CERT}
-      MG_BACKEND_DB_SSL_KEY: ${MG_BACKEND_DB_SSL_KEY}
-      MG_BACKEND_DB_SSL_ROOT_CERT: ${MG_BACKEND_DB_SSL_ROOT_CERT}
-      MG_BACKEND_INSTANCE_ID: ${MG_BACKEND_INSTANCE_ID}
-      MG_AUTH_GRPC_URL: ${MG_AUTH_GRPC_URL}
-      MG_AUTH_GRPC_TIMEOUT: ${MG_AUTH_GRPC_TIMEOUT}
-      MG_AUTH_GRPC_CLIENT_CERT: ${MG_AUTH_GRPC_CLIENT_CERT:+/auth-grpc-client.crt}
-      MG_AUTH_GRPC_CLIENT_KEY: ${MG_AUTH_GRPC_CLIENT_KEY:+/auth-grpc-client.key}
-      MG_AUTH_GRPC_SERVER_CA_CERTS: ${MG_AUTH_GRPC_SERVER_CA_CERTS:+/auth-grpc-server-ca.crt}
-      MG_UI_VERIFICATION_TLS: ${MG_UI_VERIFICATION_TLS}
-      MG_UI_CONTENT_TYPE: ${MG_UI_CONTENT_TYPE}
-      MG_UI_DOCKER_ACCEPT_EULA: ${UV_CUBE_UI_DOCKER_ACCEPT_EULA}
-      MG_BACKEND_OBJECT_STORAGE_REGION: ${MG_BACKEND_OBJECT_STORAGE_REGION}
-      MG_BACKEND_OBJECT_STORAGE_BUCKET: ${MG_BACKEND_OBJECT_STORAGE_BUCKET}
-      MG_BACKEND_OBJECT_STORAGE_ENDPOINT: ${MG_BACKEND_OBJECT_STORAGE_ENDPOINT}
-      MG_BACKEND_OBJECT_STORAGE_USE_PATH_STYLE: ${MG_BACKEND_OBJECT_STORAGE_USE_PATH_STYLE}
-      MG_BACKEND_OBJECT_STORAGE_PRESIGN_ENDPOINT: ${MG_BACKEND_OBJECT_STORAGE_PRESIGN_ENDPOINT}
-      MG_BACKEND_OBJECT_STORAGE_ACCESS_KEY: ${MG_BACKEND_OBJECT_STORAGE_ACCESS_KEY}
-      MG_BACKEND_OBJECT_STORAGE_SECRET_KEY: ${MG_BACKEND_OBJECT_STORAGE_SECRET_KEY}
-      MG_BACKEND_OBJECT_STORAGE_WRITE_TTL: ${MG_BACKEND_OBJECT_STORAGE_WRITE_TTL}
-      MG_BACKEND_OBJECT_STORAGE_READ_TTL: ${MG_BACKEND_OBJECT_STORAGE_READ_TTL}
-    depends_on:
-      magistrala-ui-backend-db:
+      cube-proxy:
         condition: service_started
-      magistrala-seaweedfs-s3:
+      atom-ui:
         condition: service_started
-      magistrala-seaweedfs-init:
-        condition: service_completed_successfully
-    volumes:
-      - type: bind
-        source: ${MG_AUTH_GRPC_CLIENT_CERT:-ssl/certs/dummy/client_cert}
-        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_CERT:+.crt}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${MG_AUTH_GRPC_CLIENT_KEY:-ssl/certs/dummy/client_key}
-        target: /auth-grpc-client${MG_AUTH_GRPC_CLIENT_KEY:+.key}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ${MG_AUTH_GRPC_SERVER_CA_CERTS:-ssl/certs/dummy/server_ca}
-        target: /auth-grpc-server-ca${MG_AUTH_GRPC_SERVER_CA_CERTS:+.crt}
-        bind:
-          create_host_path: true
-      - type: bind
-        source: ./ssl/certs/ca.crt
-        target: /etc/ssl/certs/ca.crt
-        read_only: true
-
-  magistrala-ui-backend-db:
-    image: postgres:16.2-alpine
-    container_name: magistrala-ui-backend-db
-    restart: on-failure
-    environment:
-      POSTGRES_USER: ${MG_BACKEND_DB_USER}
-      POSTGRES_PASSWORD: ${MG_BACKEND_DB_PASS}
-      POSTGRES_DB: ${MG_BACKEND_DB_NAME}
-      MG_POSTGRES_MAX_CONNECTIONS: ${MG_POSTGRES_MAX_CONNECTIONS}
     networks:
       - cube-network
-    volumes:
-      - magistrala-ui-backend-db-volume:/var/lib/postgresql/data
-    command: postgres -c "max_connections=${MG_POSTGRES_MAX_CONNECTIONS}"
-
-  magistrala-seaweedfs-s3:
-    image: chrislusf/seaweedfs:4.16
-    container_name: magistrala-seaweedfs-s3
-    command: server -s3 -s3.config=/etc/seaweedfs/s3.json -dir=/data
-    restart: on-failure:5
+    environment:
+      CUBE_PROXY_TARGET: ${CUBE_PROXY_TARGET:-http://cube-proxy:8900}
+      VITE_CUBE_PROXY_URL: ${VITE_CUBE_PROXY_URL:-http://localhost:${UI_PORT:-5173}}
+      VITE_ATOM_API_URL: ${VITE_ATOM_API_URL:-http://localhost:${ATOM_HTTP_PORT:-8080}}
+      VITE_ATOM_GRAPHQL_URL: ${VITE_ATOM_GRAPHQL_URL:-http://localhost:${ATOM_HTTP_PORT:-8080}/graphql}
+      VITE_ATOM_UI_URL: ${VITE_ATOM_UI_URL:-http://localhost:${ATOM_UI_HTTP_PORT:-3005}}
     ports:
-      - "8333:8333" # S3 endpoint
-    volumes:
-      - ./data/seaweedfs:/data
-      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
-    networks:
-      - cube-network
-
-  magistrala-seaweedfs-init:
-    image: amazon/aws-cli
-    container_name: magistrala-seaweedfs-init
-    entrypoint: /bin/sh
-    depends_on:
-      - magistrala-seaweedfs-s3
-    command:
-      - -c
-      - |
-        echo "[INIT] Waiting 20s for SeaweedFS S3 to be ready...";
-        sleep 20;
-        OUT=$(aws --endpoint-url http://magistrala-seaweedfs-s3:8333 s3api create-bucket --bucket $${BUCKET} 2>&1);
-        EXIT=$$?;
-        if [ $$EXIT -eq 0 ]; then
-          echo "[INIT] Bucket $${BUCKET} created successfully.";
-        elif echo "$$OUT" | grep -q 'BucketAlreadyOwnedByYou\|BucketAlreadyExists'; then
-          echo "[INIT] Bucket $${BUCKET} already exists, skipping.";
-        else
-          echo "[INIT] Failed to create bucket $${BUCKET}: $$OUT" >&2;
-          exit 1;
-        fi
-    networks:
-      - cube-network
-    environment:
-      BUCKET: ${MG_BACKEND_OBJECT_STORAGE_BUCKET}
-      AWS_ACCESS_KEY_ID: ${MG_BACKEND_OBJECT_STORAGE_ACCESS_KEY}
-      AWS_SECRET_ACCESS_KEY: ${MG_BACKEND_OBJECT_STORAGE_SECRET_KEY}
-      AWS_DEFAULT_REGION: ${MG_BACKEND_OBJECT_STORAGE_REGION}
-      AWS_EC2_METADATA_DISABLED: "true"
+      - ${UI_PORT:-5173}:5173
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:5173/health >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
