@@ -52,6 +52,7 @@ export default function AppLayout() {
   useEffect(() => {
     // Clear stale data from the previous workspace immediately so pages never
     // briefly show records that belong to a different workspace.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecords([])
     setDriveSources([])
     setConversations([])

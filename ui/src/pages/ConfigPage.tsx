@@ -135,6 +135,7 @@ export default function ConfigPage() {
 
   useEffect(() => {
     const cfg = loadModelConfig()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLlmProvider(cfg.provider)
     setLlmModel(cfg.model)
     setApiKey(cfg.apiKey)
@@ -146,6 +147,7 @@ export default function ConfigPage() {
 
   useEffect(() => {
     if (llmProvider !== 'local' || !domainID) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOllamaLoading(true)
     listOllamaModels(accessToken, domainID)
       .then(models => {

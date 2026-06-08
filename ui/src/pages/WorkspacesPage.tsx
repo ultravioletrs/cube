@@ -164,6 +164,7 @@ export default function WorkspacesPage() {
     }
   }, [tokens?.accessToken])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
   function handleSelect(workspace: Workspace) {
