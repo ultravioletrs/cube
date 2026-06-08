@@ -14,10 +14,7 @@ RUN apk update \
     && apk add make upx
 
 RUN CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
-    go build -ldflags "-s -w \
-    -X 'github.com/absmach/supermq.BuildTime=$(date -u '+%Y-%m-%dT%H:%M:%SZ')' \
-    -X 'github.com/absmach/supermq.Version=${VERSION}' \
-    -X 'github.com/absmach/supermq.Commit=${COMMIT}'" \
+    go build -ldflags "-s -w" \
     -o build/cube-${SVC} cmd/${SVC}/main.go
 
 RUN upx build/cube-${SVC} \

@@ -10,8 +10,53 @@ This guide explains how to generate attestation policies for Cube AI Confidentia
 
 - **Cocos CLI** installed and built (`cocos-cli`)
 - A running Cube deployment accessible through the **Traefik** reverse proxy (`https://localhost/proxy` for local `make up`)
-- A valid SuperMQ access token and domain ID for authenticated Cube Proxy API calls
+- A valid ATOM access token and tenant ID for authenticated Cube Proxy API calls
 - Appropriate permissions to access cloud provider attestation services (for GCP/Azure)
+
+## Attested TLS Certificate Flow
+
+In production, `cube-proxy` uses attested TLS (aTLS) to verify `cube-agent` before forwarding sensitive model traffic. The agent uses an ATOM-backed certificate provider when `UV_CUBE_AGENT_CERTS_TOKEN` and `UV_CUBE_AGENT_ENTITY_ID` are configured; otherwise it falls back to the Cocos aTLS provider. Local Docker bootstrapping disables aTLS first so the initial attestation policy can be generated.
+
+```mermaid
+sequenceDiagram
+    participant P as cube-proxy
+    participant A as cube-agent inside TEE/CVM
+    participant T as TEE attestation provider
+    participant AT as ATOM CA / Certs
+
+    P->>A: Start attested TLS connection
+    P->>A: Send fresh nonce / challenge
+
+    A->>A: Generate fresh private key in memory
+    A->>A: Derive public key from private key
+
+    A->>T: Ask TEE to attest public key + nonce
+    T-->>A: Attestation report
+
+    A->>A: Build CSR with public key + attestation evidence
+
+    A->>AT: issueCertificateFromCsr(CSR)
+    AT->>AT: Sign CSR with ATOM intermediate CA
+    AT->>AT: Store cert serial, fingerprint, owner, expiry, status
+    AT-->>A: Return signed certificate
+
+    A-->>P: Present signed certificate during TLS handshake
+
+    P->>P: Verify certificate chains to ATOM CA
+    P->>P: Verify attestation evidence
+    P->>P: Verify nonce matches challenge
+    P->>P: Verify TEE/runtime policy
+
+    alt Verification passes
+        P->>A: Send sensitive Cube runtime request
+        A->>A: Forward to local model runtime
+        A-->>P: Return model response
+    else Verification fails
+        P-xA: Reject connection
+    end
+```
+
+ATOM signs and records the issued leaf certificate, but the agent-generated private key remains in agent memory and is not stored by ATOM. The proxy trusts the configured ATOM CA bundle and verifies the attestation policy before using the agent path.
 
 ## Important: Initial Setup Without Attested TLS
 

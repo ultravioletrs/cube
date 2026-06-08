@@ -35,14 +35,14 @@ Expected response:
 
 ## 2) Get Access Token
 
-Issue a token from SuperMQ users service:
+Issue a token from ATOM:
 
 ```bash
 TOKEN=$(
-  curl -ksS -X POST https://localhost/users/tokens/issue \
+  curl -sS -X POST http://localhost:8080/auth/login \
     -H "Content-Type: application/json" \
-    -d '{"username":"admin@example.com","password":"m2N2Lfno"}' \
-  | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p'
+    -d '{"identifier":"00000000-0000-0000-0000-000000000001","secret":"12345678","kind":"password"}' \
+  | sed -n 's/.*"token":"\([^"]*\)".*/\1/p'
 )
 
 echo "${TOKEN:0:24}..."

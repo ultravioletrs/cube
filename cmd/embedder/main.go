@@ -53,6 +53,7 @@ type config struct {
 	imageEmbeddingConfig    imageEmbeddingConfig
 	embeddingConfig         embedding.Config
 	llmConfig               llm.Config
+	ollamaBaseURL           string
 	chatTopK                int
 	guardrailsURL           string
 	rerankerModel           string
@@ -79,7 +80,7 @@ func loadConfig() config {
 	defaultProfile := embedding.ProfileConfig{
 		Provider:   "ollama",
 		BaseURL:    "http://ollama:11434",
-		Model:      "nomic-embed-text",
+		Model:      "nomic-embed-text:v1.5",
 		Dimensions: 768,
 	}
 
@@ -109,7 +110,7 @@ func loadConfig() config {
 	return config{
 		httpAddr:                env("EMBEDDER_HTTP_ADDR", ":8080"),
 		dbURL:                   mustEnv("EMBEDDER_DB_URL"),
-		authGRPCAddr:            env("EMBEDDER_AUTH_GRPC_URL", "auth:8181"),
+		authGRPCAddr:            env("EMBEDDER_AUTH_GRPC_URL", "atom:8081"),
 		objectKeyPrefix:         env("EMBEDDER_OBJECT_STORAGE_PREFIX", "uploads"),
 		logLevel:                env("EMBEDDER_LOG_LEVEL", "info"),
 		googleOAuthClientID:     env("EMBEDDER_GOOGLE_OAUTH_CLIENT_ID", ""),
@@ -157,6 +158,7 @@ func loadConfig() config {
 			Model:    env("EMBEDDER_LLM_MODEL", "llama3.2:3b"),
 			APIKey:   env("EMBEDDER_LLM_API_KEY", ""),
 		},
+		ollamaBaseURL:        env("EMBEDDER_OLLAMA_BASE_URL", "http://ollama:11434"),
 		chatTopK:             envInt("EMBEDDER_CHAT_TOP_K", 15),
 		guardrailsURL:        env("EMBEDDER_GUARDRAILS_URL", ""),
 		rerankerModel:        env("EMBEDDER_RERANKER_MODEL", ""),
@@ -329,12 +331,15 @@ func main() {
 	}
 
 	// clientFactory builds a per-request LLM client when the caller overrides the model.
-	clientFactory := llm.ClientFactory(func(cfg llm.Config) llm.Client {
+	clientFactory := llm.ClientFactory(func(llmCfg llm.Config) llm.Client {
 		var client llm.Client
-		if cfg.Provider == "openai" {
-			client = llmopenai.NewFromConfig(cfg)
+		if llmCfg.Provider == "openai" {
+			client = llmopenai.NewFromConfig(llmCfg)
 		} else {
-			client = ollama.NewFromConfig(cfg)
+			if llmCfg.BaseURL == "" {
+				llmCfg.BaseURL = cfg.ollamaBaseURL
+			}
+			client = ollama.NewFromConfig(llmCfg)
 		}
 		if guardrailsCtrl != nil {
 			return guardrailsCtrl.Wrap(client)
@@ -346,13 +351,13 @@ func main() {
 	if cfg.rerankerModel != "" {
 		rerankerBase := cfg.rerankerBaseURL
 		if rerankerBase == "" {
-			rerankerBase = cfg.llmConfig.BaseURL
+			rerankerBase = cfg.ollamaBaseURL
 		}
 		reranker = ollama.NewReranker(rerankerBase, cfg.rerankerModel)
 		slog.Info("reranker enabled", "model", cfg.rerankerModel, "base_url", rerankerBase)
 	}
 
-	chatSvc := service.NewChatService(retrieveSvc, llmClient, reranker, cfg.chatTopK, cfg.llmConfig, clientFactory)
+	chatSvc := service.NewChatService(retrieveSvc, llmClient, reranker, cfg.chatTopK, cfg.llmConfig, cfg.ollamaBaseURL, clientFactory)
 
 	// ── HTTP server ───────────────────────────────────────────────────────────
 
@@ -369,7 +374,7 @@ func main() {
 		worker.Trigger,
 		cfg.googleOAuthClientID,
 		cfg.googleOAuthClientSecret,
-		cfg.llmConfig.BaseURL,
+		cfg.ollamaBaseURL,
 		guardrailsCtrl,
 	)
 	srv := &http.Server{

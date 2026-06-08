@@ -3,12 +3,15 @@
 
 CREATE TABLE IF NOT EXISTS conversations (
     id         UUID        PRIMARY KEY DEFAULT uuid_generate_v4(),
+    domain_id  TEXT        NOT NULL,
     user_id    TEXT        NOT NULL,
     title      TEXT        NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS domain_id TEXT;
+CREATE INDEX IF NOT EXISTS conversations_domain_id_idx ON conversations (domain_id);
 CREATE INDEX IF NOT EXISTS conversations_user_id_idx ON conversations (user_id);
 
 CREATE TABLE IF NOT EXISTS conversation_messages (

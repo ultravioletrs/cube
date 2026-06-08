@@ -7,7 +7,7 @@ import (
 	"context"
 	"math"
 
-	"github.com/absmach/supermq/pkg/authn"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
@@ -19,16 +19,16 @@ const (
 )
 
 type Service interface {
-	ProxyRequest(ctx context.Context, session *authn.Session, path string) error
+	ProxyRequest(ctx context.Context, session *cubeauth.Session, path string) error
 	Secure() string
-	UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error
-	GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error)
-	CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error)
-	UpdateRoute(ctx context.Context, session *authn.Session, name string,
+	UpdateAttestationPolicy(ctx context.Context, session *cubeauth.Session, policy []byte) error
+	GetAttestationPolicy(ctx context.Context, session *cubeauth.Session) ([]byte, error)
+	CreateRoute(ctx context.Context, session *cubeauth.Session, route *router.RouteRule) (*router.RouteRule, error)
+	UpdateRoute(ctx context.Context, session *cubeauth.Session, name string,
 		route *router.RouteRule) (*router.RouteRule, error)
-	DeleteRoute(ctx context.Context, session *authn.Session, name string) error
-	GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error)
-	ListRoutes(ctx context.Context, session *authn.Session, offset,
+	DeleteRoute(ctx context.Context, session *cubeauth.Session, name string) error
+	GetRoute(ctx context.Context, session *cubeauth.Session, name string) (*router.RouteRule, error)
+	ListRoutes(ctx context.Context, session *cubeauth.Session, offset,
 		limit uint64) (routes []router.RouteRule, total uint64, err error)
 }
 

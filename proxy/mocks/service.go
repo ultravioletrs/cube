@@ -10,8 +10,8 @@ package mocks
 import (
 	"context"
 
-	"github.com/absmach/supermq/pkg/authn"
 	mock "github.com/stretchr/testify/mock"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
@@ -43,7 +43,7 @@ func (_m *Service) EXPECT() *Service_Expecter {
 }
 
 // CreateRoute provides a mock function for the type Service
-func (_mock *Service) CreateRoute(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error) {
+func (_mock *Service) CreateRoute(ctx context.Context, session *cubeauth.Session, route *router.RouteRule) (*router.RouteRule, error) {
 	ret := _mock.Called(ctx, session, route)
 
 	if len(ret) == 0 {
@@ -52,17 +52,17 @@ func (_mock *Service) CreateRoute(ctx context.Context, session *authn.Session, r
 
 	var r0 *router.RouteRule
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) (*router.RouteRule, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, *router.RouteRule) (*router.RouteRule, error)); ok {
 		return returnFunc(ctx, session, route)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, *router.RouteRule) *router.RouteRule); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, *router.RouteRule) *router.RouteRule); ok {
 		r0 = returnFunc(ctx, session, route)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*router.RouteRule)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, *router.RouteRule) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *cubeauth.Session, *router.RouteRule) error); ok {
 		r1 = returnFunc(ctx, session, route)
 	} else {
 		r1 = ret.Error(1)
@@ -77,21 +77,21 @@ type Service_CreateRoute_Call struct {
 
 // CreateRoute is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 //   - route *router.RouteRule
 func (_e *Service_Expecter) CreateRoute(ctx interface{}, session interface{}, route interface{}) *Service_CreateRoute_Call {
 	return &Service_CreateRoute_Call{Call: _e.mock.On("CreateRoute", ctx, session, route)}
 }
 
-func (_c *Service_CreateRoute_Call) Run(run func(ctx context.Context, session *authn.Session, route *router.RouteRule)) *Service_CreateRoute_Call {
+func (_c *Service_CreateRoute_Call) Run(run func(ctx context.Context, session *cubeauth.Session, route *router.RouteRule)) *Service_CreateRoute_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		var arg2 *router.RouteRule
 		if args[2] != nil {
@@ -111,13 +111,13 @@ func (_c *Service_CreateRoute_Call) Return(routeRule *router.RouteRule, err erro
 	return _c
 }
 
-func (_c *Service_CreateRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, route *router.RouteRule) (*router.RouteRule, error)) *Service_CreateRoute_Call {
+func (_c *Service_CreateRoute_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session, route *router.RouteRule) (*router.RouteRule, error)) *Service_CreateRoute_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // DeleteRoute provides a mock function for the type Service
-func (_mock *Service) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
+func (_mock *Service) DeleteRoute(ctx context.Context, session *cubeauth.Session, name string) error {
 	ret := _mock.Called(ctx, session, name)
 
 	if len(ret) == 0 {
@@ -125,7 +125,7 @@ func (_mock *Service) DeleteRoute(ctx context.Context, session *authn.Session, n
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, string) error); ok {
 		r0 = returnFunc(ctx, session, name)
 	} else {
 		r0 = ret.Error(0)
@@ -140,21 +140,21 @@ type Service_DeleteRoute_Call struct {
 
 // DeleteRoute is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 //   - name string
 func (_e *Service_Expecter) DeleteRoute(ctx interface{}, session interface{}, name interface{}) *Service_DeleteRoute_Call {
 	return &Service_DeleteRoute_Call{Call: _e.mock.On("DeleteRoute", ctx, session, name)}
 }
 
-func (_c *Service_DeleteRoute_Call) Run(run func(ctx context.Context, session *authn.Session, name string)) *Service_DeleteRoute_Call {
+func (_c *Service_DeleteRoute_Call) Run(run func(ctx context.Context, session *cubeauth.Session, name string)) *Service_DeleteRoute_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		var arg2 string
 		if args[2] != nil {
@@ -174,13 +174,13 @@ func (_c *Service_DeleteRoute_Call) Return(err error) *Service_DeleteRoute_Call 
 	return _c
 }
 
-func (_c *Service_DeleteRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, name string) error) *Service_DeleteRoute_Call {
+func (_c *Service_DeleteRoute_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session, name string) error) *Service_DeleteRoute_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetAttestationPolicy provides a mock function for the type Service
-func (_mock *Service) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
+func (_mock *Service) GetAttestationPolicy(ctx context.Context, session *cubeauth.Session) ([]byte, error) {
 	ret := _mock.Called(ctx, session)
 
 	if len(ret) == 0 {
@@ -189,17 +189,17 @@ func (_mock *Service) GetAttestationPolicy(ctx context.Context, session *authn.S
 
 	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session) ([]byte, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session) ([]byte, error)); ok {
 		return returnFunc(ctx, session)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session) []byte); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session) []byte); ok {
 		r0 = returnFunc(ctx, session)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *cubeauth.Session) error); ok {
 		r1 = returnFunc(ctx, session)
 	} else {
 		r1 = ret.Error(1)
@@ -214,20 +214,20 @@ type Service_GetAttestationPolicy_Call struct {
 
 // GetAttestationPolicy is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 func (_e *Service_Expecter) GetAttestationPolicy(ctx interface{}, session interface{}) *Service_GetAttestationPolicy_Call {
 	return &Service_GetAttestationPolicy_Call{Call: _e.mock.On("GetAttestationPolicy", ctx, session)}
 }
 
-func (_c *Service_GetAttestationPolicy_Call) Run(run func(ctx context.Context, session *authn.Session)) *Service_GetAttestationPolicy_Call {
+func (_c *Service_GetAttestationPolicy_Call) Run(run func(ctx context.Context, session *cubeauth.Session)) *Service_GetAttestationPolicy_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		run(
 			arg0,
@@ -242,13 +242,13 @@ func (_c *Service_GetAttestationPolicy_Call) Return(bytes []byte, err error) *Se
 	return _c
 }
 
-func (_c *Service_GetAttestationPolicy_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session) ([]byte, error)) *Service_GetAttestationPolicy_Call {
+func (_c *Service_GetAttestationPolicy_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session) ([]byte, error)) *Service_GetAttestationPolicy_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // GetRoute provides a mock function for the type Service
-func (_mock *Service) GetRoute(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error) {
+func (_mock *Service) GetRoute(ctx context.Context, session *cubeauth.Session, name string) (*router.RouteRule, error) {
 	ret := _mock.Called(ctx, session, name)
 
 	if len(ret) == 0 {
@@ -257,17 +257,17 @@ func (_mock *Service) GetRoute(ctx context.Context, session *authn.Session, name
 
 	var r0 *router.RouteRule
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string) (*router.RouteRule, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, string) (*router.RouteRule, error)); ok {
 		return returnFunc(ctx, session, name)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string) *router.RouteRule); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, string) *router.RouteRule); ok {
 		r0 = returnFunc(ctx, session, name)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*router.RouteRule)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, string) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *cubeauth.Session, string) error); ok {
 		r1 = returnFunc(ctx, session, name)
 	} else {
 		r1 = ret.Error(1)
@@ -282,21 +282,21 @@ type Service_GetRoute_Call struct {
 
 // GetRoute is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 //   - name string
 func (_e *Service_Expecter) GetRoute(ctx interface{}, session interface{}, name interface{}) *Service_GetRoute_Call {
 	return &Service_GetRoute_Call{Call: _e.mock.On("GetRoute", ctx, session, name)}
 }
 
-func (_c *Service_GetRoute_Call) Run(run func(ctx context.Context, session *authn.Session, name string)) *Service_GetRoute_Call {
+func (_c *Service_GetRoute_Call) Run(run func(ctx context.Context, session *cubeauth.Session, name string)) *Service_GetRoute_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		var arg2 string
 		if args[2] != nil {
@@ -316,13 +316,13 @@ func (_c *Service_GetRoute_Call) Return(routeRule *router.RouteRule, err error) 
 	return _c
 }
 
-func (_c *Service_GetRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, name string) (*router.RouteRule, error)) *Service_GetRoute_Call {
+func (_c *Service_GetRoute_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session, name string) (*router.RouteRule, error)) *Service_GetRoute_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ListRoutes provides a mock function for the type Service
-func (_mock *Service) ListRoutes(ctx context.Context, session *authn.Session, offset uint64, limit uint64) ([]router.RouteRule, uint64, error) {
+func (_mock *Service) ListRoutes(ctx context.Context, session *cubeauth.Session, offset uint64, limit uint64) ([]router.RouteRule, uint64, error) {
 	ret := _mock.Called(ctx, session, offset, limit)
 
 	if len(ret) == 0 {
@@ -332,22 +332,22 @@ func (_mock *Service) ListRoutes(ctx context.Context, session *authn.Session, of
 	var r0 []router.RouteRule
 	var r1 uint64
 	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, uint64, uint64) ([]router.RouteRule, uint64, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, uint64, uint64) ([]router.RouteRule, uint64, error)); ok {
 		return returnFunc(ctx, session, offset, limit)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, uint64, uint64) []router.RouteRule); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, uint64, uint64) []router.RouteRule); ok {
 		r0 = returnFunc(ctx, session, offset, limit)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]router.RouteRule)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, uint64, uint64) uint64); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *cubeauth.Session, uint64, uint64) uint64); ok {
 		r1 = returnFunc(ctx, session, offset, limit)
 	} else {
 		r1 = ret.Get(1).(uint64)
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, *authn.Session, uint64, uint64) error); ok {
+	if returnFunc, ok := ret.Get(2).(func(context.Context, *cubeauth.Session, uint64, uint64) error); ok {
 		r2 = returnFunc(ctx, session, offset, limit)
 	} else {
 		r2 = ret.Error(2)
@@ -362,22 +362,22 @@ type Service_ListRoutes_Call struct {
 
 // ListRoutes is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 //   - offset uint64
 //   - limit uint64
 func (_e *Service_Expecter) ListRoutes(ctx interface{}, session interface{}, offset interface{}, limit interface{}) *Service_ListRoutes_Call {
 	return &Service_ListRoutes_Call{Call: _e.mock.On("ListRoutes", ctx, session, offset, limit)}
 }
 
-func (_c *Service_ListRoutes_Call) Run(run func(ctx context.Context, session *authn.Session, offset uint64, limit uint64)) *Service_ListRoutes_Call {
+func (_c *Service_ListRoutes_Call) Run(run func(ctx context.Context, session *cubeauth.Session, offset uint64, limit uint64)) *Service_ListRoutes_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		var arg2 uint64
 		if args[2] != nil {
@@ -402,13 +402,13 @@ func (_c *Service_ListRoutes_Call) Return(routes []router.RouteRule, total uint6
 	return _c
 }
 
-func (_c *Service_ListRoutes_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, offset uint64, limit uint64) ([]router.RouteRule, uint64, error)) *Service_ListRoutes_Call {
+func (_c *Service_ListRoutes_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session, offset uint64, limit uint64) ([]router.RouteRule, uint64, error)) *Service_ListRoutes_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // ProxyRequest provides a mock function for the type Service
-func (_mock *Service) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
+func (_mock *Service) ProxyRequest(ctx context.Context, session *cubeauth.Session, path string) error {
 	ret := _mock.Called(ctx, session, path)
 
 	if len(ret) == 0 {
@@ -416,7 +416,7 @@ func (_mock *Service) ProxyRequest(ctx context.Context, session *authn.Session, 
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, string) error); ok {
 		r0 = returnFunc(ctx, session, path)
 	} else {
 		r0 = ret.Error(0)
@@ -431,21 +431,21 @@ type Service_ProxyRequest_Call struct {
 
 // ProxyRequest is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 //   - path string
 func (_e *Service_Expecter) ProxyRequest(ctx interface{}, session interface{}, path interface{}) *Service_ProxyRequest_Call {
 	return &Service_ProxyRequest_Call{Call: _e.mock.On("ProxyRequest", ctx, session, path)}
 }
 
-func (_c *Service_ProxyRequest_Call) Run(run func(ctx context.Context, session *authn.Session, path string)) *Service_ProxyRequest_Call {
+func (_c *Service_ProxyRequest_Call) Run(run func(ctx context.Context, session *cubeauth.Session, path string)) *Service_ProxyRequest_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		var arg2 string
 		if args[2] != nil {
@@ -465,7 +465,7 @@ func (_c *Service_ProxyRequest_Call) Return(err error) *Service_ProxyRequest_Cal
 	return _c
 }
 
-func (_c *Service_ProxyRequest_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, path string) error) *Service_ProxyRequest_Call {
+func (_c *Service_ProxyRequest_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session, path string) error) *Service_ProxyRequest_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -515,7 +515,7 @@ func (_c *Service_Secure_Call) RunAndReturn(run func() string) *Service_Secure_C
 }
 
 // UpdateAttestationPolicy provides a mock function for the type Service
-func (_mock *Service) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
+func (_mock *Service) UpdateAttestationPolicy(ctx context.Context, session *cubeauth.Session, policy []byte) error {
 	ret := _mock.Called(ctx, session, policy)
 
 	if len(ret) == 0 {
@@ -523,7 +523,7 @@ func (_mock *Service) UpdateAttestationPolicy(ctx context.Context, session *auth
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, []byte) error); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, []byte) error); ok {
 		r0 = returnFunc(ctx, session, policy)
 	} else {
 		r0 = ret.Error(0)
@@ -538,21 +538,21 @@ type Service_UpdateAttestationPolicy_Call struct {
 
 // UpdateAttestationPolicy is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 //   - policy []byte
 func (_e *Service_Expecter) UpdateAttestationPolicy(ctx interface{}, session interface{}, policy interface{}) *Service_UpdateAttestationPolicy_Call {
 	return &Service_UpdateAttestationPolicy_Call{Call: _e.mock.On("UpdateAttestationPolicy", ctx, session, policy)}
 }
 
-func (_c *Service_UpdateAttestationPolicy_Call) Run(run func(ctx context.Context, session *authn.Session, policy []byte)) *Service_UpdateAttestationPolicy_Call {
+func (_c *Service_UpdateAttestationPolicy_Call) Run(run func(ctx context.Context, session *cubeauth.Session, policy []byte)) *Service_UpdateAttestationPolicy_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		var arg2 []byte
 		if args[2] != nil {
@@ -572,13 +572,13 @@ func (_c *Service_UpdateAttestationPolicy_Call) Return(err error) *Service_Updat
 	return _c
 }
 
-func (_c *Service_UpdateAttestationPolicy_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, policy []byte) error) *Service_UpdateAttestationPolicy_Call {
+func (_c *Service_UpdateAttestationPolicy_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session, policy []byte) error) *Service_UpdateAttestationPolicy_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // UpdateRoute provides a mock function for the type Service
-func (_mock *Service) UpdateRoute(ctx context.Context, session *authn.Session, name string, route *router.RouteRule) (*router.RouteRule, error) {
+func (_mock *Service) UpdateRoute(ctx context.Context, session *cubeauth.Session, name string, route *router.RouteRule) (*router.RouteRule, error) {
 	ret := _mock.Called(ctx, session, name, route)
 
 	if len(ret) == 0 {
@@ -587,17 +587,17 @@ func (_mock *Service) UpdateRoute(ctx context.Context, session *authn.Session, n
 
 	var r0 *router.RouteRule
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string, *router.RouteRule) (*router.RouteRule, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, string, *router.RouteRule) (*router.RouteRule, error)); ok {
 		return returnFunc(ctx, session, name, route)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *authn.Session, string, *router.RouteRule) *router.RouteRule); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *cubeauth.Session, string, *router.RouteRule) *router.RouteRule); ok {
 		r0 = returnFunc(ctx, session, name, route)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*router.RouteRule)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, *authn.Session, string, *router.RouteRule) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, *cubeauth.Session, string, *router.RouteRule) error); ok {
 		r1 = returnFunc(ctx, session, name, route)
 	} else {
 		r1 = ret.Error(1)
@@ -612,22 +612,22 @@ type Service_UpdateRoute_Call struct {
 
 // UpdateRoute is a helper method to define mock.On call
 //   - ctx context.Context
-//   - session *authn.Session
+//   - session *cubeauth.Session
 //   - name string
 //   - route *router.RouteRule
 func (_e *Service_Expecter) UpdateRoute(ctx interface{}, session interface{}, name interface{}, route interface{}) *Service_UpdateRoute_Call {
 	return &Service_UpdateRoute_Call{Call: _e.mock.On("UpdateRoute", ctx, session, name, route)}
 }
 
-func (_c *Service_UpdateRoute_Call) Run(run func(ctx context.Context, session *authn.Session, name string, route *router.RouteRule)) *Service_UpdateRoute_Call {
+func (_c *Service_UpdateRoute_Call) Run(run func(ctx context.Context, session *cubeauth.Session, name string, route *router.RouteRule)) *Service_UpdateRoute_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 *authn.Session
+		var arg1 *cubeauth.Session
 		if args[1] != nil {
-			arg1 = args[1].(*authn.Session)
+			arg1 = args[1].(*cubeauth.Session)
 		}
 		var arg2 string
 		if args[2] != nil {
@@ -652,7 +652,7 @@ func (_c *Service_UpdateRoute_Call) Return(routeRule *router.RouteRule, err erro
 	return _c
 }
 
-func (_c *Service_UpdateRoute_Call) RunAndReturn(run func(ctx context.Context, session *authn.Session, name string, route *router.RouteRule) (*router.RouteRule, error)) *Service_UpdateRoute_Call {
+func (_c *Service_UpdateRoute_Call) RunAndReturn(run func(ctx context.Context, session *cubeauth.Session, name string, route *router.RouteRule) (*router.RouteRule, error)) *Service_UpdateRoute_Call {
 	_c.Call.Return(run)
 	return _c
 }

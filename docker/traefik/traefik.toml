@@ -18,10 +18,6 @@
 [accessLog]
   format = "json"
 
-# Distributed Tracing
-[tracing.otlp.http]
-  endpoint = "http://jaeger:4318/v1/traces"
-
 # Entry Points
 [entryPoints]
   [entryPoints.web]

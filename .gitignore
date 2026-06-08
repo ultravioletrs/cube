@@ -17,6 +17,7 @@ build
 
 # Docker data
 docker/data/
+docker/certs/
 
 # Filesystem
 *.ext4
@@ -29,3 +30,4 @@ __pycache__/
 
 # Vite cache
 ui/.vite/
+ui/node_modules/

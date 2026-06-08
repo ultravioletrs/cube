@@ -2,235 +2,91 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { useAuth } from '@/hooks/useAuth'
-import { listUserJournals, listEntityJournals, JOURNAL_PAGE_SIZE } from '@/lib/platform/service'
-import type { Journal } from '@/lib/platform/service'
-import type { AppContext } from '@/types'
 import UserMenu from '@/components/UserMenu'
+import { listIdentityAuditLogs } from '@/lib/platform/service'
+import type { IdentityAuditLog } from '@/lib/platform/service'
+import type { AppContext } from '@/types'
 
-type Tab = 'user' | 'domain'
-
-function formatDate(s?: string) {
-  if (!s) return '—'
-  try {
-    return new Date(s).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'medium',
-    })
-  } catch {
-    return s
+function outcomeColor(outcome: string): string {
+  switch (outcome.toLowerCase()) {
+    case 'allow':
+    case 'success':
+      return 'var(--accent)'
+    case 'deny':
+    case 'error':
+    case 'fail':
+      return '#ff6b6b'
+    default:
+      return '#ffb400'
   }
 }
 
-function OperationBadge({ op }: { op?: string }) {
-  if (!op) return null
-  const lower = op.toLowerCase()
-  let bg = 'rgba(255,255,255,0.06)'
-  let color = 'var(--text-muted)'
-  if (lower.includes('create') || lower.includes('add') || lower.includes('register')) {
-    bg = 'rgba(0,212,180,0.1)'; color = '#00d4b4'
-  } else if (lower.includes('delete') || lower.includes('remove') || lower.includes('revoke')) {
-    bg = 'rgba(255,80,80,0.1)'; color = '#ff5050'
-  } else if (lower.includes('update') || lower.includes('assign') || lower.includes('enable') || lower.includes('disable')) {
-    bg = 'rgba(255,180,0,0.1)'; color = '#ffb400'
-  } else if (lower.includes('login') || lower.includes('issue') || lower.includes('refresh')) {
-    bg = 'rgba(100,160,255,0.1)'; color = '#64a0ff'
-  }
-  return (
-    <span style={{ display: 'inline-block', background: bg, color, fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', padding: '2px 8px', borderRadius: '20px', fontWeight: '500', whiteSpace: 'nowrap' }}>
-      {op}
-    </span>
-  )
-}
-
-function PayloadCell({ payload }: { payload?: Record<string, unknown> }) {
-  const [open, setOpen] = useState(false)
-  if (!payload || Object.keys(payload).length === 0) return <span style={{ color: 'var(--text-dim)', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' }}>—</span>
-  return (
-    <div>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: '5px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', padding: '2px 8px', cursor: 'pointer' }}
-      >
-        {open ? 'hide' : 'view'}
-      </button>
-      {open && (
-        <pre style={{ marginTop: '6px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border)', borderRadius: '6px', padding: '8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-muted)', overflowX: 'auto', whiteSpace: 'pre-wrap', maxWidth: '320px' }}>
-          {JSON.stringify(payload, null, 2)}
-        </pre>
-      )}
-    </div>
-  )
+function formatDetails(details: Record<string, unknown>): string {
+  const text = JSON.stringify(details ?? {})
+  return text.length > 180 ? `${text.slice(0, 177)}...` : text
 }
 
 export default function AuditLogsPage() {
-  const { tokens, user } = useAuth()
-  const { activeDomain } = useOutletContext<AppContext>()
-
-  const [tab, setTab] = useState<Tab>('user')
-  const [journals, setJournals] = useState<Journal[]>([])
+  const { activeWorkspace } = useOutletContext<AppContext>()
+  const [logs, setLogs] = useState<IdentityAuditLog[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(0)
-  const [total, setTotal] = useState(0)
 
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const load = useCallback(async () => {
-    if (!tokens?.accessToken) return
     setLoading(true)
     setError(null)
     try {
-      if (tab === 'user') {
-        const userID = user?.id ?? ''
-        if (!userID) throw new Error('User ID not available')
-        const res = await listUserJournals(userID, tokens.accessToken, page)
-        setJournals(res.journals)
-        setTotal(res.total)
-      } else {
-        if (!activeDomain?.id) throw new Error('No domain selected')
-        const res = await listEntityJournals('domain', activeDomain.id, activeDomain.id, tokens.accessToken, page)
-        setJournals(res.journals)
-        setTotal(res.total)
-      }
+      setLogs(await listIdentityAuditLogs(activeWorkspace?.id))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load audit logs')
     } finally {
       setLoading(false)
     }
-  }, [tokens?.accessToken, tab, page, activeDomain?.id, user])
+  }, [activeWorkspace?.id])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
 
-  function switchTab(t: Tab) {
-    setTab(t)
-    setPage(0)
-    setJournals([])
-  }
-
-  const totalPages = Math.max(1, Math.ceil(total / JOURNAL_PAGE_SIZE))
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '20px 28px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         <div>
-          <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '20px', color: 'var(--text)', margin: '0 0 2px', letterSpacing: '-0.02em' }}>
+          <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '20px', color: 'var(--text)', margin: '0 0 2px' }}>
             Audit Logs
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>
-            Activity history for your account and domains
+            ATOM identity and authorization activity{activeWorkspace?.name ? ` for ${activeWorkspace.name}` : ''}
           </p>
         </div>
         <UserMenu />
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', padding: '12px 28px 0', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        {(['user', 'domain'] as Tab[]).map(t => (
-          <button
-            key={t}
-            onClick={() => switchTab(t)}
-            style={{
-              padding: '7px 16px',
-              borderRadius: '8px 8px 0 0',
-              border: 'none',
-              background: tab === t ? 'var(--card-bg)' : 'transparent',
-              color: tab === t ? 'var(--text)' : 'var(--text-muted)',
-              fontFamily: 'Space Grotesk, sans-serif',
-              fontSize: '13px',
-              fontWeight: tab === t ? '700' : '500',
-              cursor: 'pointer',
-              borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-            }}
-          >
-            {t === 'user' ? 'My activity' : 'Domain activity'}
-          </button>
-        ))}
-      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 28px' }}>
+        {loading && <div style={{ color: 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px' }}>Loading audit logs...</div>}
+        {error && <div style={{ padding: '12px 14px', marginBottom: '14px', background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', borderRadius: '8px', color: '#ff6b6b', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px' }}>{error}</div>}
 
-      {/* Content */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 28px' }}>
-        {tab === 'domain' && !activeDomain && (
-          <div style={{ padding: '14px 16px', background: 'rgba(255,180,0,0.06)', border: '1px solid rgba(255,180,0,0.2)', borderRadius: '10px', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: '#ffb400' }}>
-            Select a domain from the Domains page to view domain activity.
-          </div>
-        )}
-
-        {loading && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '200px' }}>
-            <div style={{ width: '24px', height: '24px', border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-          </div>
-        )}
-
-        {!loading && error && (
-          <div style={{ padding: '14px 16px', background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.2)', borderRadius: '10px', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: '#ff6b6b' }}>
-            {error}
-          </div>
-        )}
-
-        {!loading && !error && journals.length === 0 && (tab === 'user' || activeDomain) && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '200px', gap: '10px' }}>
-            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>No events found</p>
-          </div>
-        )}
-
-        {!loading && !error && journals.length > 0 && (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['Time', 'Operation', 'Payload'].map(h => (
-                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: '600', fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {journals.map((j, i) => (
-                  <tr
-                    key={j.id ?? i}
-                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <td style={{ padding: '10px 12px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', whiteSpace: 'nowrap' }}>
-                      {formatDate(j.occurred_at)}
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <OperationBadge op={j.operation} />
-                    </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <PayloadCell payload={j.payload} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Pagination */}
-        {!loading && !error && totalPages > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', marginTop: '16px' }}>
-            <button
-              onClick={() => setPage(p => Math.max(0, p - 1))}
-              disabled={page === 0}
-              style={{ padding: '6px 14px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: page === 0 ? 'var(--text-dim)' : 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: '600', cursor: page === 0 ? 'not-allowed' : 'pointer' }}
-            >
-              Previous
-            </button>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>
-              {page + 1} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
-              style={{ padding: '6px 14px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: page >= totalPages - 1 ? 'var(--text-dim)' : 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: '600', cursor: page >= totalPages - 1 ? 'not-allowed' : 'pointer' }}
-            >
-              Next
-            </button>
+        {!loading && !error && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: '10px', overflow: 'hidden', background: 'var(--card-bg)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr 110px 1.2fr', gap: '12px', padding: '10px 14px', borderBottom: '1px solid var(--border)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+              <span>Time</span>
+              <span>Event</span>
+              <span>Outcome</span>
+              <span>Details</span>
+            </div>
+            {logs.length === 0 ? (
+              <div style={{ padding: '28px 14px', color: 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px' }}>No identity audit logs found.</div>
+            ) : logs.map(log => (
+              <div key={log.id} style={{ display: 'grid', gridTemplateColumns: '150px 1fr 110px 1.2fr', gap: '12px', alignItems: 'center', padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
+                <span style={{ color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>{new Date(log.createdAt).toLocaleString()}</span>
+                <div style={{ minWidth: 0 }}>
+                  <p style={{ margin: 0, color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.event}</p>
+                  <p style={{ margin: '2px 0 0', color: 'var(--text-dim)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.entityId ?? 'system'}</p>
+                </div>
+                <span style={{ color: outcomeColor(log.outcome), fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' }}>{log.outcome}</span>
+                <code style={{ color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatDetails(log.details)}</code>
+              </div>
+            ))}
           </div>
         )}
       </div>

@@ -6,7 +6,7 @@ package middleware
 import (
 	"context"
 
-	"github.com/absmach/supermq/pkg/authn"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/router"
 	"go.opentelemetry.io/otel/trace"
@@ -26,7 +26,7 @@ func NewTracingMiddleware(tracer trace.Tracer, svc proxy.Service) proxy.Service 
 	}
 }
 
-func (t *tracingMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) error {
+func (t *tracingMiddleware) ProxyRequest(ctx context.Context, session *cubeauth.Session, path string) error {
 	ctx, span := t.tracer.Start(ctx, "ProxyRequest")
 	defer span.End()
 
@@ -38,18 +38,20 @@ func (t *tracingMiddleware) Secure() string {
 }
 
 // GetAttestationPolicy implements proxy.Service.
-func (t *tracingMiddleware) GetAttestationPolicy(ctx context.Context, session *authn.Session) ([]byte, error) {
+func (t *tracingMiddleware) GetAttestationPolicy(ctx context.Context, session *cubeauth.Session) ([]byte, error) {
 	return t.svc.GetAttestationPolicy(ctx, session)
 }
 
 // UpdateAttestationPolicy implements proxy.Service.
-func (t *tracingMiddleware) UpdateAttestationPolicy(ctx context.Context, session *authn.Session, policy []byte) error {
+func (t *tracingMiddleware) UpdateAttestationPolicy(
+	ctx context.Context, session *cubeauth.Session, policy []byte,
+) error {
 	return t.svc.UpdateAttestationPolicy(ctx, session, policy)
 }
 
 // CreateRoute implements proxy.Service.
 func (t *tracingMiddleware) CreateRoute(
-	ctx context.Context, session *authn.Session, route *router.RouteRule,
+	ctx context.Context, session *cubeauth.Session, route *router.RouteRule,
 ) (*router.RouteRule, error) {
 	ctx, span := t.tracer.Start(ctx, "CreateRoute")
 	defer span.End()
@@ -59,7 +61,7 @@ func (t *tracingMiddleware) CreateRoute(
 
 // UpdateRoute implements proxy.Service.
 func (t *tracingMiddleware) UpdateRoute(
-	ctx context.Context, session *authn.Session, name string, route *router.RouteRule,
+	ctx context.Context, session *cubeauth.Session, name string, route *router.RouteRule,
 ) (*router.RouteRule, error) {
 	ctx, span := t.tracer.Start(ctx, "UpdateRoute")
 	defer span.End()
@@ -68,7 +70,7 @@ func (t *tracingMiddleware) UpdateRoute(
 }
 
 // DeleteRoute implements proxy.Service.
-func (t *tracingMiddleware) DeleteRoute(ctx context.Context, session *authn.Session, name string) error {
+func (t *tracingMiddleware) DeleteRoute(ctx context.Context, session *cubeauth.Session, name string) error {
 	ctx, span := t.tracer.Start(ctx, "DeleteRoute")
 	defer span.End()
 
@@ -77,7 +79,7 @@ func (t *tracingMiddleware) DeleteRoute(ctx context.Context, session *authn.Sess
 
 // GetRoute implements proxy.Service.
 func (t *tracingMiddleware) GetRoute(
-	ctx context.Context, session *authn.Session, name string,
+	ctx context.Context, session *cubeauth.Session, name string,
 ) (*router.RouteRule, error) {
 	ctx, span := t.tracer.Start(ctx, "GetRoute")
 	defer span.End()
@@ -87,7 +89,7 @@ func (t *tracingMiddleware) GetRoute(
 
 // ListRoutes implements proxy.Service.
 func (t *tracingMiddleware) ListRoutes(
-	ctx context.Context, session *authn.Session, offset, limit uint64,
+	ctx context.Context, session *cubeauth.Session, offset, limit uint64,
 ) ([]router.RouteRule, uint64, error) {
 	ctx, span := t.tracer.Start(ctx, "ListRoutes")
 	defer span.End()

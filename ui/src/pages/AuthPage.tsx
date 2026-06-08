@@ -26,26 +26,18 @@ const labelStyle: React.CSSProperties = {
   marginBottom: '6px',
 }
 
-function isLocalDev(): boolean {
-  return ['localhost', '127.0.0.1'].includes(window.location.hostname)
-}
-
 export default function AuthPage() {
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
-  const [username, setUsername] = useState('')
-  const [firstName, setFirstName] = useState('')
-  const [lastName, setLastName] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const { login, register, isAuthenticated } = useAuth()
+  const { login, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? '/domains'
-  const showLocalDevHint = mode === 'login' && isLocalDev()
+  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
+  const atomUIURL = import.meta.env.VITE_ATOM_UI_URL ?? '/atom'
 
   // Auth page should always redirect authenticated users to app.
   if (isAuthenticated) return <Navigate to={from} replace />
@@ -56,11 +48,7 @@ export default function AuthPage() {
     setLoading(true)
 
     try {
-      if (mode === 'login') {
-        await login(email, password)
-      } else {
-        await register(email, username, password, firstName || undefined, lastName || undefined)
-      }
+      await login(email, password)
       navigate(from)
     } catch (err) {
       setError(extractMessage(err))
@@ -69,48 +57,25 @@ export default function AuthPage() {
     }
   }
 
-  function switchMode() {
-    setMode(m => (m === 'login' ? 'signup' : 'login'))
-    setError(null)
-  }
-
   return (
     <div style={{ display: 'flex', height: '100%', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
       <div style={{ width: '100%', maxWidth: '380px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px', boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '22px', color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-            {mode === 'login' ? 'Welcome back' : 'Create an account'}
+            Welcome back
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
-            {mode === 'login' ? 'Sign in to your Cube AI account' : 'Start using Cube AI for free'}
+            Sign in to your Cube AI account
           </p>
         </div>
 
         <form style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} onSubmit={handleSubmit}>
-          {mode === 'signup' && (
-            <>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle} htmlFor="firstName">First name</label>
-                  <input id="firstName" type="text" placeholder="Jane" style={inputStyle} value={firstName} onChange={e => setFirstName(e.target.value)} required />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle} htmlFor="lastName">Last name</label>
-                  <input id="lastName" type="text" placeholder="Doe" style={inputStyle} value={lastName} onChange={e => setLastName(e.target.value)} />
-                </div>
-              </div>
-              <div>
-                <label style={labelStyle} htmlFor="username">Username</label>
-                <input id="username" type="text" placeholder="jane.doe" style={inputStyle} value={username} onChange={e => setUsername(e.target.value)} required />
-              </div>
-            </>
-          )}
           <div>
-            <label style={labelStyle} htmlFor="email">{mode === 'login' ? 'Email or username' : 'Email'}</label>
+            <label style={labelStyle} htmlFor="email">Email or username</label>
             <input
               id="email"
-              type={mode === 'login' ? 'text' : 'email'}
-              placeholder={mode === 'login' ? 'you@example.com or johndoe' : 'you@example.com'}
+              type="text"
+              placeholder="you@example.com or johndoe"
               style={inputStyle}
               value={email}
               onChange={e => setEmail(e.target.value)}
@@ -158,29 +123,24 @@ export default function AuthPage() {
             </p>
           )}
 
-          {showLocalDevHint && (
-            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 1.6, padding: '9px 11px', border: '1px solid var(--border)', borderRadius: '8px', background: 'rgba(255,255,255,0.03)' }}>
-              Local dev admin: <span style={{ color: 'var(--text)' }}>admin</span> / <span style={{ color: 'var(--text)' }}>m2N2Lfno</span>
-            </div>
-          )}
-
           <button
             type="submit"
             disabled={loading}
             style={{ background: loading ? 'rgba(0,212,180,0.5)' : 'var(--accent)', border: 'none', color: '#070c16', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', fontWeight: '700', marginTop: '4px' }}
           >
-            {loading ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}
+            {loading ? 'Please wait…' : 'Sign in'}
           </button>
         </form>
 
         <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '20px', marginBottom: 0 }}>
-          {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
-          <button
-            onClick={switchMode}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text)', fontWeight: '600', padding: 0, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+          <a
+            href={atomUIURL}
+            target="_blank"
+            rel="noreferrer"
+            style={{ color: 'var(--text)', fontWeight: '600', textDecoration: 'underline', textUnderlineOffset: '3px' }}
           >
-            {mode === 'login' ? 'Sign up' : 'Sign in'}
-          </button>
+            Identity & Access
+          </a>
         </p>
       </div>
     </div>

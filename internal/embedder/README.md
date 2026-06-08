@@ -16,7 +16,7 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/.e
 | --- | --- | --- |
 | `EMBEDDER_HTTP_ADDR` | HTTP bind address | `:8080` |
 | `EMBEDDER_DB_URL` | Postgres/pgvector connection URL | required |
-| `EMBEDDER_AUTH_GRPC_URL` | SuperMQ auth gRPC endpoint | `auth:8181` |
+| `EMBEDDER_AUTH_GRPC_URL` | ATOM auth gRPC endpoint | `atom:8081` |
 | `EMBEDDER_LOG_LEVEL` | Log level | `info` |
 | `EMBEDDER_EMBEDDING_TEXT_PROVIDER` | Embedding provider for text profile | `ollama` |
 | `EMBEDDER_EMBEDDING_TEXT_BASE_URL` | Embedding API base URL | `http://ollama:11434` |

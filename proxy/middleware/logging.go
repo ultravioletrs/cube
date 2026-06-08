@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/absmach/supermq/pkg/authn"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
@@ -27,7 +27,7 @@ func NewLoggingMiddleware(logger *slog.Logger, svc proxy.Service) proxy.Service 
 	}
 }
 
-func (l *loggingMiddleware) ProxyRequest(ctx context.Context, session *authn.Session, path string) (err error) {
+func (l *loggingMiddleware) ProxyRequest(ctx context.Context, session *cubeauth.Session, path string) (err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("ProxyRequest", "path", path, "took", time.Since(begin), "error", err)
 	}(time.Now())
@@ -41,7 +41,7 @@ func (l *loggingMiddleware) Secure() string {
 
 // GetAttestationPolicy implements proxy.Service.
 func (l *loggingMiddleware) GetAttestationPolicy(
-	ctx context.Context, session *authn.Session,
+	ctx context.Context, session *cubeauth.Session,
 ) (policy []byte, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("GetAttestationPolicy", "took", time.Since(begin), "error", err)
@@ -52,7 +52,7 @@ func (l *loggingMiddleware) GetAttestationPolicy(
 
 // UpdateAttestationPolicy implements proxy.Service.
 func (l *loggingMiddleware) UpdateAttestationPolicy(
-	ctx context.Context, session *authn.Session, policy []byte,
+	ctx context.Context, session *cubeauth.Session, policy []byte,
 ) (err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("UpdateAttestationPolicy", "took", time.Since(begin), "error", err)
@@ -63,7 +63,7 @@ func (l *loggingMiddleware) UpdateAttestationPolicy(
 
 // CreateRoute implements proxy.Service.
 func (l *loggingMiddleware) CreateRoute(
-	ctx context.Context, session *authn.Session, route *router.RouteRule,
+	ctx context.Context, session *cubeauth.Session, route *router.RouteRule,
 ) (createdRoute *router.RouteRule, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("CreateRoute", "took", time.Since(begin), "error", err)
@@ -74,7 +74,7 @@ func (l *loggingMiddleware) CreateRoute(
 
 // UpdateRoute implements proxy.Service.
 func (l *loggingMiddleware) UpdateRoute(
-	ctx context.Context, session *authn.Session, name string, route *router.RouteRule,
+	ctx context.Context, session *cubeauth.Session, name string, route *router.RouteRule,
 ) (updatedRoute *router.RouteRule, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("UpdateRoute", "took", time.Since(begin), "error", err)
@@ -84,7 +84,7 @@ func (l *loggingMiddleware) UpdateRoute(
 }
 
 // DeleteRoute implements proxy.Service.
-func (l *loggingMiddleware) DeleteRoute(ctx context.Context, session *authn.Session, name string) (err error) {
+func (l *loggingMiddleware) DeleteRoute(ctx context.Context, session *cubeauth.Session, name string) (err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("DeleteRoute", "took", time.Since(begin), "error", err)
 	}(time.Now())
@@ -94,7 +94,7 @@ func (l *loggingMiddleware) DeleteRoute(ctx context.Context, session *authn.Sess
 
 // GetRoute implements proxy.Service.
 func (l *loggingMiddleware) GetRoute(
-	ctx context.Context, session *authn.Session, name string,
+	ctx context.Context, session *cubeauth.Session, name string,
 ) (rule *router.RouteRule, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("GetRoute", "took", time.Since(begin), "error", err)
@@ -105,7 +105,7 @@ func (l *loggingMiddleware) GetRoute(
 
 // ListRoutes implements proxy.Service.
 func (l *loggingMiddleware) ListRoutes(
-	ctx context.Context, session *authn.Session, offset, limit uint64,
+	ctx context.Context, session *cubeauth.Session, offset, limit uint64,
 ) (rules []router.RouteRule, total uint64, err error) {
 	defer func(begin time.Time) {
 		l.logger.Info("ListRoutes", "offset", offset, "limit", limit, "took", time.Since(begin), "error", err)

@@ -5,6 +5,7 @@ package agent
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,7 +13,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/absmach/supermq/pkg/errors"
 	"github.com/google/go-sev-guest/proto/sevsnp"
 	tdxabi "github.com/google/go-tdx-guest/abi"
 	"github.com/google/go-tdx-guest/proto/tdx"
@@ -35,6 +35,10 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 	// ErrAttestationUnmarshal indicates that the attestation report could not be unmarshaled.
 	ErrAttestationUnmarshal = errors.New("failed to unmarshal the attestation report")
+	// ErrVTpmUnsupported indicates that plain vTPM attestation is not supported.
+	ErrVTpmUnsupported = errors.New("plain vTPM attestation is not supported")
+	// ErrNoCCPlatform indicates that no confidential computing platform was detected.
+	ErrNoCCPlatform = errors.New("no confidential computing platform detected")
 )
 
 type TLSConfig struct {
@@ -128,7 +132,7 @@ func (a *agentService) Attestation(
 	case attestation.SNP:
 		rawQuote, err := a.provider.TeeAttestation(reportData[:])
 		if err != nil {
-			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
+			return []byte{}, fmt.Errorf("%w: %w", ErrAttestationFailed, err)
 		}
 
 		if toJSON {
@@ -139,7 +143,7 @@ func (a *agentService) Attestation(
 	case attestation.TDX:
 		rawQuote, err := a.provider.TeeAttestation(reportData[:])
 		if err != nil {
-			return []byte{}, errors.Wrap(ErrAttestationFailed, err)
+			return []byte{}, fmt.Errorf("%w: %w", ErrAttestationFailed, err)
 		}
 
 		if toJSON {
@@ -150,7 +154,7 @@ func (a *agentService) Attestation(
 	case attestation.SNPvTPM, attestation.Azure:
 		vTPMQuote, err := a.provider.Attestation(reportData[:], nonce[:])
 		if err != nil {
-			return []byte{}, errors.Wrap(ErrAttestationVTpmFailed, err)
+			return []byte{}, fmt.Errorf("%w: %w", ErrAttestationVTpmFailed, err)
 		}
 
 		if toJSON {
@@ -159,9 +163,9 @@ func (a *agentService) Attestation(
 
 		return vTPMQuote, nil
 	case attestation.VTPM:
-		return []byte{}, errors.New("plain vTPM attestation is not supported")
+		return []byte{}, ErrVTpmUnsupported
 	case attestation.NoCC:
-		return []byte{}, errors.New("no confidential computing platform detected")
+		return []byte{}, ErrNoCCPlatform
 	default:
 		return []byte{}, ErrAttestationType
 	}
@@ -199,12 +203,12 @@ func (a *agentService) snpVtpmAttestationToJSON(report []byte) ([]byte, error) {
 func (a *agentService) tdxAttestationToJSON(vTPMQuote []byte) ([]byte, error) {
 	res, err := tdxabi.QuoteToProto(vTPMQuote)
 	if err != nil {
-		return nil, errors.Wrap(ErrAttestationFailed, err)
+		return nil, fmt.Errorf("%w: %w", ErrAttestationFailed, err)
 	}
 
 	quote, ok := res.(*tdx.QuoteV4)
 	if !ok {
-		return nil, errors.Wrap(ErrAttestationFailed, errors.New("failed to convert to tdx.QuoteV4"))
+		return nil, fmt.Errorf("%w: failed to convert to tdx.QuoteV4", ErrAttestationFailed)
 	}
 
 	return protojson.MarshalOptions{

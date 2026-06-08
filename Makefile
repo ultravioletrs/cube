@@ -23,10 +23,7 @@ CONFIG_FILE = ./docker/config.json
 
 define compile_service
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
-	go build -ldflags "-s -w \
-	-X 'github.com/absmach/supermq.BuildTime=$(TIME)' \
-	-X 'github.com/absmach/supermq.Version=$(VERSION)' \
-	-X 'github.com/absmach/supermq.Commit=$(COMMIT)'" \
+	go build -ldflags "-s -w" \
 	-o ${BUILD_DIR}/cube-$(1) cmd/$(1)/main.go
 endef
 
@@ -148,6 +145,23 @@ docker-embedder-dev:
 .PHONY: config-ollama
 config-ollama:
 	$(call update_env_var,UV_CUBE_AGENT_TARGET_URL,$(OLLAMA_TARGET_URL))
+	$(call update_env_var,EMBEDDER_OLLAMA_BASE_URL,$(OLLAMA_TARGET_URL))
+	$(call update_env_var,EMBEDDER_LLM_PROVIDER,ollama)
+	$(call update_env_var,EMBEDDER_LLM_BASE_URL,$(OLLAMA_TARGET_URL))
+	$(call update_env_var,EMBEDDER_LLM_MODEL,llama3.2:3b)
+	$(call update_env_var,EMBEDDER_LLM_API_KEY,)
+	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_PROVIDER,ollama)
+	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_BASE_URL,$(OLLAMA_TARGET_URL))
+	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_MODEL,nomic-embed-text:v1.5)
+	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_API_KEY,)
+	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_PROVIDER,ollama)
+	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_BASE_URL,$(OLLAMA_TARGET_URL))
+	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_MODEL,nomic-embed-text:v1.5)
+	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_API_KEY,)
+	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_PROVIDER,ollama)
+	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_BASE_URL,$(OLLAMA_TARGET_URL))
+	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_MODEL,nomic-embed-text:v1.5)
+	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_API_KEY,)
 	@echo "Configured for Ollama backend"
 
 .PHONY: config-vllm
@@ -166,15 +180,23 @@ else
 	@exit 1
 endif
 
+.PHONY: atom-dev-certs
+atom-dev-certs:
+	./scripts/generate-atom-dev-certs.sh docker/certs
+
 .PHONY: up-ollama
-up-ollama: config-ollama
+up-ollama: atom-dev-certs config-ollama
 	@echo "Starting Cube with Ollama backend..."
-	docker compose -f docker/compose.yaml -f docker/cube-compose.yaml --env-file docker/.env --profile default up -d
+	docker compose -f docker/compose.yaml --env-file docker/.env --profile default up -d
 
 .PHONY: up-vllm
-up-vllm: config-vllm
+up-vllm: atom-dev-certs config-vllm
 	@echo "Starting Cube with vLLM backend..."
-	docker compose -f docker/compose.yaml -f docker/cube-compose.yaml --env-file docker/.env --profile vllm up -d
+	docker compose -f docker/compose.yaml --env-file docker/.env --profile vllm up -d
+
+.PHONY: smoke-atom-cube
+smoke-atom-cube:
+	./scripts/smoke-atom-cube.sh
 
 GUARDRAILS_CONFIG_FILE = ./guardrails/rails/config.yml
 
@@ -226,27 +248,14 @@ endif
 .PHONY: config-local
 config-local:
 	@echo "Configuring for local development..."
-	@sed -i 's|__SMQ_EMAIL_HOST__|localhost|g' docker/.env
-	@sed -i 's|__SMQ_EMAIL_PORT__|1025|g' docker/.env
-	@sed -i 's|__SMQ_EMAIL_USERNAME__|test|g' docker/.env
-	@sed -i 's|__SMQ_EMAIL_PASSWORD__|test|g' docker/.env
-	@sed -i 's|__SMQ_EMAIL_FROM_ADDRESS__|noreply@localhost|g' docker/.env
 	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/.env
 	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/config.json
 	@sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml
-	@sed -i 's|__SMQ_GOOGLE_CLIENT_ID__||g' docker/.env
-	@sed -i 's|__SMQ_GOOGLE_CLIENT_SECRET__||g' docker/.env
-	@sed -i 's|__SMQ_GOOGLE_STATE__||g' docker/.env
-	@sed -i 's|__MG_MAILCHIMP_API_KEY__||g' docker/.env
-	@sed -i 's|__MG_MAILCHIMP_SERVER_PREFIX__||g' docker/.env
-	@sed -i 's|__MG_MAILCHIMP_AUDIENCE_ID__||g' docker/.env
 	@sed -i 's|__CUBE_PUBLIC_URL__|localhost|g' docker/.env
 	@sed -i 's|__TRAEFIK_HTTP_PORT__|80|g' docker/.env
 	@sed -i 's|__TRAEFIK_HTTPS_PORT__|443|g' docker/.env
-	@sed -i 's|__TRAEFIK_DASHBOARD_PORT__|8080|g' docker/.env
+	@sed -i 's|__TRAEFIK_DASHBOARD_PORT__|8090|g' docker/.env
 	@sed -i 's|__TUNNEL_TOKEN__||g' docker/.env
-	@sed -i 's|__CUBE_AGENT_CERTS_TOKEN__|localdevtoken12we12we12we12we12we|g' docker/.env
-	@sed -i "s|__NEXTAUTH_SECRET__|$(shell python3 -c 'import secrets; print(secrets.token_urlsafe(37))')|g" docker/.env
 	@echo "✓ Configured with local defaults"
 
 .PHONY: restore-config

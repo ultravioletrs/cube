@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/absmach/supermq"
 	"github.com/go-chi/chi/v5"
 	kithttp "github.com/go-kit/kit/transport/http"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -23,7 +22,7 @@ func MakeHandler(svc agent.Service, instanceID string) http.Handler {
 	endpoints := endpoint.MakeEndpoints(svc)
 	mux := chi.NewRouter()
 
-	mux.Get("/health", supermq.Health("cube-agent", instanceID))
+	mux.Get("/health", healthHandler("cube-agent", instanceID))
 	mux.Handle("/metrics", promhttp.Handler())
 
 	mux.Post("/attestation", kithttp.NewServer(
@@ -36,6 +35,18 @@ func MakeHandler(svc agent.Service, instanceID string) http.Handler {
 	mux.Handle("/*", svc.Proxy())
 
 	return mux
+}
+
+func healthHandler(service, instanceID string) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", ContentType)
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status":      "pass",
+			"service":     service,
+			"instance_id": instanceID,
+		})
+	}
 }
 
 func decodeAttestationRequest(_ context.Context, r *http.Request) (any, error) {

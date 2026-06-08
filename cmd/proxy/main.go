@@ -5,38 +5,31 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"log/slog"
-	"net/url"
+	"net"
+	stdhttp "net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
-	"github.com/absmach/callhome/pkg/client"
-	"github.com/absmach/supermq"
-	mglog "github.com/absmach/supermq/logger"
-	smqauthn "github.com/absmach/supermq/pkg/authn"
-	"github.com/absmach/supermq/pkg/authn/authsvc"
-	"github.com/absmach/supermq/pkg/authz"
-	authzsvc "github.com/absmach/supermq/pkg/authz/authsvc"
-	domainsgrpc "github.com/absmach/supermq/pkg/domains/grpcclient"
-	"github.com/absmach/supermq/pkg/grpcclient"
-	"github.com/absmach/supermq/pkg/jaeger"
-	"github.com/absmach/supermq/pkg/postgres"
-	"github.com/absmach/supermq/pkg/prometheus"
-	"github.com/absmach/supermq/pkg/server"
-	"github.com/absmach/supermq/pkg/server/http"
-	"github.com/absmach/supermq/pkg/uuid"
 	"github.com/caarlos0/env/v11"
+	"github.com/google/uuid"
 	"github.com/ultravioletrs/cocos/pkg/clients"
 	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
 	"github.com/ultravioletrs/cube/agent/audit"
+	"github.com/ultravioletrs/cube/internal/atom"
 	"github.com/ultravioletrs/cube/proxy"
 	"github.com/ultravioletrs/cube/proxy/api"
 	"github.com/ultravioletrs/cube/proxy/middleware"
 	ppostgres "github.com/ultravioletrs/cube/proxy/postgres"
 	"github.com/ultravioletrs/cube/proxy/router"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/noop"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -45,22 +38,30 @@ const (
 	envPrefixHTTP  = "UV_CUBE_PROXY_"
 	defSvcHTTPPort = "8900"
 	envPrefixAgent = "UV_CUBE_AGENT_"
-	envPrefixAuth  = "SMQ_AUTH_GRPC_"
 	envPrefixDB    = "UV_CUBE_PROXY_DB_"
 	defDB          = "postgres"
 )
 
 type config struct {
-	LogLevel            string  `env:"UV_CUBE_PROXY_LOG_LEVEL"     envDefault:"info"`
-	TargetURL           string  `env:"UV_CUBE_PROXY_TARGET_URL"    envDefault:"http://ollama:11434"`
-	SendTelemetry       bool    `env:"SMQ_SEND_TELEMETRY"          envDefault:"true"`
-	InstanceID          string  `env:"UV_CUBE_PROXY_INSTANCE_ID"   envDefault:""`
-	JaegerURL           url.URL `env:"SMQ_JAEGER_URL"              envDefault:"http://localhost:4318/v1/traces"`
-	TraceRatio          float64 `env:"SMQ_JAEGER_TRACE_RATIO"      envDefault:"1.0"`
-	OpenSearchURL       string  `env:"UV_CUBE_OPENSEARCH_URL"      envDefault:"http://opensearch:9200"`
-	RouterConfig        string  `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
-	AgentURL            string  `env:"UV_CUBE_AGENT_URL"           envDefault:"http://cube-agent:8901"`
-	AllowUnverifiedUser bool    `env:"SMQ_ALLOW_UNVERIFIED_USER"   envDefault:"false"`
+	LogLevel       string        `env:"UV_CUBE_PROXY_LOG_LEVEL"     envDefault:"info"`
+	TargetURL      string        `env:"UV_CUBE_PROXY_TARGET_URL"    envDefault:"http://ollama:11434"`
+	InstanceID     string        `env:"UV_CUBE_PROXY_INSTANCE_ID"   envDefault:""`
+	OpenSearchURL  string        `env:"UV_CUBE_OPENSEARCH_URL"      envDefault:"http://opensearch:9200"`
+	RouterConfig   string        `env:"UV_CUBE_PROXY_ROUTER_CONFIG" envDefault:"docker/config.json"`
+	AgentURL       string        `env:"UV_CUBE_AGENT_URL"           envDefault:"http://cube-agent:8901"`
+	AtomGRPCURL    string        `env:"ATOM_GRPC_URL"               envDefault:"atom:8081"`
+	AtomGraphQLURL string        `env:"ATOM_GRAPHQL_URL"            envDefault:"http://atom:8080/graphql"`
+	AtomTimeout    time.Duration `env:"ATOM_TIMEOUT"                envDefault:"15s"`
+}
+
+type httpServerConfig struct {
+	Host         string        `env:"HOST"                 envDefault:"0.0.0.0"`
+	Port         string        `env:"PORT"                 envDefault:"8900"`
+	ServerCert   string        `env:"SERVER_CERT"          envDefault:""`
+	ServerKey    string        `env:"SERVER_KEY"           envDefault:""`
+	ReadTimeout  time.Duration `env:"SERVER_READ_TIMEOUT"  envDefault:"10s"`
+	WriteTimeout time.Duration `env:"SERVER_WRITE_TIMEOUT" envDefault:"10s"`
+	IdleTimeout  time.Duration `env:"SERVER_IDLE_TIMEOUT"  envDefault:"60s"`
 }
 
 type fileConfig struct {
@@ -68,104 +69,62 @@ type fileConfig struct {
 }
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	g, ctx := errgroup.WithContext(ctx)
+	if err := run(); err != nil {
+		log.Fatalf("%s service terminated: %s", svcName, err)
+	}
+}
 
+func run() error {
 	cfg := config{}
 	if err := env.Parse(&cfg); err != nil {
-		log.Fatalf("failed to load %s configuration : %s", svcName, err)
+		return fmt.Errorf("failed to load %s configuration: %w", svcName, err)
 	}
 
-	logger, err := mglog.New(os.Stdout, cfg.LogLevel)
-	if err != nil {
-		log.Fatalf("failed to init logger: %s", err.Error())
-	}
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
 
-	var exitCode int
-	defer mglog.ExitWithError(&exitCode)
+	g, ctx := errgroup.WithContext(ctx)
+
+	logger := newLogger(cfg.LogLevel)
 
 	if cfg.InstanceID == "" {
-		if cfg.InstanceID, err = uuid.New().ID(); err != nil {
-			logger.Error(fmt.Sprintf("failed to generate instanceID: %s", err))
-
-			exitCode = 1
-
-			return
-		}
+		cfg.InstanceID = uuid.NewString()
 	}
 
-	auth, authzz, closeAuth, err := initAuthClients(ctx, logger)
+	atomClient, err := atom.NewClient(cfg.AtomGRPCURL, cfg.AtomGraphQLURL, cfg.AtomTimeout)
 	if err != nil {
-		logger.Error(err.Error())
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to create atom client: %w", err)
 	}
-	defer closeAuth()
+	defer atomClient.Close()
 
-	tp, err := jaeger.NewProvider(ctx, svcName, cfg.JaegerURL, cfg.InstanceID, cfg.TraceRatio)
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to init Jaeger: %s", err))
-	}
-
-	dbConfig := postgres.Config{Name: defDB}
+	dbConfig := ppostgres.Config{Name: defDB}
 	if err := env.ParseWithOptions(&dbConfig, env.Options{Prefix: envPrefixDB}); err != nil {
-		logger.Error(err.Error())
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to load %s db configuration: %w", svcName, err)
 	}
 
-	db, err := postgres.Setup(dbConfig, *ppostgres.Migration())
+	db, err := ppostgres.Setup(dbConfig)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Failed to connect to %s database: %s", svcName, err))
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to connect to %s database: %w", svcName, err)
 	}
 	defer db.Close()
 
-	defer func() {
-		if err := tp.Shutdown(ctx); err != nil {
-			logger.Error(fmt.Sprintf("Error shutting down tracer provider: %v", err))
-		}
-	}()
-
-	tracer := tp.Tracer(svcName)
-
-	database := postgres.NewDatabase(db, dbConfig, tracer)
-
-	repo := ppostgres.NewRepository(database)
+	tracer := noop.NewTracerProvider().Tracer(svcName)
+	repo := ppostgres.NewRepository(db)
 
 	agentConfig := clients.AttestedClientConfig{}
 
 	if err := env.ParseWithOptions(&agentConfig, env.Options{Prefix: envPrefixAgent}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load %s agent client configuration : %s", svcName, err))
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to load %s agent client configuration: %w", svcName, err)
 	}
 
 	agentClient, err := httpclient.NewClient(&agentConfig)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create agent HTTP client: %s", err))
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to create agent HTTP client: %w", err)
 	}
 
 	fileCfg, rter, err := initRouter(cfg.RouterConfig)
 	if err != nil {
-		logger.Error(err.Error())
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to init router: %w", err)
 	}
 
 	// Load routes from database and update in-memory router
@@ -175,14 +134,10 @@ func main() {
 
 	svc, err := newService(logger, tracer, &agentConfig, repo, rter)
 	if err != nil {
-		logger.Error(fmt.Sprintf("failed to create service: %s", err))
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to create service: %w", err)
 	}
 
-	svc = middleware.AuthMiddleware(authzz)(svc)
+	svc = middleware.AuthMiddleware(atomClient)(svc)
 
 	logger.Info(fmt.Sprintf(
 		"%s service %s client configured to connect to agent at %s with %s",
@@ -195,23 +150,9 @@ func main() {
 		SensitiveHeaders: []string{},
 	})
 
-	idp := uuid.New()
-
-	authmMiddleware := smqauthn.NewAuthNMiddleware(
-		auth, smqauthn.WithAllowUnverifiedUser(cfg.AllowUnverifiedUser), smqauthn.WithDomainCheck(false),
-	)
-
-	domainAuthmMiddleware := smqauthn.NewAuthNMiddleware(
-		auth, smqauthn.WithAllowUnverifiedUser(true), smqauthn.WithDomainCheck(true),
-	)
-
-	httpServerConfig := server.Config{Port: defSvcHTTPPort}
+	httpServerConfig := httpServerConfig{Port: defSvcHTTPPort}
 	if err := env.ParseWithOptions(&httpServerConfig, env.Options{Prefix: envPrefixHTTP}); err != nil {
-		logger.Error(fmt.Sprintf("failed to load %s HTTP server configuration : %s", svcName, err))
-
-		exitCode = 1
-
-		return
+		return fmt.Errorf("failed to load %s HTTP server configuration: %w", svcName, err)
 	}
 
 	// Wrap agent transport with instrumented transport for aTLS audit logging
@@ -219,28 +160,27 @@ func main() {
 	attestationType := deriveAttestationType(agentClient.Secure())
 	instrumentedTransport := audit.NewInstrumentedTransport(agentTransport, attestationType)
 
-	httpSvr := http.NewServer(
-		ctx, cancel, svcName, httpServerConfig, api.MakeHandler(
-			svc, cfg.InstanceID, auditSvc, authmMiddleware, domainAuthmMiddleware, idp, instrumentedTransport, rter,
-		),
-		logger)
-
-	if cfg.SendTelemetry {
-		chc := client.New(svcName, supermq.Version, logger, cancel)
-		go chc.CallHome(ctx)
-	}
+	handler := api.MakeHandler(svc, cfg.InstanceID, auditSvc, atomClient, instrumentedTransport, rter)
+	httpSvr := newHTTPServer(httpServerConfig, handler)
 
 	g.Go(func() error {
-		return httpSvr.Start()
+		return serveHTTP(httpSvr, httpServerConfig, logger)
 	})
 
 	g.Go(func() error {
-		return server.StopSignalHandler(ctx, cancel, logger, svcName, httpSvr)
+		<-ctx.Done()
+
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer shutdownCancel()
+
+		return httpSvr.Shutdown(shutdownCtx)
 	})
 
 	if err := g.Wait(); err != nil {
-		logger.Error(fmt.Sprintf("Proxy service terminated: %s", err))
+		return fmt.Errorf("proxy service terminated: %w", err)
 	}
+
+	return nil
 }
 
 // newServiceWithRouter creates a service with router integration for dynamic route management.
@@ -255,8 +195,6 @@ func newService(
 
 	svc = middleware.NewLoggingMiddleware(logger, svc)
 	svc = middleware.NewTracingMiddleware(tracer, svc)
-	counter, latency := prometheus.MakeMetrics(svcName, "api")
-	svc = middleware.NewMetricsMiddleware(counter, latency, svc)
 
 	return svc, nil
 }
@@ -270,40 +208,43 @@ func loadDatabaseRoutes(
 		return err
 	}
 
-	// If DB is empty and we have default routes, seed them
-	if len(routes) == 0 && len(defaultRoutes) > 0 {
-		seededRoutes := make([]router.RouteRule, 0, len(defaultRoutes))
+	existing := make(map[string]struct{}, len(routes))
+	for i := range routes {
+		existing[routes[i].Name] = struct{}{}
+	}
 
-		for i := range defaultRoutes {
-			route := &defaultRoutes[i]
-			// Skip disabled routes
-			if route.Enabled != nil && !*route.Enabled {
-				continue
-			}
+	seeded := 0
 
-			// Validate route before inserting
-			if err := router.ValidateRoute(route); err != nil {
-				log.Printf("Skipping invalid default route %s: %s", route.Name, err)
-
-				continue
-			}
-
-			created, err := repo.CreateRoute(ctx, route)
-			if err != nil {
-				log.Printf("Failed to seed default route %s: %s", route.Name, err)
-
-				continue
-			}
-
-			seededRoutes = append(seededRoutes, *created)
+	for i := range defaultRoutes {
+		route := &defaultRoutes[i]
+		if route.Enabled != nil && !*route.Enabled {
+			continue
 		}
 
-		if len(seededRoutes) > 0 {
-			log.Printf("Seeded %d default routes into database", len(seededRoutes))
-			rter.UpdateRoutes(seededRoutes)
-
-			return nil
+		if _, ok := existing[route.Name]; ok {
+			continue
 		}
+
+		if err := router.ValidateRoute(route); err != nil {
+			log.Printf("Skipping invalid default route %s: %s", route.Name, err)
+
+			continue
+		}
+
+		created, err := repo.CreateRoute(ctx, route)
+		if err != nil {
+			log.Printf("Failed to seed default route %s: %s", route.Name, err)
+
+			continue
+		}
+
+		routes = append(routes, *created)
+		existing[created.Name] = struct{}{}
+		seeded++
+	}
+
+	if seeded > 0 {
+		log.Printf("Seeded %d missing default routes into database", seeded)
 	}
 
 	if len(routes) > 0 {
@@ -313,47 +254,40 @@ func loadDatabaseRoutes(
 	return nil
 }
 
-// initAuthClients initializes authentication and authorization gRPC clients.
-func initAuthClients(
-	ctx context.Context,
-	logger *slog.Logger,
-) (smqauthn.Authentication, authz.Authorization, func(), error) {
-	grpcCfg := grpcclient.Config{}
-	if err := env.ParseWithOptions(&grpcCfg, env.Options{Prefix: envPrefixAuth}); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to load auth gRPC client configuration: %w", err)
+func newLogger(level string) *slog.Logger {
+	var slogLevel slog.Level
+	if err := slogLevel.UnmarshalText([]byte(strings.ToLower(level))); err != nil {
+		slogLevel = slog.LevelInfo
 	}
 
-	auth, authnClient, err := authsvc.NewAuthentication(ctx, grpcCfg)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to init auth gRPC client: %w", err)
+	return slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slogLevel}))
+}
+
+func newHTTPServer(cfg httpServerConfig, handler stdhttp.Handler) *stdhttp.Server {
+	return &stdhttp.Server{
+		Addr:         net.JoinHostPort(cfg.Host, cfg.Port),
+		Handler:      handler,
+		ReadTimeout:  cfg.ReadTimeout,
+		WriteTimeout: cfg.WriteTimeout,
+		IdleTimeout:  cfg.IdleTimeout,
+	}
+}
+
+func serveHTTP(srv *stdhttp.Server, cfg httpServerConfig, logger *slog.Logger) error {
+	logger.Info("HTTP server starting", "addr", srv.Addr)
+
+	var err error
+	if cfg.ServerCert != "" && cfg.ServerKey != "" {
+		err = srv.ListenAndServeTLS(cfg.ServerCert, cfg.ServerKey)
+	} else {
+		err = srv.ListenAndServe()
 	}
 
-	logger.Info("AuthN successfully connected to auth gRPC server " + authnClient.Secure())
-
-	domainsAuthz, _, domainsClient, err := domainsgrpc.NewAuthorization(ctx, grpcCfg)
-	if err != nil {
-		authnClient.Close()
-
-		return nil, nil, nil, fmt.Errorf("failed to init domains gRPC client: %w", err)
+	if errors.Is(err, stdhttp.ErrServerClosed) {
+		return nil
 	}
 
-	authorization, authzClient, err := authzsvc.NewAuthorization(ctx, grpcCfg, domainsAuthz)
-	if err != nil {
-		authnClient.Close()
-		domainsClient.Close()
-
-		return nil, nil, nil, fmt.Errorf("failed to init authz gRPC client: %w", err)
-	}
-
-	logger.Info("AuthZ successfully connected to auth gRPC server " + authzClient.Secure())
-
-	closeFunc := func() {
-		authnClient.Close()
-		domainsClient.Close()
-		authzClient.Close()
-	}
-
-	return auth, authorization, closeFunc, nil
+	return err
 }
 
 // initRouter initializes the router from a config file.

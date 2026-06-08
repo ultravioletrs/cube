@@ -1,0 +1,80 @@
+# Copyright (c) Ultraviolet
+# SPDX-License-Identifier: Apache-2.0
+
+volumes:
+  atom-postgres-data:
+
+services:
+  atom-postgres:
+    image: postgres:16-alpine
+    container_name: atom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ATOM_POSTGRES_USER:-atom}
+      POSTGRES_PASSWORD: ${ATOM_POSTGRES_PASSWORD:-atom-dev-only}
+      POSTGRES_DB: ${ATOM_POSTGRES_DB:-atom}
+    volumes:
+      - atom-postgres-data:/var/lib/postgresql/data
+    networks:
+      - cube-network
+    healthcheck:
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  atom:
+    image: ghcr.io/absmach/atom:latest
+    container_name: atom
+    restart: unless-stopped
+    depends_on:
+      atom-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${ATOM_POSTGRES_USER:-atom}:${ATOM_POSTGRES_PASSWORD:-atom-dev-only}@atom-postgres:5432/${ATOM_POSTGRES_DB:-atom}
+      LISTEN_ADDR: 0.0.0.0:8080
+      GRPC_ADDR: 0.0.0.0:8081
+      JWT_EXPIRY_SECS: ${ATOM_JWT_EXPIRY_SECS:-3600}
+      ADMIN_SECRET: ${ATOM_ADMIN_SECRET:-12345678}
+      ATOM_CERTS_ENABLED: ${ATOM_CERTS_ENABLED:-true}
+      ATOM_CERTS_CA_MODE: ${ATOM_CERTS_CA_MODE:-file_intermediate_issuer}
+      ATOM_CERTS_ROOT_CA_CERT_PATH: ${ATOM_CERTS_ROOT_CA_CERT_PATH:-/certs/root-ca.crt}
+      ATOM_CERTS_INTERMEDIATE_CA_CERT_PATH: ${ATOM_CERTS_INTERMEDIATE_CA_CERT_PATH:-/certs/intermediate-ca.crt}
+      ATOM_CERTS_INTERMEDIATE_CA_KEY_PATH: ${ATOM_CERTS_INTERMEDIATE_CA_KEY_PATH:-/certs/intermediate-ca.key}
+      ATOM_CERTS_ROOT_CA_KEY_PATH: ${ATOM_CERTS_ROOT_CA_KEY_PATH:-}
+      ATOM_CERTS_LEAF_DEFAULT_TTL_SECS: ${ATOM_CERTS_LEAF_DEFAULT_TTL_SECS:-2592000}
+      ATOM_CERTS_LEAF_MAX_TTL_SECS: ${ATOM_CERTS_LEAF_MAX_TTL_SECS:-2592000}
+      ATOM_MIN_PASSWORD_CHARS: ${ATOM_MIN_PASSWORD_CHARS:-8}
+      ATOM_CORS_ALLOWED_ORIGINS: ${ATOM_CORS_ALLOWED_ORIGINS:-http://localhost:6193,http://localhost:5173,http://localhost:3005}
+      ATOM_PUBLIC_BASE_URL: ${ATOM_PUBLIC_BASE_URL:-http://localhost:8080}
+      ATOM_AUTH_COOKIE_SECURE: ${ATOM_AUTH_COOKIE_SECURE:-false}
+      ATOM_AUTH_COOKIE_DOMAIN: ${ATOM_AUTH_COOKIE_DOMAIN:-}
+      ATOM_EMAIL_VERIFICATION_REDIRECT: ${ATOM_EMAIL_VERIFICATION_REDIRECT:-http://localhost:3005/auth/email/verify}
+      ATOM_OAUTH_SUCCESS_REDIRECT: ${ATOM_OAUTH_SUCCESS_REDIRECT:-http://localhost:3005/auth/callback}
+      ATOM_OAUTH_ERROR_REDIRECT: ${ATOM_OAUTH_ERROR_REDIRECT:-http://localhost:3005/auth/callback}
+      ATOM_PASSWORD_RESET_REDIRECT: ${ATOM_PASSWORD_RESET_REDIRECT:-http://localhost:3005/reset-password}
+      ATOM_INVITATION_REDIRECT: ${ATOM_INVITATION_REDIRECT:-http://localhost:3005/invitations/accept}
+      ATOM_SIGNUP_ENABLED: ${ATOM_SIGNUP_ENABLED:-true}
+      ATOM_DEV_ALLOW_UNVERIFIED_EMAIL_LOGIN: ${ATOM_DEV_ALLOW_UNVERIFIED_EMAIL_LOGIN:-true}
+      RUST_LOG: ${ATOM_RUST_LOG:-info}
+    volumes:
+      - ${ATOM_CERTS_CA_DIR:-./certs}:/certs:ro
+    ports:
+      - ${ATOM_HTTP_PORT:-8080}:8080
+      - ${ATOM_GRPC_PORT:-8081}:8081
+    networks:
+      - cube-network
+
+  atom-ui:
+    image: ghcr.io/absmach/atom-ui:latest
+    container_name: atom-ui
+    restart: unless-stopped
+    depends_on:
+      atom:
+        condition: service_started
+    environment:
+      ATOM_GRAPHQL_URL: ${ATOM_GRAPHQL_URL:-http://atom:8080/graphql}
+    ports:
+      - ${ATOM_UI_HTTP_PORT:-3005}:3000
+    networks:
+      - cube-network

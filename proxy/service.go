@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/absmach/supermq/pkg/authn"
 	"github.com/ultravioletrs/cocos/pkg/clients"
 	httpclient "github.com/ultravioletrs/cocos/pkg/clients/http"
+	"github.com/ultravioletrs/cube/internal/cubeauth"
 	"github.com/ultravioletrs/cube/proxy/router"
 )
 
@@ -52,7 +52,7 @@ func NewWithRouter(config *clients.AttestedClientConfig, repo Repository, rter *
 	}, nil
 }
 
-func (s *service) ProxyRequest(_ context.Context, _ *authn.Session, _ string) error {
+func (s *service) ProxyRequest(_ context.Context, _ *cubeauth.Session, _ string) error {
 	return nil
 }
 
@@ -61,18 +61,18 @@ func (s *service) Secure() string {
 }
 
 // GetAttestationPolicy implements Service.
-func (s *service) GetAttestationPolicy(ctx context.Context, _ *authn.Session) ([]byte, error) {
+func (s *service) GetAttestationPolicy(ctx context.Context, _ *cubeauth.Session) ([]byte, error) {
 	return s.repo.GetAttestationPolicy(ctx)
 }
 
 // UpdateAttestationPolicy implements Service.
-func (s *service) UpdateAttestationPolicy(ctx context.Context, _ *authn.Session, policy []byte) error {
+func (s *service) UpdateAttestationPolicy(ctx context.Context, _ *cubeauth.Session, policy []byte) error {
 	return s.repo.UpdateAttestationPolicy(ctx, policy)
 }
 
 // CreateRoute implements Service.
 func (s *service) CreateRoute(
-	ctx context.Context, _ *authn.Session, route *router.RouteRule,
+	ctx context.Context, _ *cubeauth.Session, route *router.RouteRule,
 ) (*router.RouteRule, error) {
 	if err := router.ValidateRoute(route); err != nil {
 		return nil, err
@@ -100,13 +100,13 @@ func (s *service) CreateRoute(
 }
 
 // GetRoute implements Service.
-func (s *service) GetRoute(ctx context.Context, _ *authn.Session, name string) (*router.RouteRule, error) {
+func (s *service) GetRoute(ctx context.Context, _ *cubeauth.Session, name string) (*router.RouteRule, error) {
 	return s.repo.GetRoute(ctx, name)
 }
 
 // UpdateRoute implements Service.
 func (s *service) UpdateRoute(
-	ctx context.Context, _ *authn.Session, name string, route *router.RouteRule,
+	ctx context.Context, _ *cubeauth.Session, name string, route *router.RouteRule,
 ) (*router.RouteRule, error) {
 	if route.Name == "" {
 		route.Name = name
@@ -150,7 +150,7 @@ func (s *service) UpdateRoute(
 }
 
 // DeleteRoute implements Service.
-func (s *service) DeleteRoute(ctx context.Context, _ *authn.Session, name string) error {
+func (s *service) DeleteRoute(ctx context.Context, _ *cubeauth.Session, name string) error {
 	// Check if this is a system route
 	if router.IsSystemRoute(name) {
 		return router.ErrSystemRouteProtected
@@ -167,7 +167,7 @@ func (s *service) DeleteRoute(ctx context.Context, _ *authn.Session, name string
 
 // ListRoutes implements Service.
 func (s *service) ListRoutes(
-	ctx context.Context, _ *authn.Session, offset, limit uint64,
+	ctx context.Context, _ *cubeauth.Session, offset, limit uint64,
 ) ([]router.RouteRule, uint64, error) {
 	return s.repo.ListRoutes(ctx, offset, limit)
 }

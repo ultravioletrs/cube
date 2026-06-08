@@ -608,19 +608,15 @@ export default function ChatPage() {
       setInput('')
       return
     }
-    if (activeSources.length === 0) {
-      const reason = selectedSourceID
-        ? `"Selected source has no indexed records yet. Go to Records and wait for indexing."`
-        : `"No active indexed records selected."`
+    if (selectedSourceID && selectedSourceHasNoIndexedRecords) {
       setChatMessages(prev => [
         ...prev,
         { id: Date.now(), role: 'user', content: input.trim() },
-        { id: Date.now() + 1, role: 'assistant', content: `Cannot answer yet: ${reason}` },
+        { id: Date.now() + 1, role: 'assistant', content: 'Cannot answer for this source yet: "Selected source has no indexed records. Retry sync or wait for indexing."' },
       ])
       setInput('')
       return
     }
-
     const userContent = input.trim()
     const targetRecordIDs = activeSources
     setInput('')
@@ -695,7 +691,7 @@ export default function ChatPage() {
       }
       setLoading(false)
     })
-  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, conversationId, setConversationId, setConversations, modelConfig, debugEnabled])
+  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, selectedSourceHasNoIndexedRecords, conversationId, setConversationId, setConversations, modelConfig, debugEnabled])
 
   const indexedSources = records.filter(s => s.status === 'indexed')
   const modelStatusInfo = modelStatusDetails(modelConfig, modelStatus)
@@ -872,7 +868,7 @@ export default function ChatPage() {
           <div style={{ maxWidth: '760px', margin: '0 auto', width: '100%', padding: '32px 0' }}>
             {chatMessages.length === 0 && !loading && (
               <div style={{ textAlign: 'center', paddingTop: '80px', color: 'var(--text-dim)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px' }}>
-                Ask a question about your indexed records.
+                Ask anything, or select indexed records for grounded answers.
               </div>
             )}
             {chatMessages.map(msg => (
@@ -898,13 +894,15 @@ export default function ChatPage() {
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() } }}
-                placeholder="Ask a question about your documents…"
+                placeholder="Ask a question…"
                 rows={1}
                 style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none', color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', padding: '14px 16px 10px', resize: 'none', lineHeight: 1.6, boxSizing: 'border-box', minHeight: '48px' }}
                 onInput={e => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 160) + 'px' }}
               />
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px 10px' }}>
-                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>RAG · Grounded responses only</span>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>
+                  {activeSources.length > 0 ? 'RAG · selected records' : 'LLM · no records selected'}
+                </span>
                 {loading ? (
                   <button
                     onClick={() => { abortRef.current?.abort(); setLoading(false) }}

@@ -15,9 +15,11 @@ The service is configured via environment variables (unset variables use default
 | `UV_CUBE_AGENT_SERVER_CERT` | Path to PEM-encoded server certificate (TLS) | `""` |
 | `UV_CUBE_AGENT_SERVER_KEY` | Path to PEM-encoded server key (TLS) | `""` |
 | `UV_CUBE_AGENT_TARGET_URL` | LLM backend base URL for reverse proxy | `http://localhost:11434` |
-| `UV_CUBE_AGENT_CA_URL` | CA URL for aTLS certificate provisioning | `""` |
-| `UV_CUBE_AGENT_CERTS_TOKEN` | CA auth token used for aTLS certificate provisioning | `""` |
-| `UV_CUBE_AGENT_CVM_ID` | CVM identifier used for certificate provisioning | `""` |
+| `UV_CUBE_AGENT_CERTS_TOKEN` | ATOM bearer token used for aTLS certificate provisioning | `""` |
+| `UV_CUBE_AGENT_ENTITY_ID` | ATOM entity ID used for certificate provisioning | `""` |
+| `UV_CUBE_AGENT_CVM_ID` | Legacy alias for `UV_CUBE_AGENT_ENTITY_ID` | `""` |
+| `ATOM_GRPC_URL` | ATOM gRPC endpoint | `atom:8081` |
+| `ATOM_GRAPHQL_URL` | ATOM GraphQL endpoint | `http://atom:8080/graphql` |
 | `AGENT_MAA_URL` | Azure Attestation service URL | `https://sharedeus2.eus2.attest.azure.net` |
 | `AGENT_OS_BUILD` | Attestation OS build identifier | `UVC` |
 | `AGENT_OS_DISTRO` | Attestation OS distro identifier | `UVC` |

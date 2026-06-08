@@ -238,7 +238,7 @@ export default function AttestationPage() {
               When a request reaches the proxy, the router matches it against the
               <code style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', background: 'rgba(255,255,255,0.07)', padding: '1px 5px', borderRadius: '4px' }}> attestation </code>
               route. The proxy establishes an aTLS handshake with the agent and verifies the
-              hardware attestation report before forwarding. Results are captured in Audit Logs.
+              hardware attestation report before forwarding. Results are captured in runtime activity logs.
             </p>
           </InfoCard>
         </div>

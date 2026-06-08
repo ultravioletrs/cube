@@ -4,12 +4,14 @@ import type { Domain as SDKDomain } from '@/lib/platform/service'
 
 export type { SDKDomain as PlatformDomain }
 
-export interface ActiveDomain {
+export interface ActiveWorkspace {
   id: string
   name: string
   route?: string
   status?: string
 }
+
+export type ActiveDomain = ActiveWorkspace
 
 export type RecordFormat = 'text' | 'pdf' | 'md' | 'docx' | 'code' | 'image' | 'link'
 
@@ -130,6 +132,8 @@ export interface AppContext {
   setConversationId: React.Dispatch<React.SetStateAction<string | null>>
   conversations: Conversation[]
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>
-  activeDomain: ActiveDomain | null
-  setActiveDomain: React.Dispatch<React.SetStateAction<ActiveDomain | null>>
+  activeWorkspace: ActiveWorkspace | null
+  setActiveWorkspace: React.Dispatch<React.SetStateAction<ActiveWorkspace | null>>
+  activeDomain: ActiveWorkspace | null
+  setActiveDomain: React.Dispatch<React.SetStateAction<ActiveWorkspace | null>>
 }

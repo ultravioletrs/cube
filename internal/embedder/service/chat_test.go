@@ -61,7 +61,7 @@ func TestShouldRetrieveOnlySkipsClearConversationalMessages(t *testing.T) {
 func TestChatSkipsRetrievalForConversationalMessage(t *testing.T) {
 	retrieve := &chatRetrieveStub{}
 	client := &chatLLMStub{}
-	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, "", nil)
 
 	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
 		{Role: "user", Content: "hello!"},
@@ -83,7 +83,7 @@ func TestChatSkipsRetrievalForConversationalMessage(t *testing.T) {
 func TestChatDoesNotCallLLMWhenRetrievalFindsNoChunks(t *testing.T) {
 	retrieve := &chatRetrieveStub{}
 	client := &chatLLMStub{}
-	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, "", nil)
 
 	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
 		{Role: "user", Content: "record details"},
@@ -131,7 +131,7 @@ func TestChatDoesNotCallLLMWhenRetrievedChunksAreWeak(t *testing.T) {
 		Content:    "Unrelated retrieved content",
 	}}}
 	client := &chatLLMStub{}
-	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, "", nil)
 
 	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
 		{Role: "user", Content: "specific external topic"},
@@ -184,7 +184,7 @@ func TestChatFiltersWeakChunksBeforeCallingLLM(t *testing.T) {
 		},
 	}}
 	client := &chatLLMStub{}
-	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, "", nil)
 
 	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
 		{Role: "user", Content: "alpha topic"},
@@ -220,7 +220,7 @@ func TestChatEmitsRetrievalDebug(t *testing.T) {
 		Score:      &score,
 	}}}
 	client := &chatLLMStub{}
-	service := NewChatService(retrieve, client, nil, 5, llm.Config{}, nil)
+	service := NewChatService(retrieve, client, nil, 5, llm.Config{}, "", nil)
 
 	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
 		{Role: "user", Content: "alpha details"},
@@ -296,7 +296,7 @@ func TestChatKeepsChunksWhenQueryHasNoMeaningfulTerms(t *testing.T) {
 		Content:    "Unrelated retrieved content",
 	}}}
 	client := &chatLLMStub{}
-	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, "", nil)
 
 	// Query is entirely stopwords/short tokens: no lexical signal to filter on.
 	events, err := service.Chat(context.Background(), "domain", []domain.ChatMessage{
@@ -321,7 +321,7 @@ func TestChatSkipsGroundingForExplicitlyScopedRecords(t *testing.T) {
 		Content:    "Unrelated retrieved content",
 	}}}
 	client := &chatLLMStub{}
-	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, nil)
+	service := NewChatService(retrieve, client, nil, 8, llm.Config{}, "", nil)
 
 	// User scoped to record-1; grounding must not block the answer even when
 	// the query terms do not literally appear in the chunk.

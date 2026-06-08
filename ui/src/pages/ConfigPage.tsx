@@ -1,11 +1,13 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useEffect } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import UserMenu from '@/components/UserMenu'
 import { useAuth } from '@/hooks/useAuth'
-import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG, LLM_MODEL_OPTIONS, toBackendModelConfig } from '@/lib/modelConfig'
+import { loadModelConfig, saveModelConfig, DEFAULT_MODEL_CONFIG } from '@/lib/modelConfig'
 import type { LLMProvider } from '@/lib/modelConfig'
-import { getGuardrailsStatus, listOllamaModels, setGuardrailsEnabled, testModelConnection } from '@/lib/api'
+import { getGuardrailsStatus, listOllamaModels, setGuardrailsEnabled } from '@/lib/api'
+import type { AppContext } from '@/types'
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -75,20 +77,12 @@ function ProviderButtons({ providers, active, onSelect, labelMap }: { providers:
   )
 }
 
-function InlineNotice({ tone, children }: { tone: 'info' | 'warning' | 'success'; children: React.ReactNode }) {
-  const styles = {
-    info:    { bg: 'rgba(0,212,180,0.05)', border: 'rgba(0,212,180,0.16)', color: 'var(--text-muted)' },
-    warning: { bg: 'rgba(255,180,0,0.07)', border: 'rgba(255,180,0,0.22)', color: '#ffb400' },
-    success: { bg: 'rgba(0,212,180,0.08)', border: 'rgba(0,212,180,0.24)', color: 'var(--accent)' },
-  }[tone]
-  return (
-    <div style={{ marginTop: '8px', padding: '8px 12px', background: styles.bg, border: `1px solid ${styles.border}`, borderRadius: '7px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: styles.color, lineHeight: 1.5 }}>
-      {children}
-    </div>
-  )
-}
-
 const providerLabel: Record<string, string> = { openai: 'OpenAI', anthropic: 'Anthropic', local: 'Local / Ollama', cohere: 'Cohere' }
+
+const llmModels: Record<string, { value: string; label: string }[]> = {
+  openai: [{ value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }, { value: 'o3', label: 'o3 (reasoning)' }],
+  anthropic: [{ value: 'claude-opus-4-5', label: 'Claude Opus 4.5' }, { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' }, { value: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }],
+}
 
 const embModels: Record<string, { value: string; label: string }[]> = {
   openai: [{ value: 'text-embedding-3-large', label: 'text-embedding-3-large (3072d)' }, { value: 'text-embedding-3-small', label: 'text-embedding-3-small (1536d)' }],
@@ -98,7 +92,9 @@ const embModels: Record<string, { value: string; label: string }[]> = {
 
 export default function ConfigPage() {
   const { tokens } = useAuth()
+  const { activeDomain } = useOutletContext<AppContext>()
   const accessToken = tokens?.accessToken ?? ''
+  const domainID = activeDomain?.id ?? ''
 
   const [llmProvider, setLlmProvider] = useState<LLMProvider>(DEFAULT_MODEL_CONFIG.provider)
   const [llmModel, setLlmModel] = useState(DEFAULT_MODEL_CONFIG.model)
@@ -118,21 +114,19 @@ export default function ConfigPage() {
   const [guardrailsEnabled, setGuardrailsEnabledState] = useState(false)
   const [guardrailsConfigured, setGuardrailsConfigured] = useState(false)
   const [guardrailsLoading, setGuardrailsLoading] = useState(false)
-  const [connectionTesting, setConnectionTesting] = useState(false)
-  const [connectionResult, setConnectionResult] = useState<{ connected: boolean; message: string } | null>(null)
 
   useEffect(() => {
-    if (!tokens?.accessToken) return
-    getGuardrailsStatus(tokens.accessToken)
+    if (!tokens?.accessToken || !domainID) return
+    getGuardrailsStatus(tokens.accessToken, domainID)
       .then(s => { setGuardrailsEnabledState(s.enabled); setGuardrailsConfigured(s.configured) })
       .catch(() => {})
-  }, [tokens?.accessToken])
+  }, [tokens?.accessToken, domainID])
 
   const handleGuardrailsToggle = async (v: boolean) => {
-    if (!tokens?.accessToken || !guardrailsConfigured || guardrailsLoading) return
+    if (!tokens?.accessToken || !domainID || !guardrailsConfigured || guardrailsLoading) return
     setGuardrailsLoading(true)
     try {
-      const s = await setGuardrailsEnabled(tokens.accessToken, v)
+      const s = await setGuardrailsEnabled(tokens.accessToken, v, domainID)
       setGuardrailsEnabledState(s.enabled)
     } catch { /* ignore */ } finally {
       setGuardrailsLoading(false)
@@ -152,10 +146,10 @@ export default function ConfigPage() {
   }, [])
 
   useEffect(() => {
-    if (llmProvider !== 'local') return
+    if (llmProvider !== 'local' || !domainID) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOllamaLoading(true)
-    listOllamaModels(accessToken, '')
+    listOllamaModels(accessToken, domainID)
       .then(models => {
         setOllamaModels(models)
         // Auto-select the first model if none is currently set
@@ -163,42 +157,26 @@ export default function ConfigPage() {
       })
       .catch(() => { setOllamaModels([]) })
       .finally(() => { setOllamaLoading(false) })
-  }, [llmProvider, accessToken])
+  }, [llmProvider, accessToken, domainID])
 
   const handleProviderChange = (p: string) => {
     const provider = p as LLMProvider
     setLlmProvider(provider)
-    setConnectionResult(null)
     if (provider === 'local') {
       setLlmModel(ollamaModels[0] ?? '')
     } else {
-      setLlmModel(LLM_MODEL_OPTIONS[provider]?.[0]?.value ?? '')
+      setLlmModel(llmModels[provider]?.[0]?.value ?? '')
     }
   }
 
   const currentModelOptions = llmProvider === 'local'
     ? ollamaModels.map(m => ({ value: m, label: m }))
-    : LLM_MODEL_OPTIONS[llmProvider] ?? []
-  const externalProviderMissingKey = llmProvider !== 'local' && !apiKey.trim()
+    : llmModels[llmProvider] ?? []
 
   const handleSave = () => {
     saveModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
-  }
-
-  const handleTestConnection = async () => {
-    const config = toBackendModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })
-    if (!config || !accessToken || connectionTesting) return
-    setConnectionTesting(true)
-    setConnectionResult(null)
-    try {
-      setConnectionResult(await testModelConnection(accessToken, config))
-    } catch (err) {
-      setConnectionResult({ connected: false, message: err instanceof Error ? err.message : 'Connection test failed' })
-    } finally {
-      setConnectionTesting(false)
-    }
   }
 
   return (
@@ -223,42 +201,16 @@ export default function ConfigPage() {
             <Field label="Provider"><ProviderButtons providers={['openai', 'anthropic', 'local']} active={llmProvider} onSelect={handleProviderChange} labelMap={providerLabel} /></Field>
             {llmProvider !== 'local' && (
               <Field label="API Key" hint={`Your ${providerLabel[llmProvider]} API key. Stored locally in your browser only.`}>
-                <input type="password" value={apiKey} onChange={e => { setApiKey(e.target.value); setConnectionResult(null) }} placeholder="sk-..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
-                {externalProviderMissingKey && (
-                  <InlineNotice tone="warning">
-                    API key is missing. Chat requests will use the server default model instead of {providerLabel[llmProvider]}.
-                  </InlineNotice>
-                )}
+                <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="sk-..." style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '8px', padding: '9px 12px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '12px', outline: 'none', boxSizing: 'border-box' }} />
               </Field>
             )}
             <Field label="Model" hint={llmProvider === 'local' ? 'Models fetched live from your Ollama instance.' : 'The selected model must support function calling for optimal RAG performance.'}>
               {llmProvider === 'local' && ollamaLoading
                 ? <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)', padding: '9px 0' }}>Loading models from Ollama…</div>
-                : <SelectInput value={llmModel} onChange={value => { setLlmModel(value); setConnectionResult(null) }} options={currentModelOptions} />
+                : <SelectInput value={llmModel} onChange={setLlmModel} options={currentModelOptions} />
               }
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
-                <button
-                  onClick={() => { void handleTestConnection() }}
-                  disabled={connectionTesting || !toBackendModelConfig({ provider: llmProvider, model: llmModel, apiKey, temperature, maxTokens, streamResponses, systemPrompt })}
-                  style={{ padding: '7px 12px', borderRadius: '7px', border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-muted)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', fontWeight: '600', cursor: connectionTesting ? 'default' : 'pointer', opacity: connectionTesting ? 0.55 : 1 }}
-                >
-                  {connectionTesting ? 'Testing…' : 'Test connection'}
-                </button>
-                {connectionResult && (
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: connectionResult.connected ? 'var(--accent)' : '#ff5050' }}>
-                    {connectionResult.message}
-                  </span>
-                )}
-              </div>
-              {llmProvider === 'local' && !ollamaLoading && ollamaModels.length > 0 && (
-                <InlineNotice tone="success">
-                  Ollama connected. {ollamaModels.length} local {ollamaModels.length === 1 ? 'model' : 'models'} available.
-                </InlineNotice>
-              )}
               {llmProvider === 'local' && !ollamaLoading && ollamaModels.length === 0 && (
-                <InlineNotice tone="warning">
-                  No local models found. Make sure Ollama is running before using Local / Ollama.
-                </InlineNotice>
+                <div style={{ marginTop: '8px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ffb400' }}>No local models found — make sure Ollama is running.</div>
               )}
             </Field>
             <Field label="Temperature" hint="Lower values produce more deterministic, grounded responses."><Slider value={temperature} onChange={setTemperature} min={0} max={1} step={0.05} label="temperature" /></Field>

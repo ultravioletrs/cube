@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package auth provides request authentication by delegating token validation
-// to the SuperMQ auth gRPC service (Authenticate RPC at auth:8181).
+// to the ATOM auth gRPC service.
 package auth
 
 import (
@@ -12,8 +12,7 @@ import (
 	"strings"
 	"time"
 
-	grpcAuthV1 "github.com/absmach/supermq/api/grpc/auth/v1"
-	authgrpc "github.com/absmach/supermq/auth/api/grpc/auth"
+	atomv1 "github.com/ultravioletrs/cube/proto/atom/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -27,14 +26,19 @@ const (
 	domainIDKey contextKey = "domain_id"
 )
 
-// Authenticator wraps the SuperMQ AuthService gRPC client.
+type Identity struct {
+	EntityID string
+	TenantID string
+}
+
+// Authenticator wraps the ATOM AuthService gRPC client.
 type Authenticator struct {
-	client  grpcAuthV1.AuthServiceClient
+	client  atomv1.AuthServiceClient
 	timeout time.Duration
 }
 
-// NewAuthenticator dials the SuperMQ auth service and returns an Authenticator.
-// addr should be host:port, e.g. "auth:8181".
+// NewAuthenticator dials ATOM auth and returns an Authenticator.
+// addr should be host:port, e.g. "atom:8081".
 func NewAuthenticator(addr string) (*Authenticator, *grpc.ClientConn, error) {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -42,36 +46,35 @@ func NewAuthenticator(addr string) (*Authenticator, *grpc.ClientConn, error) {
 	}
 	timeout := 15 * time.Second
 	return &Authenticator{
-		client:  authgrpc.NewAuthClient(conn, timeout),
+		client:  atomv1.NewAuthServiceClient(conn),
 		timeout: timeout,
 	}, conn, nil
 }
 
-// Identify authenticates the token via the SuperMQ Auth gRPC API and
-// returns the user ID on success.
-func (a *Authenticator) Identify(ctx context.Context, token string) (string, error) {
+// Identify authenticates the token via ATOM and returns the entity identity.
+func (a *Authenticator) Identify(ctx context.Context, token string) (Identity, error) {
 	ctx, cancel := context.WithTimeout(ctx, a.timeout)
 	defer cancel()
 
-	res, err := a.client.Authenticate(ctx, &grpcAuthV1.AuthNReq{Token: token})
+	res, err := a.client.Authenticate(ctx, &atomv1.AuthenticateRequest{Token: token})
 	if err != nil {
 		if st, ok := status.FromError(err); ok {
 			switch st.Code() {
 			case codes.Unauthenticated, codes.NotFound, codes.PermissionDenied:
-				return "", fmt.Errorf("unauthenticated: %w", err)
+				return Identity{}, fmt.Errorf("unauthenticated: %w", err)
 			}
 		}
-		return "", fmt.Errorf("auth authenticate: %w", err)
+		return Identity{}, fmt.Errorf("auth authenticate: %w", err)
 	}
 
-	userID := res.GetUserId()
-	if userID == "" {
-		userID = res.GetId()
+	identity := Identity{
+		EntityID: res.GetEntityId(),
+		TenantID: res.GetTenantId(),
 	}
-	if userID == "" {
-		return "", fmt.Errorf("auth authenticate returned empty user id")
+	if identity.EntityID == "" {
+		return Identity{}, fmt.Errorf("auth authenticate returned empty entity id")
 	}
-	return userID, nil
+	return identity, nil
 }
 
 // Middleware returns an HTTP middleware that extracts the Bearer token,
@@ -85,7 +88,7 @@ func Middleware(auth *Authenticator) func(http.Handler) http.Handler {
 				return
 			}
 
-			userID, err := auth.Identify(r.Context(), raw)
+			identity, err := auth.Identify(r.Context(), raw)
 			if err != nil {
 				if strings.Contains(err.Error(), "unauthenticated:") {
 					writeError(w, http.StatusUnauthorized, "invalid or expired token")
@@ -95,8 +98,8 @@ func Middleware(auth *Authenticator) func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), userIDKey, userID)
-			if domainID := r.Header.Get("X-Domain-Id"); domainID != "" {
+			ctx := context.WithValue(r.Context(), userIDKey, identity.EntityID)
+			if domainID := firstNonEmpty(r.Header.Get("X-Domain-Id"), identity.TenantID); domainID != "" {
 				ctx = context.WithValue(ctx, domainIDKey, domainID)
 			}
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -120,4 +123,13 @@ func writeError(w http.ResponseWriter, code int, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	fmt.Fprintf(w, `{"error":%q}`, msg)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
