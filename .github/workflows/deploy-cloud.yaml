@@ -162,7 +162,7 @@ jobs:
 
             if [ "$ALL_RUNNING" = false ]; then
               echo "Deployment verification failed!"
-              make logs-cloud 2>&1 | tail -100
+              docker compose -f docker/compose.yaml --profile cloud logs 2>&1 | tail -100
               exit 1
             fi
 
