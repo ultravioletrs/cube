@@ -1,35 +1,34 @@
 # Copyright (c) Ultraviolet
 # SPDX-License-Identifier: Apache-2.0
 
-CUBE_PROXY_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/proxy
-CUBE_AGENT_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/agent
-CUBE_EMBEDDER_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/embedder
-CUBE_GUARDRAILS_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/guardrails
-CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME ?= ghcr.io/ultravioletrs/cube/image-embedder
+CUBE_PROXY_IMAGE          ?= ghcr.io/ultravioletrs/cube/proxy
+CUBE_AGENT_IMAGE          ?= ghcr.io/ultravioletrs/cube/agent
+CUBE_EMBEDDER_IMAGE       ?= ghcr.io/ultravioletrs/cube/embedder
+CUBE_GUARDRAILS_IMAGE     ?= ghcr.io/ultravioletrs/cube/guardrails
+CUBE_IMAGE_EMBEDDER_IMAGE ?= ghcr.io/ultravioletrs/cube/image-embedder
+CUBE_UI_IMAGE             ?= ghcr.io/ultravioletrs/cube/ui
+
 CGO_ENABLED ?= 0
-GOOS ?= linux
-GOARCH ?= amd64
-BUILD_DIR = build
-TIME=$(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
-VERSION ?= $(shell git describe --abbrev=0 --tags 2>/dev/null || echo 'v0.0.0')
-COMMIT ?= $(shell git rev-parse HEAD)
+GOOS        ?= linux
+GOARCH      ?= amd64
+BUILD_DIR   = build
+VERSION     ?= $(shell git describe --abbrev=0 --tags 2>/dev/null || echo 'v0.0.0')
+COMMIT      ?= $(shell git rev-parse HEAD)
 
-AI_BACKEND ?= ollama
-OLLAMA_TARGET_URL = http://ollama:11434
-VLLM_TARGET_URL = http://vllm:8000
+LOCAL_COMPOSE = docker/local/docker-compose.yaml
+LOCAL_ENV     = docker/local/.env
+PROD_COMPOSE  = docker/prod/docker-compose.yaml
+PROD_ENV      = docker/prod/.env
 
-ENV_FILE = ./docker/.env
-CONFIG_FILE = ./docker/config.json
+SERVICES = proxy agent embedder
 
 define compile_service
 	CGO_ENABLED=$(CGO_ENABLED) GOOS=$(GOOS) GOARCH=$(GOARCH) \
-	go build -ldflags "-s -w" \
-	-o ${BUILD_DIR}/cube-$(1) cmd/$(1)/main.go
+	go build -ldflags "-s -w" -o $(BUILD_DIR)/cube-$(1) cmd/$(1)/main.go
 endef
 
 define make_docker
 	docker build \
-		--no-cache \
 		--build-arg SVC=$(1) \
 		--build-arg GOOS=$(GOOS) \
 		--build-arg GOARCH=$(GOARCH) \
@@ -40,384 +39,138 @@ define make_docker
 		-f docker/Dockerfile .
 endef
 
-define make_docker_dev
-	docker build \
-		--no-cache \
-		--build-arg SVC=$(1) \
-		--tag=$(2):$(VERSION) \
-		--tag=$(2):latest \
-		-f docker/Dockerfile.dev ./build
-endef
-
 define docker_push
 	docker push $(1):$(VERSION)
 	docker push $(1):latest
 endef
 
-define update_env_var
-	@if [ -f $(ENV_FILE) ]; then \
-		if grep -q "^$(1)=" $(ENV_FILE); then \
-			sed -i 's|^$(1)=.*|$(1)=$(2)|' $(ENV_FILE); \
-		else \
-			echo "$(1)=$(2)" >> $(ENV_FILE); \
-		fi; \
-	else \
-		echo "$(1)=$(2)" > $(ENV_FILE); \
-	fi
-	@echo "Updated $(1) to $(2)"
-endef
+# ── Build ──────────────────────────────────────────────────────────────
+.PHONY: all
+all: build
 
 .PHONY: build
-build: build-proxy build-agent build-embedder
+build: $(addprefix build-,$(SERVICES))
 
-.PHONY: build-proxy
-build-proxy:
-	$(call compile_service,proxy)
+build-%:
+	$(call compile_service,$*)
 
-.PHONY: build-agent
-build-agent:
-	$(call compile_service,agent)
+# Per-service build aliases: `make proxy` == `make build-proxy`.
+.PHONY: $(SERVICES)
+$(SERVICES): %: build-%
 
-.PHONY: build-embedder
-build-embedder:
-	$(call compile_service,embedder)
+# ── Docker images ──────────────────────────────────────────────────────
+.PHONY: dockers
+dockers: docker-proxy docker-agent docker-embedder docker-guardrails docker-image-embedder docker-ui
 
-.PHONY: docker
-docker: docker-proxy docker-agent docker-embedder docker-guardrails docker-image-embedder
-
-.PHONY: docker-proxy
 docker-proxy:
-	$(call make_docker,proxy,$(CUBE_PROXY_DOCKER_IMAGE_NAME))
+	$(call make_docker,proxy,$(CUBE_PROXY_IMAGE))
 
-.PHONY: docker-agent
 docker-agent:
-	$(call make_docker,agent,$(CUBE_AGENT_DOCKER_IMAGE_NAME))
+	$(call make_docker,agent,$(CUBE_AGENT_IMAGE))
 
-.PHONY: docker-embedder
+# Embedder needs a runtime with poppler-utils + tesseract (PDF/OCR text
+# extraction), so it uses its own Dockerfile instead of the scratch image.
 docker-embedder:
-	$(call make_docker,embedder,$(CUBE_EMBEDDER_DOCKER_IMAGE_NAME))
+	docker build --tag=$(CUBE_EMBEDDER_IMAGE):$(VERSION) --tag=$(CUBE_EMBEDDER_IMAGE):latest \
+		-f docker/Dockerfile.embedder .
 
-.PHONY: docker-guardrails
 docker-guardrails:
-	docker build \
-		--no-cache \
-		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):$(VERSION) \
-		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):latest \
+	docker build --tag=$(CUBE_GUARDRAILS_IMAGE):$(VERSION) --tag=$(CUBE_GUARDRAILS_IMAGE):latest \
 		-f guardrails/Dockerfile ./guardrails
 
-.PHONY: docker-guardrails-dev
-docker-guardrails-dev:
-	docker build \
-		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):$(VERSION) \
-		--tag=$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME):latest \
-		-f guardrails/Dockerfile.dev .
-
-.PHONY: docker-image-embedder
 docker-image-embedder:
-	docker build \
-		--tag=$(CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME):$(VERSION) \
-		--tag=$(CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME):latest \
+	docker build --tag=$(CUBE_IMAGE_EMBEDDER_IMAGE):$(VERSION) --tag=$(CUBE_IMAGE_EMBEDDER_IMAGE):latest \
 		-f docker/Dockerfile.image-embedder .
 
-.PHONY: guardrails-venv
-guardrails-venv:
-	@echo "Setting up guardrails virtual environment in root .venv..."
-	python -m venv .venv
-	. .venv/bin/activate && pip install --upgrade pip && pip install -r guardrails/requirements.txt
-	. .venv/bin/activate && python -m spacy download en_core_web_lg
-	@echo "Guardrails venv created successfully at .venv"
+# Build the UI container used by the local stack.
+.PHONY: docker-ui
+docker-ui:
+	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) build ui
+	docker tag $(CUBE_UI_IMAGE):latest $(CUBE_UI_IMAGE):$(VERSION)
 
-.PHONY: docker-dev
-docker-dev: docker-proxy-dev docker-agent-dev docker-embedder-dev docker-guardrails-dev
+.PHONY: docker-push
+docker-push:
+	$(call docker_push,$(CUBE_PROXY_IMAGE))
+	$(call docker_push,$(CUBE_AGENT_IMAGE))
+	$(call docker_push,$(CUBE_EMBEDDER_IMAGE))
+	$(call docker_push,$(CUBE_GUARDRAILS_IMAGE))
+	$(call docker_push,$(CUBE_IMAGE_EMBEDDER_IMAGE))
+	$(call docker_push,$(CUBE_UI_IMAGE))
 
-.PHONY: docker-proxy-dev
-docker-proxy-dev:
-	$(call make_docker_dev,proxy,$(CUBE_PROXY_DOCKER_IMAGE_NAME))
+# ── Local stack (minimal, no TEE) ──────────────────────────────────────
+.PHONY: up down restart logs
+up: docker-ui
+	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) up -d
 
-.PHONY: docker-agent-dev
-docker-agent-dev:
-	$(call make_docker_dev,agent,$(CUBE_AGENT_DOCKER_IMAGE_NAME))
-
-.PHONY: docker-embedder-dev
-docker-embedder-dev:
-	$(call make_docker_dev,embedder,$(CUBE_EMBEDDER_DOCKER_IMAGE_NAME))
-
-.PHONY: config-ollama
-config-ollama:
-	$(call update_env_var,UV_CUBE_AGENT_TARGET_URL,$(OLLAMA_TARGET_URL))
-	$(call update_env_var,EMBEDDER_OLLAMA_BASE_URL,$(OLLAMA_TARGET_URL))
-	$(call update_env_var,EMBEDDER_LLM_PROVIDER,ollama)
-	$(call update_env_var,EMBEDDER_LLM_BASE_URL,$(OLLAMA_TARGET_URL))
-	$(call update_env_var,EMBEDDER_LLM_MODEL,llama3.2:3b)
-	$(call update_env_var,EMBEDDER_LLM_API_KEY,)
-	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_PROVIDER,ollama)
-	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_BASE_URL,$(OLLAMA_TARGET_URL))
-	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_MODEL,nomic-embed-text:v1.5)
-	$(call update_env_var,EMBEDDER_EMBEDDING_TEXT_API_KEY,)
-	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_PROVIDER,ollama)
-	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_BASE_URL,$(OLLAMA_TARGET_URL))
-	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_MODEL,nomic-embed-text:v1.5)
-	$(call update_env_var,EMBEDDER_EMBEDDING_CODE_API_KEY,)
-	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_PROVIDER,ollama)
-	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_BASE_URL,$(OLLAMA_TARGET_URL))
-	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_MODEL,nomic-embed-text:v1.5)
-	$(call update_env_var,EMBEDDER_EMBEDDING_IMAGE_API_KEY,)
-	@echo "Configured for Ollama backend"
-
-.PHONY: config-vllm
-config-vllm:
-	$(call update_env_var,UV_CUBE_AGENT_TARGET_URL,$(VLLM_TARGET_URL))
-	@echo "Configured for vLLM backend"
-
-.PHONY: config-backend
-config-backend:
-ifeq ($(AI_BACKEND),vllm)
-	@$(MAKE) config-vllm
-else ifeq ($(AI_BACKEND),ollama)
-	@$(MAKE) config-ollama
-else
-	@echo "Invalid AI_BACKEND: $(AI_BACKEND). Use 'ollama' or 'vllm'"
-	@exit 1
-endif
-
-.PHONY: atom-dev-certs
-atom-dev-certs:
-	./scripts/generate-atom-dev-certs.sh docker/certs
-
-.PHONY: up-ollama
-up-ollama: atom-dev-certs config-ollama
-	@echo "Starting Cube with Ollama backend..."
-	docker compose -f docker/compose.yaml --env-file docker/.env --profile default up -d
-
-.PHONY: up-vllm
-up-vllm: atom-dev-certs config-vllm
-	@echo "Starting Cube with vLLM backend..."
-	docker compose -f docker/compose.yaml --env-file docker/.env --profile vllm up -d
-
-.PHONY: smoke-atom-cube
-smoke-atom-cube:
-	./scripts/smoke-atom-cube.sh
-
-GUARDRAILS_CONFIG_FILE = ./guardrails/rails/config.yml
-
-.PHONY: config-guardrails-vllm
-config-guardrails-vllm:
-	@echo "Configuring guardrails for vLLM backend..."
-	@sed -i '/^models:/,/X-Guardrails-Request:/{s/engine: CubeLLM/engine: CubeVLLM/; s/model: llama3.2:3b/model: microsoft\/DialoGPT-medium/}' $(GUARDRAILS_CONFIG_FILE)
-	@echo "Guardrails configured for vLLM"
-
-.PHONY: config-guardrails-ollama
-config-guardrails-ollama:
-	@echo "Configuring guardrails for Ollama backend..."
-	@sed -i '/^models:/,/X-Guardrails-Request:/{s/engine: CubeVLLM/engine: CubeLLM/; s/model: microsoft\/DialoGPT-medium/model: llama3.2:3b/}' $(GUARDRAILS_CONFIG_FILE)
-	@echo "Guardrails configured for Ollama"
-
-.PHONY: up-vllm-guardrails
-up-vllm-guardrails: enable-guardrails config-guardrails-vllm up-vllm
-
-.PHONY: disable-atls
-disable-atls:
-	@if grep -q '^UV_CUBE_AGENT_ATTESTED_TLS=true' docker/.env; then \
-		echo "Disabling attested TLS for local development..."; \
-		sed -i 's|^UV_CUBE_AGENT_CLIENT_CERT=.*|UV_CUBE_AGENT_CLIENT_CERT=|' docker/.env; \
-		sed -i 's|^UV_CUBE_AGENT_CLIENT_KEY=.*|UV_CUBE_AGENT_CLIENT_KEY=|' docker/.env; \
-		sed -i 's|^UV_CUBE_AGENT_SERVER_CA_CERTS=.*|UV_CUBE_AGENT_SERVER_CA_CERTS=|' docker/.env; \
-		sed -i 's|^UV_CUBE_AGENT_ATTESTED_TLS=.*|UV_CUBE_AGENT_ATTESTED_TLS=false|' docker/.env; \
-		sed -i 's|^UV_CUBE_AGENT_ATTESTATION_POLICY=.*|UV_CUBE_AGENT_ATTESTATION_POLICY=|' docker/.env; \
-		echo "✓ Attested TLS disabled"; \
-	else \
-		echo "✓ Attested TLS already configured, skipping"; \
-	fi
-
-.PHONY: up
-up: config-local enable-guardrails config-backend disable-atls
-ifeq ($(AI_BACKEND),vllm)
-	@$(MAKE) up-vllm
-else
-	@$(MAKE) up-ollama
-endif
-
-.PHONY: up-disable-guardrails
-up-disable-guardrails: config-cloud-local disable-guardrails config-backend disable-atls
-ifeq ($(AI_BACKEND),vllm)
-	@$(MAKE) up-vllm
-else
-	@$(MAKE) up-ollama
-endif
-
-.PHONY: config-local
-config-local:
-	@echo "Configuring for local development..."
-	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/.env
-	@sed -i 's|__CUBE_INTERNAL_AGENT_URL__|http://cube-agent:8901|g' docker/config.json
-	@sed -i 's|__CUBE_DOMAIN__|localhost|g' docker/traefik/dynamic.toml
-	@sed -i 's|__CUBE_PUBLIC_URL__|localhost|g' docker/.env
-	@sed -i 's|__TRAEFIK_HTTP_PORT__|80|g' docker/.env
-	@sed -i 's|__TRAEFIK_HTTPS_PORT__|443|g' docker/.env
-	@sed -i 's|__TRAEFIK_DASHBOARD_PORT__|8090|g' docker/.env
-	@sed -i 's|__TUNNEL_TOKEN__||g' docker/.env
-	@echo "✓ Configured with local defaults"
-
-.PHONY: restore-config
-restore-config:
-	@echo "Restoring configuration placeholders..."
-	@git checkout -- docker/.env docker/traefik/dynamic.toml docker/config.json $(GUARDRAILS_CONFIG_FILE) 2>/dev/null && \
-		echo "✓ Restored from git" || echo "⚠ git restore failed, files may not be tracked"
-
-.PHONY: down
 down:
-	@echo "Stopping all Cube services..."
-	docker compose -f docker/compose.yaml down
+	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) down
 
-.PHONY: down-volumes
-down-volumes:
-	@echo "Stopping all Cube services and removing volumes..."
-	docker compose -f docker/compose.yaml down -v
-
-.PHONY: restart
 restart: down up
 
-.PHONY: restart-ollama
-restart-ollama: down up-ollama
-
-.PHONY: restart-vllm
-restart-vllm: down up-vllm
-
-.PHONY: logs
 logs:
-	docker compose -f docker/compose.yaml logs -f
+	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) logs -f
 
-.PHONY: logs-cloud
-logs-cloud:
-	docker compose -f docker/compose.yaml --profile cloud logs -f
+# Stop and wipe volumes (databases, models, uploads).
+.PHONY: clean-volumes
+clean-volumes:
+	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) down -v
 
-.PHONY: dev-setup
-dev-setup: build docker-dev
+# ── Production stack ───────────────────────────────────────────────────
+.PHONY: up-prod down-prod restart-prod logs-prod
+up-prod:
+	docker compose -f $(PROD_COMPOSE) --env-file $(PROD_ENV) up -d
 
-.PHONY: show-config
-show-config:
-	@echo "=== Current Configuration ==="
-	@echo "AI Backend: $(AI_BACKEND)"
-	@echo "Ollama Target: $(OLLAMA_TARGET_URL)"
-	@echo "vLLM Target: $(VLLM_TARGET_URL)"
-	@echo ""
-	@if [ -f $(ENV_FILE) ]; then \
-		echo "=== Environment Variables ==="; \
-		grep -E "(UV_CUBE_AGENT_TARGET_URL|VLLM_MODEL)" $(ENV_FILE) 2>/dev/null || echo "No AI backend variables configured"; \
-	fi
+down-prod:
+	docker compose -f $(PROD_COMPOSE) --env-file $(PROD_ENV) down
 
-.PHONY: clean-env
-clean-env:
-	@echo "Cleaning environment configuration..."
-	@if [ -f $(ENV_FILE) ]; then \
-		sed -i '/^UV_CUBE_AGENT_TARGET_URL=/d' $(ENV_FILE); \
-		echo "Removed UV_CUBE_AGENT_TARGET_URL from $(ENV_FILE)"; \
-	fi
+restart-prod: down-prod up-prod
 
-.PHONY: enable-guardrails
-enable-guardrails:
-	@echo "Enabling guardrails in config.json..."
-	@sed -i '/"name": "guardrails-agent"/,/"enabled":/{s/"enabled": false/"enabled": true/}' $(CONFIG_FILE)
-	@sed -i '/"name": "forward-to-guardrails"/,/"enabled":/{s/"enabled": false/"enabled": true/}' $(CONFIG_FILE)
-	@sed -i '/"name": "guardrails-admin"/,/"enabled":/{s/"enabled": false/"enabled": true/}' $(CONFIG_FILE)
-	@echo "Guardrails enabled"
+logs-prod:
+	docker compose -f $(PROD_COMPOSE) --env-file $(PROD_ENV) logs -f
 
-.PHONY: disable-guardrails
-disable-guardrails:
-	@echo "Disabling guardrails in config.json..."
-	@sed -i '/"name": "guardrails-agent"/,/"enabled":/{s/"enabled": true/"enabled": false/}' $(CONFIG_FILE)
-	@sed -i '/"name": "forward-to-guardrails"/,/"enabled":/{s/"enabled": true/"enabled": false/}' $(CONFIG_FILE)
-	@sed -i '/"name": "guardrails-admin"/,/"enabled":/{s/"enabled": true/"enabled": false/}' $(CONFIG_FILE)
-	@echo "Guardrails disabled"
-
-# Help
-.PHONY: help
-help:
-	@echo "Cube AI - Available Commands:"
-	@echo ""
-	@echo "Build Commands:"
-	@echo "  build              Build all services"
-	@echo "  build-proxy        Build proxy service"
-	@echo "  build-agent        Build agent service"
-	@echo "  docker             Build Docker images"
-	@echo "  docker-guardrails  Build Nemo Guardrails Docker image"
-	@echo "  docker-image-embedder Build image embedding sidecar Docker image"
-	@echo "  docker-dev         Build development Docker images"
-	@echo ""
-	@echo "Configuration Commands:"
-	@echo "  config-ollama           Configure for Ollama backend"
-	@echo "  config-vllm             Configure for vLLM backend"
-	@echo "  config-guardrails-vllm  Configure guardrails config.yml for vLLM"
-	@echo "  config-guardrails-ollama Configure guardrails config.yml for Ollama"
-	@echo "  enable-guardrails       Enable guardrails routes in config.json"
-	@echo "  disable-guardrails      Disable guardrails routes in config.json"
-	@echo "  show-config             Show current configuration"
-	@echo "  clean-env               Clean environment configuration"
-	@echo ""
-	@echo "Deployment Commands:"
-	@echo "  up                      Start with guardrails enabled (default)"
-	@echo "  up-disable-guardrails   Start without guardrails"
-	@echo "  up-ollama               Start with Ollama backend (pulls models automatically)"
-	@echo "  up-vllm                 Start with vLLM backend"
-	@echo "  up-vllm-guardrails      Start with vLLM backend and guardrails enabled"
-	@echo "  up-cloud                Start cloud deployment using cloud-compose.yaml"
-	@echo "  down                    Stop all services"
-	@echo "  down-cloud              Stop cloud services and restore config"
-	@echo "  down-volumes            Stop all services and remove volumes"
-	@echo "  down-cloud-volumes      Stop cloud services, remove volumes, and restore config"
-	@echo "  restart                 Restart with configured backend"
-	@echo "  restart-cloud           Restart cloud deployment"
-	@echo ""
-	@echo "Cloud Configuration Commands:"
-	@echo "  config-cloud-local Configure cloud deployment with localhost defaults"
-	@echo "  restore-config       Restore placeholder values in config files"
-	@echo ""
-
-	@echo "Logs:"
-	@echo "  logs               Show all logs"
-	@echo "  logs-cloud         Show cloud deployment logs"
-	@echo ""
-	@echo "Examples:"
-	@echo "  make up                              # Start with guardrails (default)"
-	@echo "  make up-disable-guardrails           # Start without guardrails"
-	@echo "  make up AI_BACKEND=vllm              # Start with vLLM + guardrails"
-	@echo "  make up-ollama                       # Start with Ollama (pulls models)"
-	@echo "  make up-cloud                        # Start cloud deployment locally"
-
-
-
-all: build docker-dev
-
-clean:
-	rm -rf build
-
+# ── Dev tooling ────────────────────────────────────────────────────────
+.PHONY: lint mocks clean guardrails-venv
 lint:
 	golangci-lint run --config .golangci.yaml
 
-.PHONY: latest
-latest: docker docker-push
-
-.PHONY: docker-push
-docker-push: docker-push-proxy docker-push-agent docker-push-guardrails docker-push-image-embedder
-
-.PHONY: docker-push-proxy
-docker-push-proxy:
-	$(call docker_push,$(CUBE_PROXY_DOCKER_IMAGE_NAME))
-
-.PHONY: docker-push-agent
-docker-push-agent:
-	$(call docker_push,$(CUBE_AGENT_DOCKER_IMAGE_NAME))
-
-.PHONY: mocks
 mocks:
 	mockery --config ./.mockery.yml
 
-.PHONY: docker-push-guardrails
-docker-push-guardrails:
-	$(call docker_push,$(CUBE_GUARDRAILS_DOCKER_IMAGE_NAME))
+clean:
+	rm -rf $(BUILD_DIR)
 
-.PHONY: docker-push-image-embedder
-docker-push-image-embedder:
-	$(call docker_push,$(CUBE_IMAGE_EMBEDDER_DOCKER_IMAGE_NAME))
+guardrails-venv:
+	python -m venv .venv
+	. .venv/bin/activate && pip install --upgrade pip && pip install -r guardrails/requirements.txt
+	. .venv/bin/activate && python -m spacy download en_core_web_lg
+
+# ── Help ───────────────────────────────────────────────────────────────
+.PHONY: help
+help:
+	@echo "Cube — make targets"
+	@echo ""
+	@echo "Build:"
+	@echo "  build              Compile proxy, agent, embedder binaries"
+	@echo "  proxy|agent|embedder  Compile a single service binary"
+	@echo "  dockers            Build all service docker images (:latest and :VERSION)"
+	@echo "  docker-<service>   Build one service image: proxy, agent, embedder,"
+	@echo "                     guardrails, image-embedder, ui"
+	@echo "  docker-push        Push all Cube images"
+	@echo ""
+	@echo "Local stack (docker/local — minimal, no TEE):"
+	@echo "  up                 Build UI and start the local stack (needs 'make dockers' first)"
+	@echo "  down               Stop the local stack"
+	@echo "  restart            Restart the local stack"
+	@echo "  logs               Follow local stack logs"
+	@echo "  clean-volumes      Stop and delete local volumes"
+	@echo ""
+	@echo "Production stack (docker/prod — full, edit docker/prod/.env first):"
+	@echo "  up-prod            Start the production stack"
+	@echo "  down-prod          Stop the production stack"
+	@echo "  restart-prod       Restart the production stack"
+	@echo "  logs-prod          Follow production stack logs"
+	@echo ""
+	@echo "Dev:"
+	@echo "  lint  mocks  clean  guardrails-venv"
 
 .DEFAULT_GOAL := help

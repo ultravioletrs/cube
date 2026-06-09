@@ -1,0 +1,113 @@
+{
+  "router": {
+    "routes": [
+      {
+        "name": "guardrails-agent",
+        "target_url": "http://cube-agent:8901",
+        "matchers": [
+          {
+            "condition": "header",
+            "field": "X-Guardrails-Request",
+            "pattern": "true"
+          }
+        ],
+        "priority": 25,
+        "enabled": true,
+        "event_type": "llm_request",
+        "atls": true
+      },
+      {
+        "name": "attestation",
+        "target_url": "http://cube-agent:8901",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "/attestation/.*",
+            "is_regex": true
+          }
+        ],
+        "priority": 15,
+        "strip_prefix": "",
+        "enabled": true,
+        "event_type": "attestation_request",
+        "atls": true
+      },
+      {
+        "name": "audit",
+        "target_url": "http://opensearch:9200",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "/audit/.*",
+            "is_regex": true
+          }
+        ],
+        "priority": 10,
+        "strip_prefix": "/audit",
+        "enabled": true,
+        "event_type": "audit_event",
+        "atls": false
+      },
+      {
+        "name": "forward-to-guardrails",
+        "target_url": "http://guardrails:8001/guardrails/messages",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "^.*/api/chat$",
+            "is_regex": true
+          }
+        ],
+        "priority": 20,
+        "strip_prefix": "/api/chat",
+        "enabled": true,
+        "event_type": "guardrails_request",
+        "atls": false
+      },
+      {
+        "name": "embedder-api",
+        "target_url": "http://cube-embedder:8082",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "^(/[^/]+)?/api/v1/(records|sources|conversations|retrieve|chat|models|guardrails)(/.*)?$",
+            "is_regex": true
+          }
+        ],
+        "priority": 18,
+        "enabled": true,
+        "event_type": "embedder_request",
+        "atls": false
+      },
+      {
+        "name": "guardrails-admin",
+        "target_url": "http://guardrails:8001/guardrails",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "^.*guardrails/.*",
+            "is_regex": true
+          }
+        ],
+        "priority": 15,
+        "enabled": true,
+        "event_type": "guardrails_request",
+        "atls": true
+      },
+      {
+        "name": "agent",
+        "target_url": "http://cube-agent:8901",
+        "default_rule": true,
+        "enabled": true,
+        "event_type": "llm_request",
+        "atls": true
+      }
+    ]
+  },
+  "tls": {
+    "enabled": true,
+    "insecure_skip_verify": false,
+    "min_version": 771,
+    "max_version": 772
+  }
+}

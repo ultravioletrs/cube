@@ -1,9 +1,13 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-import type { AuthService, AuthSession } from './service'
+import type { AuthService, AuthSession, RegisterResult } from './service'
 import type { AuthTokens, AuthUser, LoginCredentials, RegisterCredentials } from './types'
 
 export const ATOM_SESSION_STORAGE_KEY = 'cube_atom_session'
+
+// Well-known UUID of the seeded ATOM admin entity (atom::config::ADMIN_ENTITY_ID).
+// Identity & Access is an admin-only surface, so we treat this entity as admin.
+const ADMIN_ENTITY_ID = '00000000-0000-0000-0000-000000000001'
 
 interface StoredAtomSession {
   accessToken: string
@@ -43,6 +47,14 @@ interface LogoutData {
   logout: boolean
 }
 
+interface SignupData {
+  signup: {
+    entityId: string
+    email: string
+    verificationRequired: boolean
+  }
+}
+
 const atomAPIURL = import.meta.env.VITE_ATOM_API_URL ?? 'http://localhost:8080'
 const atomGraphQLURL = import.meta.env.VITE_ATOM_GRAPHQL_URL ?? new URL('/graphql', atomAPIURL).toString()
 
@@ -74,6 +86,16 @@ const LOGOUT_MUTATION = `
   }
 `
 
+const SIGNUP_MUTATION = `
+  mutation CubeSignup($input: SignupInput!) {
+    signup(input: $input) {
+      entityId
+      email
+      verificationRequired
+    }
+  }
+`
+
 function isStorageAvailable(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 }
@@ -88,7 +110,7 @@ function authUser(entityID: string): AuthUser {
     id: entityID,
     email: entityID,
     username: entityID,
-    role: 'user',
+    role: entityID === ADMIN_ENTITY_ID ? 'admin' : 'user',
   }
 }
 
@@ -259,8 +281,24 @@ export const atomAuthService: AuthService = {
     return validateStoredSession(stored)
   },
 
-  async register(_credentials: RegisterCredentials): Promise<AuthUser> {
-    throw new Error('Account creation is managed in ATOM UI.')
+  async register({ email, username, password }: RegisterCredentials): Promise<RegisterResult> {
+    const data = await graphQL<SignupData>(SIGNUP_MUTATION, {
+      input: {
+        name: username,
+        email,
+        password,
+      },
+    })
+    if (!data.signup.entityId) {
+      throw new Error('ATOM returned an invalid signup response.')
+    }
+    const user = authUser(data.signup.entityId)
+    user.email = data.signup.email
+    user.username = username
+    return {
+      user,
+      verificationRequired: data.signup.verificationRequired,
+    }
   },
 
   async logout(): Promise<void> {

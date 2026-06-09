@@ -143,18 +143,6 @@ const platformItems: NavItem[] = [
       </svg>
     ),
   },
-  {
-    id: 'advanced-identity-access',
-    label: 'Advanced IAM',
-    path: ATOM_UI_URL,
-    external: true,
-    icon: (
-      <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-        <path d="M10 2.5l6.5 3v4.8c0 3.6-2.7 6.9-6.5 7.9-3.8-1-6.5-4.3-6.5-7.9V5.5l6.5-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
-        <path d="M7.5 10.2l1.7 1.7 3.4-3.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
   ...(ATTESTATION_ENABLED ? [{
     id: 'attestation',
     label: 'Attestation',
@@ -167,6 +155,20 @@ const platformItems: NavItem[] = [
     ),
   }] : []),
 ]
+
+// Identity & Access is the ATOM admin UI; only admins should see it.
+const adminItem: NavItem = {
+  id: 'advanced-identity-access',
+  label: 'Advanced IAM',
+  path: ATOM_UI_URL,
+  external: true,
+  icon: (
+    <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+      <path d="M10 2.5l6.5 3v4.8c0 3.6-2.7 6.9-6.5 7.9-3.8-1-6.5-4.3-6.5-7.9V5.5l6.5-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M7.5 10.2l1.7 1.7 3.4-3.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+}
 
 const bottomItems: NavItem[] = [
   {
@@ -348,6 +350,9 @@ function UserMenuInline() {
 export default function Sidebar({ activeWorkspace }: { activeWorkspace: ActiveWorkspace | null }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const platform = user?.role === 'admin' ? [...platformItems, adminItem] : platformItems
 
   return (
     <aside style={{ width: '210px', minWidth: '210px', height: '100%', background: 'var(--sidebar-bg)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', position: 'relative', zIndex: 10 }}>
@@ -373,7 +378,7 @@ export default function Sidebar({ activeWorkspace }: { activeWorkspace: ActiveWo
         <NavGroup label="Overview" items={overviewItems} currentPath={location.pathname} />
         <NavGroup label="Knowledge Base" items={knowledgeItems} currentPath={location.pathname} />
         <NavGroup label="AI" items={aiItems} currentPath={location.pathname} />
-        <NavGroup label="Platform" items={platformItems} currentPath={location.pathname} />
+        <NavGroup label="Platform" items={platform} currentPath={location.pathname} />
         <div style={{ flex: 1 }} />
         <NavGroup label="Account" items={bottomItems} currentPath={location.pathname} />
       </nav>

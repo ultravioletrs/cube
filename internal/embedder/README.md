@@ -8,9 +8,71 @@ Cube Embedder is the RAG ingestion and retrieval service in Cube AI. It manages:
 - user-scoped vector retrieval
 - conversation persistence for chat history
 
+## Architecture
+
+### Ingest pipeline
+
+Every record flows through the same stages:
+
+```
+ingest → extract → chunk → embed → store → (retrieve)
+```
+
+1. **Ingest** – fetch the file from a source (`google_drive`, `s3`, …) or a direct upload.
+2. **Extract** – turn the raw file into text. Format-specific: `pdftotext` for PDFs,
+   a DOCX reader, HTML stripping for links, OCR (`tesseract`) for images and as a
+   fallback for text-poor PDFs.
+3. **Chunk** – split the extracted text into overlapping windows (`EMBEDDER_CHUNK_*`).
+4. **Embed** – turn each chunk into a vector (see modalities below).
+5. **Store** – persist vectors in pgvector, scoped to the owning user.
+6. **Retrieve** – at query time, embed the query and return nearest chunks for chat.
+
+### Two axes: format vs modality
+
+The design deliberately separates two concerns that are easy to conflate:
+
+- **Format** is an *extraction* concern. PDF, DOCX, Excel, Markdown and web links are
+  all different containers that, once parsed, collapse into **text**. They share a
+  single embedding path. Adding a new format means adding an extractor (a branch in
+  `service/record_format.go` / `ingest/`), **not** a new service.
+- **Modality** is an *embedding* concern. Text and images are fundamentally different
+  inputs that need different models. Text uses the in-process embedding profiles
+  (ollama/openai); images use a CLIP model with heavy Python/ML dependencies. That is
+  the *only* reason image embedding is split out.
+
+So there is one Go embedder for everything text-derived, plus one sidecar per
+non-text modality.
+
+### Embedding profiles vs the image sidecar
+
+These are two **different** mechanisms — do not cross-wire them:
+
+| | Text/code (and all text-yielding formats) | Images |
+| --- | --- | --- |
+| Mechanism | In-process embedding **profile** (`text`, `code`, …) | External **sidecar** HTTP call |
+| Provider | `ollama` or `openai` only | `image-embedder` service (CLIP) |
+| Config | `EMBEDDER_EMBEDDING_<PROFILE>_*` | `EMBEDDER_IMAGE_EMBEDDING_*` |
+| Endpoint | n/a (library call) | `EMBEDDER_IMAGE_EMBEDDING_URL` → sidecar `:8090` |
+
+The `image` profile name routes image records and must still name a *valid profile
+provider* (`ollama`/`openai`); it is **not** where the sidecar is configured. Pointing
+a profile at a provider like `image-embedder` fails startup with
+`unknown embedding provider`. The sidecar is wired solely through
+`EMBEDDER_IMAGE_EMBEDDING_URL`.
+
+### Adding a new content type
+
+- **New document format** (e.g. `.pptx`, RTF) → add an extractor; it reuses the text
+  profile. No new service.
+- **New modality** (audio, video) → add a dedicated sidecar (its own model and deps)
+  and a corresponding `EMBEDDER_<MODALITY>_EMBEDDING_*` config block, mirroring images.
+
+The companion CLIP service lives in [`image-embedder/`](../../image-embedder/) and is
+documented in [`image-embedder/README.md`](../../image-embedder/README.md).
+
 ## Configuration
 
-The service is configured via `EMBEDDER_*` environment variables (see `docker/.env` for full defaults).
+The service is configured via `EMBEDDER_*` environment variables (see `docker/local/.env` and `docker/prod/.env` for full defaults).
 
 | Variable | Description | Default |
 | --- | --- | --- |
@@ -80,9 +142,11 @@ All `/api/v1/*` routes require `Authorization: Bearer <token>`.
 In Docker Compose, Embedder runs as:
 
 - service: `cube-embedder`
-- database: `cube-embedder-db` (`pgvector/pgvector:pg16`)
+- database: `embedder-db` (`pgvector/pgvector:pg16`)
+- image sidecar: `image-embedder` (CLIP)
 
-The compose definition is in `docker/cube-compose.yaml`.
+The compose definitions are in `docker/local/docker-compose.yaml` (minimal local stack)
+and `docker/prod/docker-compose.yaml` (full production stack).
 
 ## Workflows
 

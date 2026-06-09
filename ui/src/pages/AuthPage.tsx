@@ -27,27 +27,57 @@ const labelStyle: React.CSSProperties = {
 }
 
 export default function AuthPage() {
+  const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const { login, isAuthenticated } = useAuth()
+  const { login, register, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
-  const atomUIURL = import.meta.env.VITE_ATOM_UI_URL ?? '/atom'
+
+  const isSignup = mode === 'signup'
 
   // Auth page should always redirect authenticated users to app.
   if (isAuthenticated) return <Navigate to={from} replace />
 
+  function switchMode(next: 'signin' | 'signup') {
+    setMode(next)
+    setError(null)
+    setNotice(null)
+    setConfirmPassword('')
+  }
+
   async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
+    setNotice(null)
     setLoading(true)
 
     try {
+      if (isSignup) {
+        if (password !== confirmPassword) {
+          setError('Passwords do not match.')
+          return
+        }
+        const { verificationRequired } = await register(email, username, password)
+        if (verificationRequired) {
+          // Account created but cannot sign in until the email is verified.
+          setMode('signin')
+          setPassword('')
+          setConfirmPassword('')
+          setNotice('Account created. Check your email to verify it, then sign in.')
+          return
+        }
+        navigate(from)
+        return
+      }
       await login(email, password)
       navigate(from)
     } catch (err) {
@@ -62,26 +92,40 @@ export default function AuthPage() {
       <div style={{ width: '100%', maxWidth: '380px', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '16px', padding: '32px', boxShadow: '0 24px 80px rgba(0,0,0,0.4)' }}>
         <div style={{ marginBottom: '24px' }}>
           <h1 style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '22px', color: 'var(--text)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
-            Welcome back
+            {isSignup ? 'Create your account' : 'Welcome back'}
           </h1>
           <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', color: 'var(--text-muted)', margin: 0 }}>
-            Sign in to your Cube AI account
+            {isSignup ? 'Sign up for a Cube AI account' : 'Sign in to your Cube AI account'}
           </p>
         </div>
 
         <form style={{ display: 'flex', flexDirection: 'column', gap: '16px' }} onSubmit={handleSubmit}>
           <div>
-            <label style={labelStyle} htmlFor="email">Email or username</label>
+            <label style={labelStyle} htmlFor="email">{isSignup ? 'Email' : 'Email or username'}</label>
             <input
               id="email"
-              type="text"
-              placeholder="you@example.com or johndoe"
+              type={isSignup ? 'email' : 'text'}
+              placeholder={isSignup ? 'you@example.com' : 'you@example.com or johndoe'}
               style={inputStyle}
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
             />
           </div>
+          {isSignup && (
+            <div>
+              <label style={labelStyle} htmlFor="username">Username</label>
+              <input
+                id="username"
+                type="text"
+                placeholder="johndoe"
+                style={inputStyle}
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                required
+              />
+            </div>
+          )}
           <div>
             <label style={labelStyle} htmlFor="password">Password</label>
             <div style={{ position: 'relative' }}>
@@ -116,6 +160,27 @@ export default function AuthPage() {
               </button>
             </div>
           </div>
+          {isSignup && (
+            <div>
+              <label style={labelStyle} htmlFor="confirmPassword">Confirm password</label>
+              <input
+                id="confirmPassword"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                style={inputStyle}
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                required
+                minLength={8}
+              />
+            </div>
+          )}
+
+          {notice && (
+            <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--accent)', margin: 0, padding: '8px 12px', background: 'rgba(0,212,180,0.08)', borderRadius: '6px', border: '1px solid rgba(0,212,180,0.2)' }}>
+              {notice}
+            </p>
+          )}
 
           {error && (
             <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: '#ff6b6b', margin: 0, padding: '8px 12px', background: 'rgba(255,107,107,0.08)', borderRadius: '6px', border: '1px solid rgba(255,107,107,0.2)' }}>
@@ -128,19 +193,19 @@ export default function AuthPage() {
             disabled={loading}
             style={{ background: loading ? 'rgba(0,212,180,0.5)' : 'var(--accent)', border: 'none', color: '#070c16', padding: '10px 16px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'Space Grotesk, sans-serif', fontSize: '14px', fontWeight: '700', marginTop: '4px' }}
           >
-            {loading ? 'Please wait…' : 'Sign in'}
+            {loading ? 'Please wait…' : isSignup ? 'Sign up' : 'Sign in'}
           </button>
         </form>
 
         <p style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '20px', marginBottom: 0 }}>
-          <a
-            href={atomUIURL}
-            target="_blank"
-            rel="noreferrer"
-            style={{ color: 'var(--text)', fontWeight: '600', textDecoration: 'underline', textUnderlineOffset: '3px' }}
+          {isSignup ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <button
+            type="button"
+            onClick={() => switchMode(isSignup ? 'signin' : 'signup')}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '13px', fontWeight: '600', textDecoration: 'underline', textUnderlineOffset: '3px' }}
           >
-            Identity & Access
-          </a>
+            {isSignup ? 'Sign in' : 'Sign up'}
+          </button>
         </p>
       </div>
     </div>

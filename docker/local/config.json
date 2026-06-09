@@ -1,0 +1,32 @@
+{
+  "router": {
+    "routes": [
+      {
+        "name": "embedder-api",
+        "target_url": "http://cube-embedder:8082",
+        "matchers": [
+          {
+            "condition": "path",
+            "pattern": "^(/[^/]+)?/api/v1/(records|sources|conversations|retrieve|chat|models|guardrails)(/.*)?$",
+            "is_regex": true
+          }
+        ],
+        "priority": 18,
+        "enabled": true,
+        "event_type": "embedder_request",
+        "atls": false
+      },
+      {
+        "name": "agent",
+        "target_url": "http://cube-agent:8901",
+        "default_rule": true,
+        "enabled": true,
+        "event_type": "llm_request",
+        "atls": false
+      }
+    ]
+  },
+  "tls": {
+    "enabled": false
+  }
+}

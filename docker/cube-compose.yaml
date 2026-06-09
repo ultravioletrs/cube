@@ -311,7 +311,7 @@ services:
   ui:
     build:
       context: ../ui
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: cube-ui
     restart: unless-stopped
     depends_on:
