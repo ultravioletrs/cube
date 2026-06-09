@@ -1,6 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { List, type RowComponentProps } from 'react-window'
 import { useOutletContext, useLocation } from 'react-router-dom'
 import type { AppContext, AppRecord, ChatDebug, ChatMessage, Conversation, MsgSource } from '@/types'
 import UserMenu from '@/components/UserMenu'
@@ -9,7 +10,41 @@ import { listOllamaModels, streamChat } from '@/lib/api'
 import type { Citation } from '@/lib/api'
 import { LLM_MODEL_OPTIONS, loadExternalModelConfig, loadModelConfig, saveModelConfig, toBackendModelConfig } from '@/lib/modelConfig'
 import type { ModelConfig } from '@/lib/modelConfig'
-import { deleteConversation, getConversation, listRecordsBySource, syncSource } from '@/lib/embedder/service'
+import { deleteConversation, getConversation, listRecordsBySource, listRecordsPage, syncSource } from '@/lib/embedder/service'
+import type { RecordPage } from '@/lib/embedder/service'
+
+// Max records a single chat request may scope to. Must match the backend
+// maxChatRecordIDs cap; "all records" is sent as an empty list (unscoped).
+const RECORD_SELECTION_CAP = 1000
+// Page size for the customize-panel record search.
+const RECORD_PAGE = 50
+
+type RecordRowData = {
+  records: AppRecord[]
+  activeSet: Set<string>
+  allActive: boolean
+  onToggle: (id: string) => void
+}
+
+function RecordRow({ index, style, records, activeSet, allActive, onToggle }: RowComponentProps<RecordRowData>) {
+  const s = records[index]
+  if (!s) return null
+  const active = allActive || activeSet.has(s.id)
+  return (
+    <div style={style}>
+      <button
+        onClick={() => onToggle(s.id)}
+        title={s.name}
+        style={{ boxSizing: 'border-box', width: '100%', height: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', background: active ? 'rgba(0,212,180,0.07)' : 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', textAlign: 'left' }}
+      >
+        <div style={{ width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0, background: active ? 'var(--accent)' : 'rgba(255,255,255,0.15)', border: active ? 'none' : '1px solid rgba(255,255,255,0.2)' }} />
+        <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: active ? 'var(--text)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
+          {s.name}
+        </span>
+      </button>
+    </div>
+  )
+}
 
 interface ChatRouteState {
   source?: AppRecord
@@ -238,7 +273,12 @@ function SourcesPanel({
   indexedSources,
   activeSources,
   canCustomizeSources,
+  isCustomized,
   onToggle,
+  onSetActive,
+  onResetAll,
+  searchRecords,
+  recordCap,
   citations,
   debug,
   debugEnabled,
@@ -250,7 +290,12 @@ function SourcesPanel({
   indexedSources: AppRecord[]
   activeSources: string[]
   canCustomizeSources: boolean
+  isCustomized: boolean
   onToggle: (id: string) => void
+  onSetActive: (ids: string[]) => void
+  onResetAll: () => void
+  searchRecords: (q: string, offset: number, limit: number) => Promise<RecordPage>
+  recordCap: number
   citations: MsgSource[]
   debug?: ChatDebug | null
   debugEnabled?: boolean
@@ -260,12 +305,88 @@ function SourcesPanel({
   visibleSourceSyncNotice?: { kind: 'info' | 'error'; text: string } | null
 }) {
   const citationSummary = citationCounts(citations)
+  const [customizeOpen, setCustomizeOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [results, setResults] = useState<AppRecord[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const activeSet = useMemo(() => new Set(activeSources), [activeSources])
+
+  // Debounce the search box so each keystroke doesn't hit the backend.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 250)
+    return () => clearTimeout(t)
+  }, [query])
+
+  // Load the first page whenever the panel opens or the query changes.
+  useEffect(() => {
+    if (!customizeOpen) return
+    let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true)
+    setError(null)
+    searchRecords(debouncedQuery, 0, RECORD_PAGE)
+      .then(page => { if (!cancelled) { setResults(page.records); setTotal(page.total) } })
+      .catch(e => { if (!cancelled) { setResults([]); setTotal(0); setError(e instanceof Error ? e.message : 'Failed to load records') } })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [customizeOpen, debouncedQuery, searchRecords])
+
+  const loadMore = () => {
+    setBusy(true)
+    searchRecords(debouncedQuery, results.length, RECORD_PAGE)
+      .then(page => { setResults(prev => [...prev, ...page.records]); setTotal(page.total) })
+      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load records'))
+      .finally(() => setBusy(false))
+  }
+
+  // Resolve every record id matching the current query, bounded by the cap.
+  const matchIDs = async () => (await searchRecords(debouncedQuery, 0, recordCap)).records.map(r => r.id)
+
+  const selectAllMatches = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const ids = await matchIDs()
+      const union = Array.from(new Set([...activeSources, ...ids]))
+      if (union.length > recordCap) {
+        onSetActive(union.slice(0, recordCap))
+        setError(`Selection capped at ${recordCap} records.`)
+      } else {
+        onSetActive(union)
+        if (total > ids.length) setError(`Selected first ${ids.length} of ${total} matches (cap ${recordCap}).`)
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to select records')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const clearMatches = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      const ids = new Set(await matchIDs())
+      onSetActive(activeSources.filter(id => !ids.has(id)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to clear records')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const totalCount = customizeOpen ? total : indexedSources.length
+  const listHeight = Math.min(Math.max(results.length, 1) * 34, 264)
   return (
     <div style={{ width: '260px', minWidth: '260px', height: '100%', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--sidebar-bg)', overflow: 'hidden' }}>
 
       {/* Files section */}
       <div style={{ flexShrink: 0, padding: '16px 14px 10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.1em' }}>
             RECORDS · {indexedSources.length}
           </span>
@@ -279,36 +400,104 @@ function SourcesPanel({
             </button>
           )}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-muted)' }}>
+            {isCustomized ? `${activeSources.length} of ${totalCount} active` : `${totalCount} active · all`}
+          </span>
+          {canCustomizeSources && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              {isCustomized && (
+                <button
+                  onClick={onResetAll}
+                  title="Use all records"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', padding: '2px 4px' }}
+                >
+                  Reset
+                </button>
+              )}
+              <button
+                onClick={() => setCustomizeOpen(o => !o)}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', background: customizeOpen ? 'rgba(0,212,180,0.1)' : 'none', border: `1px solid ${customizeOpen ? 'rgba(0,212,180,0.35)' : 'var(--border)'}`, borderRadius: '6px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: customizeOpen ? 'var(--accent)' : 'var(--text-dim)', padding: '3px 8px' }}
+              >
+                {customizeOpen ? 'Done' : 'Customize'}
+              </button>
+            </div>
+          )}
+        </div>
         {visibleSourceSyncNotice && (
-          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: visibleSourceSyncNotice.kind === 'error' ? '#ff8080' : 'var(--accent)', marginBottom: '8px', lineHeight: 1.5 }}>
+          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: visibleSourceSyncNotice.kind === 'error' ? '#ff8080' : 'var(--accent)', marginTop: '8px', lineHeight: 1.5 }}>
             {visibleSourceSyncNotice.text}
           </div>
         )}
+        {customizeOpen && (
+          <>
+            <div style={{ position: 'relative', marginTop: '10px' }}>
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-dim)' }}>
+                <circle cx="6" cy="6" r="4" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M9.5 9.5L12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              <input
+                type="text"
+                placeholder="Search records..."
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px 6px 26px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', outline: 'none' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+              <button
+                onClick={() => { void selectAllMatches() }}
+                disabled={busy}
+                style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: '6px', cursor: busy ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', padding: '4px 6px', opacity: busy ? 0.6 : 1 }}
+              >
+                Select all{debouncedQuery.trim() ? ` (${total})` : ''}
+              </button>
+              <button
+                onClick={() => { void clearMatches() }}
+                disabled={busy}
+                style={{ flex: 1, background: 'none', border: '1px solid var(--border)', borderRadius: '6px', cursor: busy ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', padding: '4px 6px', opacity: busy ? 0.6 : 1 }}
+              >
+                Clear
+              </button>
+            </div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', marginTop: '6px', lineHeight: 1.5 }}>
+              {isCustomized ? 'Chat limited to selected records.' : 'All records active — select to limit the chat to them.'}
+            </div>
+            {error && (
+              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#ffb400', marginTop: '6px', lineHeight: 1.5 }}>{error}</div>
+            )}
+          </>
+        )}
       </div>
 
-      <div style={{ flex: citations.length > 0 ? '0 0 auto' : '1', maxHeight: citations.length > 0 ? '45%' : undefined, overflowY: 'auto', padding: '0 8px 8px' }}>
-        {indexedSources.length === 0 && (
-          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', textAlign: 'center', paddingTop: '12px' }}>No indexed files</div>
-        )}
-        {indexedSources.map(s => {
-          const active = activeSources.includes(s.id)
-          return (
+      {customizeOpen && (
+        <div style={{ flex: citations.length > 0 ? '0 0 auto' : '1', maxHeight: citations.length > 0 ? '45%' : undefined, overflowY: 'auto', padding: '0 8px 8px' }}>
+          {loading && results.length === 0 && (
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', textAlign: 'center', paddingTop: '12px' }}>Loading…</div>
+          )}
+          {!loading && results.length === 0 && (
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', textAlign: 'center', paddingTop: '12px' }}>{debouncedQuery.trim() ? 'No matches' : 'No indexed records'}</div>
+          )}
+          {results.length > 0 && (
+            <List
+              rowComponent={RecordRow}
+              rowCount={results.length}
+              rowHeight={34}
+              rowProps={{ records: results, activeSet, allActive: !isCustomized, onToggle }}
+              style={{ height: listHeight }}
+            />
+          )}
+          {results.length < total && (
             <button
-              key={s.id}
-              onClick={() => canCustomizeSources && onToggle(s.id)}
-              title={s.name}
-              style={{ boxSizing: 'border-box', width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', background: active ? 'rgba(0,212,180,0.07)' : 'transparent', border: 'none', borderRadius: '6px', cursor: canCustomizeSources ? 'pointer' : 'default', textAlign: 'left', transition: 'background 0.12s' }}
-              onMouseEnter={e => { if (canCustomizeSources) (e.currentTarget as HTMLButtonElement).style.background = active ? 'rgba(0,212,180,0.12)' : 'rgba(255,255,255,0.04)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = active ? 'rgba(0,212,180,0.07)' : 'transparent' }}
+              onClick={loadMore}
+              disabled={busy}
+              style={{ width: '100%', marginTop: '6px', background: 'none', border: '1px dashed var(--border)', borderRadius: '6px', cursor: busy ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', padding: '5px 6px', opacity: busy ? 0.6 : 1 }}
             >
-              <div style={{ width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0, background: active ? 'var(--accent)' : 'rgba(255,255,255,0.15)', border: active ? 'none' : '1px solid rgba(255,255,255,0.2)', transition: 'background 0.12s' }} />
-              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: active ? 'var(--text)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
-                {s.name}
-              </span>
+              {busy ? 'Loading…' : `Show more (${total - results.length})`}
             </button>
-          )
-        })}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Citations section */}
       {citations.length > 0 && (
@@ -503,6 +692,19 @@ export default function ChatPage() {
     }
   }, [accessToken, domainID, conversationId, clearChatMessages, setConversations])
 
+  // Scope-aware paged search of indexed records for the customize panel.
+  const searchIndexedRecords = useCallback(
+    (q: string, offset: number, limit: number) =>
+      listRecordsPage(accessToken ?? '', domainID, {
+        status: 'indexed',
+        sourceID: selectedSourceID,
+        q,
+        offset,
+        limit,
+      }),
+    [accessToken, domainID, selectedSourceID],
+  )
+
   const scopedSourceState = selectedSourceID && sourceScopeState?.sourceID === selectedSourceID
     ? sourceScopeState
     : null
@@ -520,19 +722,27 @@ export default function ChatPage() {
     () => records.filter(s => s.status === 'indexed' && (s.chunks ?? 0) > 0).map(s => s.id),
     [records],
   )
+  // Pool of records the user may pick from: a scoped source's records, otherwise all indexed.
+  const customizableSourceIDs = useMemo(
+    () => (selectedSourceID ? selectedSourceRecordIDs : allIndexedSourceIDs),
+    [selectedSourceID, selectedSourceRecordIDs, allIndexedSourceIDs],
+  )
   const activeSources = useMemo(() => {
     if (selectedRecord) {
       if (selectedRecordNotIndexed) return []
       return [selectedRecord.id]
     }
-    if (selectedSourceID) return selectedSourceRecordIDs
-    if (!manualActiveSources) return allIndexedSourceIDs
-    return manualActiveSources.filter(id => allIndexedSourceIDs.includes(id))
-  }, [allIndexedSourceIDs, manualActiveSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, selectedSourceRecordIDs])
+    // null = all records (default); an explicit allowlist (possibly empty) is
+    // trusted as-is, since selections may include records beyond the page the
+    // client has loaded.
+    if (!manualActiveSources) return customizableSourceIDs
+    return manualActiveSources
+  }, [customizableSourceIDs, manualActiveSources, selectedRecord, selectedRecordNotIndexed])
   const visibleSourceSyncNotice = sourceSyncNotice && selectedSourceID === sourceSyncNotice.sourceID
     ? sourceSyncNotice
     : null
-  const canCustomizeSources = !selectedRecord && !selectedSourceID
+  // Single-record scope stays locked; a source scope can still be narrowed.
+  const canCustomizeSources = !selectedRecord
 
   useEffect(() => {
     if (!selectedSourceID || !accessToken) return
@@ -618,7 +828,14 @@ export default function ChatPage() {
       return
     }
     const userContent = input.trim()
-    const targetRecordIDs = activeSources
+    // When unscoped and not customized, send no record_ids so the backend searches
+    // all records via its index instead of enumerating the (client-capped) record list.
+    const isUnscoped = !selectedRecord && !selectedSourceID && manualActiveSources === null
+    const targetRecordIDs = isUnscoped ? [] : activeSources
+    if (targetRecordIDs.length > RECORD_SELECTION_CAP) {
+      setRetrievalWarning(`Too many records selected (${targetRecordIDs.length}). Narrow to ${RECORD_SELECTION_CAP} or fewer.`)
+      return
+    }
     setInput('')
     setLoading(true)
     setRetrievalWarning(null)
@@ -691,9 +908,13 @@ export default function ChatPage() {
       }
       setLoading(false)
     })
-  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, selectedSourceHasNoIndexedRecords, conversationId, setConversationId, setConversations, modelConfig, debugEnabled])
+  }, [input, loading, chatMessages, setChatMessages, accessToken, domainID, activeSources, manualActiveSources, selectedRecord, selectedRecordNotIndexed, selectedSourceID, selectedSourceHasNoIndexedRecords, conversationId, setConversationId, setConversations, modelConfig, debugEnabled])
 
-  const indexedSources = records.filter(s => s.status === 'indexed')
+  const indexedSources = useMemo(() => {
+    const indexed = records.filter(s => s.status === 'indexed' && (s.chunks ?? 0) > 0)
+    if (selectedSourceID) return indexed.filter(s => selectedSourceRecordIDs.includes(s.id))
+    return indexed
+  }, [records, selectedSourceID, selectedSourceRecordIDs])
   const modelStatusInfo = modelStatusDetails(modelConfig, modelStatus)
   const configuredExternalProvider = externalProviderConfig?.provider ?? null
 
@@ -711,9 +932,11 @@ export default function ChatPage() {
   }
 
   function handleToggleSource(id: string) {
+    // Toggling enters allowlist mode starting from empty, so the first pick
+    // narrows the chat to that record rather than to the client-loaded page.
     setManualActiveSources(prev => {
-      const base = prev ?? allIndexedSourceIDs
-      return activeSources.includes(id) ? base.filter(x => x !== id) : [...base, id]
+      const base = prev ?? []
+      return base.includes(id) ? base.filter(x => x !== id) : [...base, id]
     })
   }
 
@@ -933,7 +1156,12 @@ export default function ChatPage() {
           indexedSources={indexedSources}
           activeSources={activeSources}
           canCustomizeSources={canCustomizeSources}
+          isCustomized={manualActiveSources !== null}
           onToggle={handleToggleSource}
+          onSetActive={setManualActiveSources}
+          onResetAll={() => setManualActiveSources(null)}
+          searchRecords={searchIndexedRecords}
+          recordCap={RECORD_SELECTION_CAP}
           citations={panelCitations}
           debug={panelDebug}
           debugEnabled={debugEnabled}

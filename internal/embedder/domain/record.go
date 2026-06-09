@@ -99,6 +99,8 @@ type RecordFilter struct {
 	SourceID *string
 	Status   *RecordStatus
 	Format   *RecordFormat
+	// Name is a case-insensitive substring matched against the record name.
+	Name *string
 }
 
 // IngestResult holds post-ingestion metadata written back to the record.

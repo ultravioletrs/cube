@@ -6,6 +6,7 @@ package transport
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
@@ -223,6 +224,9 @@ func parseRecordFilter(r *http.Request) domain.RecordFilter {
 	if s := r.URL.Query().Get("format"); s != "" {
 		fmt := domain.RecordFormat(s)
 		f.Format = &fmt
+	}
+	if s := strings.TrimSpace(r.URL.Query().Get("q")); s != "" {
+		f.Name = &s
 	}
 	return f
 }

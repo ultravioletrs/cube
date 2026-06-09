@@ -72,6 +72,10 @@ func (r *recordsRepo) List(
 		args = append(args, string(*f.Format))
 		conds = append(conds, fmt.Sprintf("r.format = $%d", len(args)))
 	}
+	if f.Name != nil {
+		args = append(args, "%"+*f.Name+"%")
+		conds = append(conds, fmt.Sprintf("r.name ILIKE $%d", len(args)))
+	}
 
 	where := strings.Join(conds, " AND ")
 

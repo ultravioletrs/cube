@@ -14,6 +14,12 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 )
 
+// maxChatRecordIDs bounds the explicit record scope a single chat request may
+// carry. A larger allowlist bloats the request and the SQL IN (...) clause
+// (Postgres caps bind parameters at 65535, and the plan degrades well before).
+// Clients that want "all records" send no record_ids, which searches unscoped.
+const maxChatRecordIDs = 1000
+
 // MountChat registers the streaming chat endpoint.
 func MountChat(r chi.Router, svc domain.ChatService, conversations domain.ConversationRepository) {
 	r.Post("/api/v1/chat", chatHandler(svc, conversations))
@@ -39,6 +45,10 @@ func chatHandler(svc domain.ChatService, conversations domain.ConversationReposi
 		}
 		if len(req.Messages) == 0 {
 			writeJSON(w, http.StatusBadRequest, errBody("messages is required"))
+			return
+		}
+		if len(req.RecordIDs) > maxChatRecordIDs {
+			writeJSON(w, http.StatusBadRequest, errBody(fmt.Sprintf("record_ids exceeds limit of %d", maxChatRecordIDs)))
 			return
 		}
 
