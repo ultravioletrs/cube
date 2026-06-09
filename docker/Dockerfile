@@ -10,15 +10,12 @@ ARG COMMIT
 
 WORKDIR /go/src/github.com/ultraviolet/cube
 COPY . .
-RUN apk update \
-    && apk add make upx
 
 RUN CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} \
     go build -ldflags "-s -w" \
     -o build/cube-${SVC} cmd/${SVC}/main.go
 
-RUN upx build/cube-${SVC} \
-    && mv build/cube-${SVC} /exe
+RUN mv build/cube-${SVC} /exe
 
 FROM alpine:3.21 AS rclone
 ARG GOARCH=amd64
