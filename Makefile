@@ -53,9 +53,13 @@ build: $(addprefix build-,$(SERVICES))
 build-%:
 	$(call compile_service,$*)
 
+# Per-service build aliases: `make proxy` == `make build-proxy`.
+.PHONY: $(SERVICES)
+$(SERVICES): %: build-%
+
 # ── Docker images ──────────────────────────────────────────────────────
-.PHONY: docker
-docker: docker-proxy docker-agent docker-embedder docker-guardrails docker-image-embedder
+.PHONY: dockers
+dockers: docker-proxy docker-agent docker-embedder docker-guardrails docker-image-embedder docker-ui
 
 docker-proxy:
 	$(call make_docker,proxy,$(CUBE_PROXY_IMAGE))
@@ -74,6 +78,11 @@ docker-image-embedder:
 	docker build --tag=$(CUBE_IMAGE_EMBEDDER_IMAGE):$(VERSION) --tag=$(CUBE_IMAGE_EMBEDDER_IMAGE):latest \
 		-f docker/Dockerfile.image-embedder .
 
+# Build the UI container used by the local stack.
+.PHONY: docker-ui
+docker-ui:
+	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) build ui
+
 .PHONY: docker-push
 docker-push:
 	$(call docker_push,$(CUBE_PROXY_IMAGE))
@@ -84,7 +93,7 @@ docker-push:
 
 # ── Local stack (minimal, no TEE) ──────────────────────────────────────
 .PHONY: up down restart logs
-up:
+up: docker-ui
 	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) up -d
 
 down:
@@ -136,11 +145,14 @@ help:
 	@echo ""
 	@echo "Build:"
 	@echo "  build              Compile proxy, agent, embedder binaries"
-	@echo "  docker             Build all Cube docker images (:latest and :VERSION)"
+	@echo "  proxy|agent|embedder  Compile a single service binary"
+	@echo "  dockers            Build all service docker images (:latest and :VERSION)"
+	@echo "  docker-<service>   Build one service image: proxy, agent, embedder,"
+	@echo "                     guardrails, image-embedder, ui"
 	@echo "  docker-push        Push all Cube images"
 	@echo ""
 	@echo "Local stack (docker/local — minimal, no TEE):"
-	@echo "  up                 Start the local stack (needs 'make docker' first)"
+	@echo "  up                 Build UI and start the local stack (needs 'make dockers' first)"
 	@echo "  down               Stop the local stack"
 	@echo "  restart            Restart the local stack"
 	@echo "  logs               Follow local stack logs"

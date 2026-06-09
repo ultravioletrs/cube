@@ -63,11 +63,20 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
 
 ## Getting Started
 
+Cube ships two self-contained Docker stacks:
+
+| Stack     | Path           | Use                    | Includes                                                                                                                      |
+| --------- | -------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **local** | `docker/local` | Day-to-day development | ATOM identity, Ollama, agent, proxy, embedder (RAG), web UI                                                                   |
+| **prod**  | `docker/prod`  | Production             | Everything above **plus** Traefik TLS, guardrails, audit pipeline, image embedder, optional attestation and Cloudflare tunnel |
+
+The local stack is intentionally minimal: **no attestation (TEE), no audit logs, no guardrails, no reverse proxy**. Services are reachable directly on `localhost` ports.
+
 ### Prerequisites
 
 - Docker and Docker Compose
-- NVIDIA GPU with CUDA support (recommended for vLLM)
-- Hardware with TEE support (AMD SEV-SNP or Intel TDX)
+- ~8 GB RAM free (Ollama model + Postgres instances)
+- TEE hardware (AMD SEV-SNP / Intel TDX) is **only** needed for attestation in the prod stack — not for local development
 
 ### Quick Start
 
@@ -78,271 +87,137 @@ Cube AI uses TEEs to protect user data and AI models from unauthorized access. T
    cd cube
    ```
 
-2. **Start Cube AI services**
+2. **Build the Cube images**
+
+   The local stack runs the `proxy`, `agent`, and `embedder` images built
+   from this repo, so build them first:
 
    ```bash
-   # Local development with Ollama (default)
-   make up
-
-   # Local development with vLLM
-   make up-vllm
-
-   # Stop services
-   make down
-
-   # Stop services and remove volumes (includes all profiles)
-   make down-volumes
+   make docker-proxy docker-agent docker-embedder
    ```
 
-   **Local Development Access:**
-   - Cube AI web UI: https://localhost
-   - Traefik Gateway: https://localhost (ports 80/443)
-   - All services accessible through Traefik reverse proxy
+   This tags `ghcr.io/ultravioletrs/cube/{proxy,agent,embedder}:latest`
+   (and `:<version>`), exactly what the compose files reference. Use
+   `make dockers` to build every service image (including guardrails,
+   image-embedder, and ui).
 
-3. **Open the web UI**
-
-   Open https://localhost in your browser. Because local development uses a
-   self-signed TLS certificate, your browser may ask you to accept the
-   certificate before continuing.
-
-   Sign in with the default local administrator:
-
-   ```text
-   Username: admin
-   Password: m2N2Lfno
-   ```
-
-   After signing in, select an existing domain or create a new one.
-
-   The UI is included in `make up`; no separate frontend command is required.
-   For frontend development with hot module replacement, follow the
-   [UI development guide](ui/README.md).
-
-4. **Get your authentication token**
-
-   All API requests require JWT authentication. Once services are running, obtain a token:
+3. **Start the local stack**
 
    ```bash
-   curl -ksSiX POST https://localhost/users/tokens/issue \
+   make up        # start
+   make logs      # follow logs
+   make down      # stop
+   make clean-volumes   # stop and wipe databases, models, uploads
+   ```
+
+   The first start pulls Ollama and ATOM images and downloads the
+   `llama3.2:3b` and `nomic-embed-text` models — give it a few minutes.
+
+   **Local access (direct ports, plain HTTP):**
+
+   | Service                  | URL                           |
+   | ------------------------ | ----------------------------- |
+   | Cube web UI              | http://localhost:5173         |
+   | ATOM identity UI         | http://localhost:3005         |
+   | Cube proxy (API gateway) | http://localhost:8900         |
+   | Cube embedder (RAG)      | http://localhost:8082         |
+   | ATOM API (GraphQL)       | http://localhost:8080/graphql |
+
+4. **Open the web UI and sign in**
+
+   Open http://localhost:5173. The local ATOM has self-signup enabled, so
+   create an account (email + password) from the login screen — email
+   verification is skipped in local dev. After signing in, create a
+   workspace (domain) and start chatting. Uploading documents in the UI
+   exercises the RAG pipeline through the embedder.
+
+   For frontend hot-reload development, see the [UI development guide](ui/README.md).
+
+5. **(Optional) Use the API directly**
+
+   Get a token from ATOM via GraphQL (use the account you created):
+
+   ```bash
+   curl -s http://localhost:8080/graphql \
      -H "Content-Type: application/json" \
-     -d '{
-       "username": "admin@example.com",
-       "password": "m2N2Lfno"
-     }'
+     -d '{"query":"mutation($i:LoginInput!){login(input:$i){token entityId}}","variables":{"i":{"identity":"you@example.com","secret":"your-password","kind":"password"}}}'
    ```
 
-   Response:
-
-   ```json
-   {
-     "access_token": "eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9...",
-     "refresh_token": "..."
-   }
-   ```
-
-5. **Create a domain**
-
-   All API requests require a domain ID in the URL path. You can fetch a domain ID from the UI or create one via the API:
+   The `token` is your bearer token. Send chat requests through the proxy,
+   with your workspace (domain) ID in the path:
 
    ```bash
-   curl -ksSiX POST https://localhost/domains \
+   curl -s http://localhost:8900/YOUR_DOMAIN_ID/v1/chat/completions \
      -H "Content-Type: application/json" \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-     -d '{
-       "name": "Magistrala",
-       "route": "cube-workspace-1",
-       "tags": ["absmach", "IoT"],
-       "metadata": {
-         "region": "EU"
-       }
-     }'
-   ```
-
-   Response (includes `id`):
-
-   ```json
-   {
-     "id": "d7f9b3b8-4f7e-4f44-8d47-1a6e5e6f7a2b",
-     "name": "Cube Workspace",
-     "route": "cube-workspace",
-     "tags": ["absmach", "IoT"],
-     "metadata": {
-       "region": "EU"
-     },
-     "status": "enabled",
-     "created_by": "c8c3e4f1-56b2-4a22-8e5f-8a77b1f9b2f4",
-     "created_at": "2025-10-29T14:12:01Z",
-     "updated_at": "2025-10-29T14:12:01Z"
-   }
-   ```
-
-   Notes:
-   - `name` and `route` are required fields.
-   - `route` must be unique and cannot be changed after creation.
-   - `metadata` must be a valid JSON object.
-   - Save the `id` value for subsequent API requests.
-
-6. **Verify the installation**
-
-   List available models (replace `YOUR_DOMAIN_ID` with the domain ID from step 5):
-
-   ```bash
-   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/models \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-   ```
-
-7. **Make your first AI request**
-
-   ```bash
-   curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
-     -H "Content-Type: application/json" \
-     -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-     -d '{
-       "model": "llama3.2:3b",
-       "messages": [
-         {
-           "role": "user",
-           "content": "Hello! How can you help me today?"
-         }
-       ]
-     }'
+     -H "Authorization: Bearer YOUR_TOKEN" \
+     -d '{"model":"llama3.2:3b","messages":[{"role":"user","content":"Hello!"}]}'
    ```
 
 ## API Endpoints
 
-Cube AI exposes all services through a Traefik reverse proxy. All protected endpoints require the `Authorization: Bearer <token>` header with a valid JWT token.
+Inference and RAG go through the **cube-proxy** gateway. Every protected
+request needs an `Authorization: Bearer <token>` header (token from ATOM —
+see step 5 of the Quick Start). The workspace (domain) ID goes in the path.
 
-**Local Development Access:**
-- Via Traefik HTTPS: `https://localhost` (port 443)
+- **Local base URL:** `http://localhost:8900`
+- **Prod base URL:** `https://<your-domain>` (Traefik, under `/proxy`)
 
-**Cloud Deployment Access:**
-- Via Traefik HTTPS: `https://your-domain.com`
+### Proxy Endpoints (OpenAI- and Ollama-compatible)
 
-### Proxy Endpoints (OpenAI-Compatible)
-
-**Base URL (Local):** `https://localhost/proxy/`
-**Base URL (Cloud):** `https://your-domain.com/proxy/`
-
-Replace `{domainID}` with your domain ID from the Getting Started section.
+Replace `{domainID}` with your workspace ID.
 
 | Method | Path                              | Description             |
-|--------|-----------------------------------|-------------------------|
+| ------ | --------------------------------- | ----------------------- |
 | GET    | `/{domainID}/v1/models`           | List available models   |
 | POST   | `/{domainID}/v1/chat/completions` | Create chat completions |
 | POST   | `/{domainID}/v1/completions`      | Create text completions |
 | GET    | `/{domainID}/api/tags`            | List Ollama models      |
-| POST   | `/{domainID}/api/generate`        | Generate completions    |
 | POST   | `/{domainID}/api/chat`            | Chat completions        |
 
-### Route Management Endpoints
+### Embedder Endpoints (RAG)
 
-**Base URL:** `https://localhost/api/routes`
+Document ingestion, sources, and retrieval are served by the embedder under
+`/{domainID}/api/v1/...` (records, sources, conversations, retrieve, chat,
+models). The web UI drives these; see the
+[embedder runbook](internal/embedder/README.md) for the raw API.
 
-| Method | Path             | Description             |
-|--------|------------------|-------------------------|
-| GET    | `/`              | List all routes         |
-| POST   | `/`              | Create a new route      |
-| GET    | `/{name}`        | Get a route by name     |
-| PUT    | `/{name}`        | Update a route          |
-| DELETE | `/{name}`        | Delete a route          |
+### Identity (ATOM)
 
-Example:
-
-```bash
-# OpenAI-compatible endpoint
-curl -k https://localhost/proxy/YOUR_DOMAIN_ID/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"model":"llama3.2:3b","messages":[{"role":"user","content":"Hello"}]}'
-
-# Ollama API endpoint
-curl -k https://localhost/proxy/YOUR_DOMAIN_ID/api/tags \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN"
-```
-
-### Auth Endpoints
-
-**Base URL (Local):** `https://localhost/users`
-**Base URL (Cloud):** `https://your-domain.com/users`
-
-| Method | Path                          | Description                            |
-|--------|-------------------------------|----------------------------------------|
-| POST   | `/users`                      | Register new user account              |
-| POST   | `/users/tokens/issue`         | Issue access and refresh token (login) |
-| POST   | `/users/tokens/refresh`       | Refresh access token                   |
-| POST   | `/password/reset-request`     | Request password reset                 |
-| PUT    | `/password/reset`             | Reset password with token              |
-
-Example:
-
-```bash
-curl -ksSiX POST https://localhost/users/tokens/issue \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin@example.com",
-    "password": "m2N2Lfno"
-  }'
-```
-
-### Domains Endpoints
-
-**Base URL (Local):** `https://localhost/domains`
-**Base URL (Cloud):** `https://your-domain.com/domains`
-
-| Method | Path                          | Description                            |
-|--------|-------------------------------|----------------------------------------|
-| POST   | `/domains`                    | Create new domain                      |
-| GET    | `/domains`                    | List domains with filters              |
-| GET    | `/domains/{domainID}`         | Get domain details                     |
-| PATCH  | `/domains/{domainID}`         | Update domain name, tags, and metadata |
-| POST   | `/domains/{domainID}/enable`  | Enable a domain                        |
-| POST   | `/domains/{domainID}/disable` | Disable a domain                       |
-| POST   | `/domains/{domainID}/freeze`  | Freeze a domain                        |
-
-Example:
-
-```bash
-curl -ksSiX POST https://localhost/domains \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
-  -d '{
-    "name": "Cube Workspace",
-    "route": "cube-workspace-1",
-    "tags": ["absmach", "IoT"],
-    "metadata": {
-      "region": "EU"
-    }
-  }'
-```
+Authentication, users, workspaces, members, and invitations are handled by
+**ATOM** over GraphQL at `http://localhost:8080/graphql` (local). The web UI
+and `ui/src/lib` use it directly; manage identity from the UI or the ATOM UI
+at `http://localhost:3005`.
 
 ## Configuration
 
-### Guardrails
+### Local vs. prod
 
-To enable or disable guardrails routing:
+- **Local** (`docker/local/.env`, `docker/local/config.json`) — Ollama
+  models, ports, and database credentials. No TEE, audit, or guardrails.
+- **Prod** (`docker/prod/.env`, `docker/prod/config.json`) — set
+  `CUBE_DOMAIN`, replace every `change-me-*` secret, and toggle
+  `ATTESTED_TLS`. Guardrails, the audit pipeline, and the image embedder are
+  always on in prod.
+
+### Choosing the model
+
+Edit `LLM_MODEL` / `EMBEDDING_MODEL` in the stack's `.env`, then
+`make clean-volumes && make up` (or `make up-prod`) to re-pull.
+
+### Image tags
+
+All Cube images use `${CUBE_TAG}` (default `latest`). `make dockers` builds
+`:latest` and `:<version>`; set `CUBE_TAG=<version>` in the `.env` to pin a
+build. ATOM is pulled as `ghcr.io/absmach/atom:latest` and
+`ghcr.io/absmach/atom-ui:latest`.
+
+### Production stack
 
 ```bash
-make enable-guardrails
-# or
-make disable-guardrails
-```
-
-This modifies `docker/config.json` to enable/disable the guardrails-related routes.
-
-### vLLM Backend
-
-Configure vLLM settings through the environment:
-
-```bash
-make up-vllm
-```
-
-### Ollama Backend
-
-For Ollama integration:
-
-```bash
-make up-ollama
+# edit docker/prod/.env first (CUBE_DOMAIN, secrets)
+make up-prod      # start
+make logs-prod    # follow logs
+make down-prod    # stop
 ```
 
 ## Service Runbooks

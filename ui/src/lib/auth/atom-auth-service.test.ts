@@ -116,6 +116,33 @@ describe('atomAuthService', () => {
     expect(localStorage.getItem(ATOM_SESSION_STORAGE_KEY)).toBe(session)
   })
 
+  it('registers a human through ATOM signup and reports verification status', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      graphQLResponse({
+        signup: {
+          entityId: 'entity-9',
+          email: 'jane@example.com',
+          verificationRequired: true,
+        },
+      }),
+    )
+
+    await expect(atomAuthService.register({
+      email: 'jane@example.com',
+      username: 'jane',
+      password: 'secret123',
+    })).resolves.toMatchObject({
+      user: { id: 'entity-9', email: 'jane@example.com', username: 'jane', role: 'user' },
+      verificationRequired: true,
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/graphql', expect.objectContaining({
+      method: 'POST',
+      credentials: 'omit',
+      body: expect.stringContaining('CubeSignup'),
+    }))
+  })
+
   it('logs out through ATOM GraphQL and clears local storage', async () => {
     localStorage.setItem(ATOM_SESSION_STORAGE_KEY, storedSession())
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(graphQLResponse({ logout: true }))

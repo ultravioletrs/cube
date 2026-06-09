@@ -8,9 +8,15 @@ export interface AuthSession {
   expiresAt?: string
 }
 
+export interface RegisterResult {
+  user: AuthUser
+  /** When true, the account exists but must verify its email before it can sign in. */
+  verificationRequired: boolean
+}
+
 export interface AuthService {
   login(credentials: LoginCredentials): Promise<AuthSession>
   getSession(): Promise<AuthSession | null>
-  register(credentials: RegisterCredentials): Promise<AuthUser>
+  register(credentials: RegisterCredentials): Promise<RegisterResult>
   logout(): Promise<void>
 }

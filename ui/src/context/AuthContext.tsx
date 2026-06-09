@@ -44,7 +44,7 @@ export interface AuthContextValue extends AuthState {
     password: string,
     firstName?: string,
     lastName?: string,
-  ): Promise<void>
+  ): Promise<{ verificationRequired: boolean }>
   logout(): void
 }
 
@@ -116,8 +116,11 @@ export function AuthProvider({
       firstName?: string,
       lastName?: string,
     ) => {
-      await service.register({ email, username, password, firstName, lastName })
-      await login(email, password)
+      const { verificationRequired } = await service.register({ email, username, password, firstName, lastName })
+      // When the account is ready to use, sign in immediately; otherwise the
+      // caller prompts the user to verify their email before signing in.
+      if (!verificationRequired) await login(email, password)
+      return { verificationRequired }
     },
     [service, login],
   )
