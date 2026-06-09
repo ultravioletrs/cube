@@ -233,6 +233,43 @@ func (d *DriveReader) ListFiles(ctx context.Context, folderID string) ([]DriveFi
 	return all, nil
 }
 
+// GetFile returns Drive metadata for a single file ID.
+func (d *DriveReader) GetFile(ctx context.Context, fileID string) (DriveFile, error) {
+	id := strings.TrimSpace(fileID)
+	if id == "" {
+		return DriveFile{}, fmt.Errorf("drive file id is required")
+	}
+
+	params := url.Values{
+		"fields":            {"id,name,mimeType,version,modifiedTime,webViewLink,parents"},
+		"supportsAllDrives": {"true"},
+	}
+	reqURL := strings.TrimRight(driveFilesURL, "/") + "/" + url.PathEscape(id) + "?" + params.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, http.NoBody)
+	if err != nil {
+		return DriveFile{}, fmt.Errorf("drive get file request: %w", err)
+	}
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return DriveFile{}, fmt.Errorf("drive get file: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return DriveFile{}, fmt.Errorf("drive get file status %d: %s", resp.StatusCode, body)
+	}
+
+	var file DriveFile
+	if err := json.NewDecoder(resp.Body).Decode(&file); err != nil {
+		return DriveFile{}, fmt.Errorf("drive get file decode: %w", err)
+	}
+	if !supportsDriveFile(file) {
+		return DriveFile{}, fmt.Errorf("drive file %s has unsupported MIME type %q", id, file.MimeType)
+	}
+	return file, nil
+}
+
 // ListFilesRecursive returns supported files contained in folderID and all of
 // its descendant folders.
 func (d *DriveReader) ListFilesRecursive(ctx context.Context, folderID string) ([]DriveFile, error) {

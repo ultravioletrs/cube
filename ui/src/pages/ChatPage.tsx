@@ -357,7 +357,8 @@ function SourcesPanel({
     setError(null)
     try {
       const ids = await matchIDs()
-      const union = Array.from(new Set([...activeSources, ...ids]))
+      const base = isCustomized ? activeSources : []
+      const union = Array.from(new Set([...base, ...ids]))
       if (union.length > recordCap) {
         onSetActive(union.slice(0, recordCap))
         setError(`Selection capped at ${recordCap} records.`)
@@ -851,6 +852,10 @@ export default function ChatPage() {
       return
     }
     const userContent = input.trim()
+    if (!selectedRecord && manualActiveSources !== null && manualActiveSources.length === 0) {
+      setRetrievalWarning('No records selected. Choose at least one record or reset to all records.')
+      return
+    }
     // When unscoped and not customized, send no record_ids so the backend searches
     // all records via its index instead of enumerating the (client-capped) record list.
     const isUnscoped = !selectedRecord && !selectedSourceID && manualActiveSources === null

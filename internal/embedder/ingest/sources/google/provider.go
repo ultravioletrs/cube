@@ -162,7 +162,13 @@ func applyDriveSelection(
 	for _, id := range selectedFiles {
 		if file, ok := baseByID[id]; ok {
 			collected[file.ID] = file
+			continue
 		}
+		file, err := reader.GetFile(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		collected[file.ID] = file
 	}
 
 	for _, folderID := range selectedFolders {
