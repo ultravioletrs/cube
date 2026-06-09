@@ -64,6 +64,10 @@ type Record struct {
 	PageCount           *int
 	IngestTotalChunks   *int
 	IngestIndexedChunks *int
+	// IngestStage is the current (or last) ingest phase: extracting, chunking,
+	// embedding. Nil once queued or after a successful index; on failure it
+	// persists so the UI can show where ingest stopped.
+	IngestStage *string
 
 	// SourceVersion and SourceModifiedAt enable idempotent re-sync:
 	// a record is only re-ingested when the source version changes.
@@ -133,6 +137,8 @@ type RecordRepository interface {
 	// UpdateStatus transitions a record to the given status (and clears/sets error).
 	UpdateStatus(ctx context.Context, id string, s RecordStatus, errMsg string) error
 	UpdateIngestProgress(ctx context.Context, id string, indexedChunks, totalChunks int) error
+	// UpdateIngestStage records the current ingest phase (extracting/chunking/embedding).
+	UpdateIngestStage(ctx context.Context, id, stage string) error
 	// UpdateAfterIngest writes chunk_count and size_bytes and marks the record indexed.
 	UpdateAfterIngest(ctx context.Context, id string, res IngestResult) error
 }
