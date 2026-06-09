@@ -319,9 +319,10 @@ services:
 
   # ── Web UI ─────────────────────────────────────────────────────────
   ui:
+    image: ghcr.io/ultravioletrs/cube/ui:${CUBE_TAG}
     build:
       context: ../../ui
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       - cube-proxy

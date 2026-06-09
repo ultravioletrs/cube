@@ -6,6 +6,7 @@ CUBE_AGENT_IMAGE          ?= ghcr.io/ultravioletrs/cube/agent
 CUBE_EMBEDDER_IMAGE       ?= ghcr.io/ultravioletrs/cube/embedder
 CUBE_GUARDRAILS_IMAGE     ?= ghcr.io/ultravioletrs/cube/guardrails
 CUBE_IMAGE_EMBEDDER_IMAGE ?= ghcr.io/ultravioletrs/cube/image-embedder
+CUBE_UI_IMAGE             ?= ghcr.io/ultravioletrs/cube/ui
 
 CGO_ENABLED ?= 0
 GOOS        ?= linux
@@ -82,6 +83,7 @@ docker-image-embedder:
 .PHONY: docker-ui
 docker-ui:
 	docker compose -f $(LOCAL_COMPOSE) --env-file $(LOCAL_ENV) build ui
+	docker tag $(CUBE_UI_IMAGE):latest $(CUBE_UI_IMAGE):$(VERSION)
 
 .PHONY: docker-push
 docker-push:
@@ -90,6 +92,7 @@ docker-push:
 	$(call docker_push,$(CUBE_EMBEDDER_IMAGE))
 	$(call docker_push,$(CUBE_GUARDRAILS_IMAGE))
 	$(call docker_push,$(CUBE_IMAGE_EMBEDDER_IMAGE))
+	$(call docker_push,$(CUBE_UI_IMAGE))
 
 # ── Local stack (minimal, no TEE) ──────────────────────────────────────
 .PHONY: up down restart logs

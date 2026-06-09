@@ -29,6 +29,9 @@ services:
       POSTGRES_DB: ${ATOM_DB_NAME}
     volumes:
       - atom-db:/var/lib/postgresql/data
+    ports:
+      # Exposed on the host so the ATOM database can be inspected directly.
+      - ${ATOM_DB_PORT}:5432
     networks: [cube-net]
     healthcheck:
       test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER"']
@@ -200,9 +203,10 @@ services:
 
   # ── Web UI ─────────────────────────────────────────────────────────
   ui:
+    image: ghcr.io/ultravioletrs/cube/ui:${CUBE_TAG}
     build:
       context: ../../ui
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     restart: unless-stopped
     depends_on:
       - cube-proxy
