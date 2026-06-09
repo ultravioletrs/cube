@@ -18,6 +18,8 @@ interface RecordDTO {
   size_bytes?: number | null
   pages?: number | null
   external_url?: string
+  folder_path?: string | null
+  folder_id?: string | null
 }
 
 interface SourceDTO {
@@ -215,6 +217,7 @@ export interface RecordListOptions {
   format?: RecordFormat | 'all'
   sourceID?: string
   q?: string
+  folder?: string
   limit?: number
   offset?: number
 }
@@ -303,6 +306,8 @@ function mapRecord(dto: RecordDTO): AppRecord {
     pages: dto.pages ?? null,
     size: bytesToLabel(dto.size_bytes ?? undefined),
     url: dto.external_url || undefined,
+    folderPath: dto.folder_path ?? undefined,
+    folderID: dto.folder_id ?? undefined,
   }
 }
 
@@ -419,6 +424,7 @@ function recordListPath(opts: RecordListOptions, status?: RawRecordStatus): stri
   if (status) params.set('status', status)
   if (opts.format && opts.format !== 'all') params.set('format', opts.format)
   if (opts.q && opts.q.trim()) params.set('q', opts.q.trim())
+  if (opts.folder && opts.folder.trim()) params.set('folder', opts.folder.trim())
   // A scoped list uses the per-source route; source_id stays off the query.
   const base = opts.sourceID ? `/api/v1/sources/${opts.sourceID}/records` : '/api/v1/records'
 

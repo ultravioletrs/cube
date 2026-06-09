@@ -64,6 +64,13 @@ type DriveFile struct {
 	ModifiedTime string   `json:"modifiedTime"`
 	WebViewLink  string   `json:"webViewLink"`
 	Parents      []string `json:"parents"`
+
+	// FolderPath and FolderID are populated by ListFilesRecursive while walking
+	// the folder tree. FolderPath is the human-readable path of the containing
+	// folder relative to the walked root (e.g. /Docs/2024/Q3); FolderID is the
+	// immediate parent folder ID. Empty for flat (whole-drive) listings.
+	FolderPath string `json:"-"`
+	FolderID   string `json:"-"`
 }
 
 // ImageIngestMode describes which signals should be indexed for an image.
@@ -234,7 +241,14 @@ func (d *DriveReader) ListFilesRecursive(ctx context.Context, folderID string) (
 		return d.ListFiles(ctx, "")
 	}
 
-	queue := []string{rootID}
+	// BFS the folder tree carrying each folder's path so files can record the
+	// human-readable folder path of their container without extra lookups.
+	type folderNode struct {
+		id   string
+		path string
+	}
+	rootPath := "/" + d.folderName(ctx, rootID)
+	queue := []folderNode{{id: rootID, path: rootPath}}
 	seenFolders := map[string]struct{}{rootID: {}}
 	filesByID := make(map[string]DriveFile)
 
@@ -242,7 +256,7 @@ func (d *DriveReader) ListFilesRecursive(ctx context.Context, folderID string) (
 		current := queue[0]
 		queue = queue[1:]
 
-		folders, files, err := d.ListFolderContent(ctx, current)
+		folders, files, err := d.ListFolderContent(ctx, current.id)
 		if err != nil {
 			return nil, err
 		}
@@ -251,9 +265,11 @@ func (d *DriveReader) ListFilesRecursive(ctx context.Context, folderID string) (
 				continue
 			}
 			seenFolders[folder.ID] = struct{}{}
-			queue = append(queue, folder.ID)
+			queue = append(queue, folderNode{id: folder.ID, path: current.path + "/" + folder.Name})
 		}
 		for _, file := range files {
+			file.FolderPath = current.path
+			file.FolderID = current.id
 			filesByID[file.ID] = file
 		}
 	}
@@ -266,6 +282,31 @@ func (d *DriveReader) ListFilesRecursive(ctx context.Context, folderID string) (
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
 	})
 	return out, nil
+}
+
+// folderName fetches a folder's display name. On any error it falls back to the
+// folder ID so path construction stays best-effort and never blocks ingest.
+func (d *DriveReader) folderName(ctx context.Context, folderID string) string {
+	params := url.Values{"fields": {"name"}, "supportsAllDrives": {"true"}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"/"+folderID+"?"+params.Encode(), http.NoBody)
+	if err != nil {
+		return folderID
+	}
+	resp, err := d.httpClient.Do(req)
+	if err != nil {
+		return folderID
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return folderID
+	}
+	var meta struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&meta); err != nil || strings.TrimSpace(meta.Name) == "" {
+		return folderID
+	}
+	return meta.Name
 }
 
 // ListFolderContent returns direct children of a folder split into folders and

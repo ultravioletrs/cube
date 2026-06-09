@@ -294,7 +294,7 @@ function SourcesPanel({
   onToggle: (id: string) => void
   onSetActive: (ids: string[]) => void
   onResetAll: () => void
-  searchRecords: (q: string, offset: number, limit: number) => Promise<RecordPage>
+  searchRecords: (q: string, folder: string, offset: number, limit: number) => Promise<RecordPage>
   recordCap: number
   citations: MsgSource[]
   debug?: ChatDebug | null
@@ -308,6 +308,8 @@ function SourcesPanel({
   const [customizeOpen, setCustomizeOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [folder, setFolder] = useState('')
+  const [debouncedFolder, setDebouncedFolder] = useState('')
   const [results, setResults] = useState<AppRecord[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -315,36 +317,40 @@ function SourcesPanel({
   const [error, setError] = useState<string | null>(null)
   const activeSet = useMemo(() => new Set(activeSources), [activeSources])
 
-  // Debounce the search box so each keystroke doesn't hit the backend.
+  // Debounce the search box / folder filter so each keystroke doesn't hit the backend.
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(query), 250)
+    const t = setTimeout(() => { setDebouncedQuery(query); setDebouncedFolder(folder) }, 250)
     return () => clearTimeout(t)
-  }, [query])
+  }, [query, folder])
 
-  // Load the first page whenever the panel opens or the query changes.
+  // Load the first page whenever the panel opens or the query/folder changes.
   useEffect(() => {
     if (!customizeOpen) return
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setError(null)
-    searchRecords(debouncedQuery, 0, RECORD_PAGE)
+    searchRecords(debouncedQuery, debouncedFolder, 0, RECORD_PAGE)
       .then(page => { if (!cancelled) { setResults(page.records); setTotal(page.total) } })
       .catch(e => { if (!cancelled) { setResults([]); setTotal(0); setError(e instanceof Error ? e.message : 'Failed to load records') } })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [customizeOpen, debouncedQuery, searchRecords])
+  }, [customizeOpen, debouncedQuery, debouncedFolder, searchRecords])
 
   const loadMore = () => {
     setBusy(true)
-    searchRecords(debouncedQuery, results.length, RECORD_PAGE)
+    searchRecords(debouncedQuery, debouncedFolder, results.length, RECORD_PAGE)
       .then(page => { setResults(prev => [...prev, ...page.records]); setTotal(page.total) })
       .catch(e => setError(e instanceof Error ? e.message : 'Failed to load records'))
       .finally(() => setBusy(false))
   }
 
-  // Resolve every record id matching the current query, bounded by the cap.
-  const matchIDs = async () => (await searchRecords(debouncedQuery, 0, recordCap)).records.map(r => r.id)
+  // Resolve every record id matching the current query/folder, bounded by the cap.
+  const matchIDs = async () => (await searchRecords(debouncedQuery, debouncedFolder, 0, recordCap)).records.map(r => r.id)
+  const folderOptions = useMemo(
+    () => Array.from(new Set(results.map(r => r.folderPath).filter((p): p is string => !!p))).sort(),
+    [results],
+  )
 
   const selectAllMatches = async () => {
     setBusy(true)
@@ -443,6 +449,22 @@ function SourcesPanel({
                 onChange={e => setQuery(e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px 6px 26px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', outline: 'none' }}
               />
+            </div>
+            <div style={{ position: 'relative', marginTop: '6px' }}>
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: 'var(--text-dim)' }}>
+                <path d="M1.5 3.5h4l1 1.5h6v6h-11z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
+              </svg>
+              <input
+                type="text"
+                list="customize-folder-options"
+                placeholder="Filter by folder..."
+                value={folder}
+                onChange={e => setFolder(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', padding: '6px 8px 6px 26px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', borderRadius: '6px', color: 'var(--text)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', outline: 'none' }}
+              />
+              <datalist id="customize-folder-options">
+                {folderOptions.map(p => <option key={p} value={p} />)}
+              </datalist>
             </div>
             <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
               <button
@@ -694,11 +716,12 @@ export default function ChatPage() {
 
   // Scope-aware paged search of indexed records for the customize panel.
   const searchIndexedRecords = useCallback(
-    (q: string, offset: number, limit: number) =>
+    (q: string, folder: string, offset: number, limit: number) =>
       listRecordsPage(accessToken ?? '', domainID, {
         status: 'indexed',
         sourceID: selectedSourceID,
         q,
+        folder,
         offset,
         limit,
       }),

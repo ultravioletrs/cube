@@ -15,6 +15,15 @@ import (
 	embedmetrics "github.com/ultravioletrs/cube/internal/embedder/metrics"
 )
 
+// nonEmptyPtr returns a pointer to s, or nil when s is empty, so optional
+// string columns stay NULL rather than storing empty strings.
+func nonEmptyPtr(s string) *string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return &s
+}
+
 type sourceSyncService struct {
 	sources   domain.SourceRepository
 	records   domain.RecordRepository
@@ -100,6 +109,8 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, domainID string) (res 
 			MimeType:         file.MimeType,
 			SourceVersion:    file.SourceVersion,
 			SourceModifiedAt: file.SourceModifiedAt,
+			FolderPath:       nonEmptyPtr(file.FolderPath),
+			FolderID:         nonEmptyPtr(file.FolderID),
 		})
 		if err != nil {
 			msg := err.Error()

@@ -67,6 +67,8 @@ export interface AppRecord {
   size?: string
   pages?: number | null
   url?: string
+  folderPath?: string
+  folderID?: string
 }
 
 export interface Conversation {

@@ -64,6 +64,10 @@ func (p *sourceProvider) ListFiles(
 
 	out := make([]ingest.SourceFile, 0, len(files))
 	for _, file := range files {
+		folderID := file.FolderID
+		if folderID == "" && len(file.Parents) > 0 {
+			folderID = file.Parents[0]
+		}
 		out = append(out, ingest.SourceFile{
 			ExternalID:       file.ID,
 			Name:             file.Name,
@@ -72,6 +76,8 @@ func (p *sourceProvider) ListFiles(
 			MimeType:         file.MimeType,
 			SourceVersion:    file.Version,
 			SourceModifiedAt: parseRFC3339Ptr(file.ModifiedTime),
+			FolderPath:       file.FolderPath,
+			FolderID:         folderID,
 		})
 	}
 	return out, nil

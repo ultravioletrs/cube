@@ -28,6 +28,7 @@ func (r *recordsRepo) GetByID(ctx context.Context, id, domainID string) (domain.
 	const q = `
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
+		       r.folder_path, r.folder_id,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
@@ -76,6 +77,12 @@ func (r *recordsRepo) List(
 		args = append(args, "%"+*f.Name+"%")
 		conds = append(conds, fmt.Sprintf("r.name ILIKE $%d", len(args)))
 	}
+	if f.FolderPrefix != nil {
+		// Match the folder itself and any nested folder via prefix on folder_path.
+		args = append(args, *f.FolderPrefix)
+		args = append(args, *f.FolderPrefix+"/%")
+		conds = append(conds, fmt.Sprintf("(r.folder_path = $%d OR r.folder_path LIKE $%d)", len(args)-1, len(args)))
+	}
 
 	where := strings.Join(conds, " AND ")
 
@@ -87,6 +94,7 @@ func (r *recordsRepo) List(
 	q := fmt.Sprintf(`
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
+		       r.folder_path, r.folder_id,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
@@ -143,6 +151,8 @@ func scanRecord(row interface {
 		externalURL         pgtype.Text
 		externalRef         pgtype.Text
 		mimeType            pgtype.Text
+		folderPath          pgtype.Text
+		folderID            pgtype.Text
 		description         pgtype.Text
 		chunkCount          pgtype.Int4
 		sizeBytes           pgtype.Int8
@@ -161,6 +171,7 @@ func scanRecord(row interface {
 	if err := row.Scan(
 		&rec.ID, &rec.DomainID, &rec.UserID, &sourceID, &rec.Name, &format, &status,
 		&externalID, &externalURL, &externalRef, &mimeType,
+		&folderPath, &folderID,
 		&description, &chunkCount, &sizeBytes, &pageCount,
 		&ingestTotalChunks, &ingestIndexedChunks, &ingestStage,
 		&sourceVersion, &sourceModifiedAt, &recError,
@@ -188,6 +199,14 @@ func scanRecord(row interface {
 	}
 	if mimeType.Valid {
 		rec.MimeType = mimeType.String
+	}
+	if folderPath.Valid {
+		s := folderPath.String
+		rec.FolderPath = &s
+	}
+	if folderID.Valid {
+		s := folderID.String
+		rec.FolderID = &s
 	}
 	if description.Valid {
 		rec.Description = description.String
@@ -242,10 +261,12 @@ func (r *recordsRepo) Create(ctx context.Context, rec domain.Record) (domain.Rec
 		INSERT INTO records
 			(domain_id, user_id, source_id, name, format, status,
 			 external_id, external_url, external_ref, mime_type,
+			 folder_path, folder_id,
 			 source_version, source_modified_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
+		          folder_path, folder_id,
 		          description, chunk_count, size_bytes, page_count,
 		          ingest_total_chunks, ingest_indexed_chunks, ingest_stage,
 		          source_version, source_modified_at, error,
@@ -260,6 +281,7 @@ func (r *recordsRepo) Create(ctx context.Context, rec domain.Record) (domain.Rec
 	row := r.pool.QueryRow(ctx, q,
 		rec.DomainID, rec.UserID, rec.SourceID, rec.Name, string(rec.Format), string(rec.Status),
 		rec.ExternalID, rec.ExternalURL, rec.ExternalRef, rec.MimeType,
+		rec.FolderPath, rec.FolderID,
 		rec.SourceVersion, sourceModifiedAt,
 	)
 	created, err := scanRecord(row)
@@ -276,6 +298,7 @@ func (r *recordsRepo) ListQueued(ctx context.Context, limit int) ([]domain.Recor
 	const q = `
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
+		       r.folder_path, r.folder_id,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
@@ -386,6 +409,7 @@ func (r *recordsRepo) UpsertFromSource(ctx context.Context, rec domain.Record) (
 	const selectQ = `
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
+		       r.folder_path, r.folder_id,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
 		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
@@ -440,10 +464,12 @@ func (r *recordsRepo) createInTx(ctx context.Context, tx pgx.Tx, rec domain.Reco
 		INSERT INTO records
 			(domain_id, user_id, source_id, name, format, status,
 			 external_id, external_url, external_ref, mime_type,
+			 folder_path, folder_id,
 			 source_version, source_modified_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
+		          folder_path, folder_id,
 		          description, chunk_count, size_bytes, page_count,
 		          ingest_total_chunks, ingest_indexed_chunks, ingest_stage,
 		          source_version, source_modified_at, error,
@@ -458,6 +484,7 @@ func (r *recordsRepo) createInTx(ctx context.Context, tx pgx.Tx, rec domain.Reco
 	created, err := scanRecord(tx.QueryRow(ctx, q,
 		rec.DomainID, rec.UserID, rec.SourceID, rec.Name, string(rec.Format), string(rec.Status),
 		rec.ExternalID, rec.ExternalURL, rec.ExternalRef, rec.MimeType,
+		rec.FolderPath, rec.FolderID,
 		rec.SourceVersion, sourceModifiedAt,
 	))
 	if err != nil {
@@ -495,12 +522,15 @@ func (r *recordsRepo) updateFromSourceInTx(
 		    chunk_count = $9,
 		    size_bytes = $10,
 		    page_count = $11,
+		    folder_path = $12,
+		    folder_id = $13,
 		    ingest_total_chunks = NULL,
 		    ingest_indexed_chunks = NULL,
 		    updated_at = now()
-		WHERE id = $12
+		WHERE id = $14
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
+		          folder_path, folder_id,
 		          description, chunk_count, size_bytes, page_count,
 		          ingest_total_chunks, ingest_indexed_chunks, ingest_stage,
 		          source_version, source_modified_at, error,
@@ -529,7 +559,7 @@ func (r *recordsRepo) updateFromSourceInTx(
 	updated, err := scanRecord(tx.QueryRow(ctx, baseQ,
 		rec.Name, string(rec.Format), rec.ExternalURL, rec.ExternalRef, rec.MimeType,
 		rec.SourceVersion, sourceModifiedAt, string(nextStatus),
-		chunkCount, sizeBytes, pageCount, id,
+		chunkCount, sizeBytes, pageCount, rec.FolderPath, rec.FolderID, id,
 	))
 	if err != nil {
 		return domain.Record{}, fmt.Errorf("update record from source: %w", err)
