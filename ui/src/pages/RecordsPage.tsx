@@ -257,6 +257,82 @@ function friendlyError(msg: string): string {
   return 'Indexing failed.'
 }
 
+// Steps shown in the ingest timeline. Images skip the text-chunking step.
+function ingestSteps(record: AppRecord): string[] {
+  return record.format === 'image'
+    ? ['Queued', 'Extract', 'Embed', 'Indexed']
+    : ['Queued', 'Extract', 'Chunk', 'Embed', 'Indexed']
+}
+
+// Maps the backend ingest_stage to its step label.
+const stageLabel: Record<string, string> = {
+  extracting: 'Extract',
+  chunking: 'Chunk',
+  embedding: 'Embed',
+}
+
+// Index of the step the record is currently on (or stopped at, when failed).
+function currentStepIndex(record: AppRecord, steps: string[]): number {
+  if (record.status === 'queued') return 0
+  if (record.status === 'indexed') return steps.length - 1
+  const label = stageLabel[record.ingestStage ?? '']
+  const idx = label ? steps.indexOf(label) : -1
+  return idx >= 0 ? idx : 1 // default to the first work step once processing
+}
+
+type StepState = 'done' | 'active' | 'pending' | 'failed'
+
+function IngestTimeline({ record }: { record: AppRecord }) {
+  const steps = ingestSteps(record)
+  const current = currentStepIndex(record, steps)
+
+  function stateOf(i: number): StepState {
+    if (record.status === 'indexed') return 'done'
+    if (record.status === 'queued') return i === 0 ? 'active' : 'pending'
+    if (i < current) return 'done'
+    if (i === current) return record.status === 'failed' ? 'failed' : 'active'
+    return 'pending'
+  }
+
+  const palette: Record<StepState, string> = {
+    done: 'var(--accent)',
+    active: '#ffb400',
+    failed: '#ff5050',
+    pending: 'var(--text-dim)',
+  }
+
+  const total = record.ingestTotalChunks ?? 0
+  const indexed = record.ingestIndexedChunks ?? 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', padding: '12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+      <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.08em', marginBottom: '6px' }}>ACTIVITY</div>
+      {steps.map((label, i) => {
+        const state = stateOf(i)
+        const color = palette[state]
+        const showCounter = label === 'Embed' && state === 'active' && total > 0
+        return (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 0' }}>
+            <span style={{ width: '12px', height: '12px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              {state === 'done' ? (
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke={color} strokeWidth="1.2"/><path d="M5 7l1.5 1.5L9 5" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              ) : state === 'failed' ? (
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke={color} strokeWidth="1.2"/><path d="M4.8 4.8l4.4 4.4M9.2 4.8l-4.4 4.4" stroke={color} strokeWidth="1.2" strokeLinecap="round"/></svg>
+              ) : (
+                <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: state === 'active' ? color : 'transparent', border: state === 'active' ? 'none' : `1.2px solid ${color}`, ...(state === 'active' ? { animation: 'pulse 1.5s ease-in-out infinite' } : {}) }} />
+              )}
+            </span>
+            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: state === 'pending' ? 'var(--text-dim)' : 'var(--text)', flex: 1 }}>{label}</span>
+            {showCounter && (
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: '#ffb400' }}>{indexed}/{total}</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function DetailPanel({ record, onClose, onStartChat, onRetry, onCancel }: { record: AppRecord; onClose: () => void; onStartChat: (r: AppRecord) => void; onRetry: (id: string) => Promise<void>; onCancel: (id: string) => Promise<void> }) {
   const [retrying, setRetrying] = useState(false)
   const [cancelling, setCancelling] = useState(false)
@@ -311,6 +387,10 @@ function DetailPanel({ record, onClose, onStartChat, onRetry, onCancel }: { reco
         ))}
       </div>
 
+      {(record.status === 'processing' || record.status === 'queued' || record.status === 'failed') && (
+        <IngestTimeline record={record} />
+      )}
+
       {record.status === 'indexed' && (
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 12px', background: 'rgba(0,212,180,0.06)', borderRadius: '8px', border: '1px solid rgba(0,212,180,0.15)' }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0, marginTop: '1px' }}>
@@ -330,9 +410,16 @@ function DetailPanel({ record, onClose, onStartChat, onRetry, onCancel }: { reco
               <circle cx="7" cy="7" r="6" stroke="#ff5050" strokeWidth="1.2"/>
               <path d="M7 4v3M7 9.5v.5" stroke="#ff5050" strokeWidth="1.4" strokeLinecap="round"/>
             </svg>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#ff6b6b', lineHeight: 1.5 }}>
-              {friendlyError(record.error ?? '')}
-            </span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+              <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#ff6b6b', lineHeight: 1.5 }}>
+                {friendlyError(record.error ?? '')}
+              </span>
+              {record.error && (
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                  {record.error}
+                </span>
+              )}
+            </div>
           </div>
           <button
             disabled={retrying}

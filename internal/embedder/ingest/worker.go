@@ -52,7 +52,22 @@ const (
 	imageEmbeddingRetryDelay  = 2 * time.Second
 )
 
+// Ingest stages surfaced per-record so the UI can show a progress timeline.
+const (
+	stageExtracting = "extracting"
+	stageChunking   = "chunking"
+	stageEmbedding  = "embedding"
+)
+
 var errRecordCancelled = errors.New("record ingest cancelled")
+
+// setStage records the current ingest phase. It is best-effort: a failed write
+// only costs UI granularity, so the error is logged and ingest continues.
+func (w *Worker) setStage(ctx context.Context, rec domain.Record, stage string, logger *slog.Logger) {
+	if err := w.records.UpdateIngestStage(ctx, rec.ID, stage); err != nil {
+		logger.Warn("ingest: update stage", "stage", stage, "err", err)
+	}
+}
 
 // NewWorker creates an ingestion worker. chunkSize and overlap are in words.
 func NewWorker(
@@ -210,6 +225,7 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
+	w.setStage(ctx, rec, stageExtracting, logger)
 	text, pageCount, err := w.downloadContent(recordCtx, rec)
 	if err != nil {
 		logger.Warn("ingest: download failed", "err", err)
@@ -221,6 +237,7 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
+	w.setStage(ctx, rec, stageChunking, logger)
 	chunks, plan := adaptiveChunk(text, w.chunkSize, w.overlap)
 	if len(chunks) == 0 {
 		_ = w.records.UpdateStatus(ctx, rec.ID, domain.RecordStatusFailed, "document produced zero chunks")
@@ -241,6 +258,7 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 		return
 	}
 
+	w.setStage(ctx, rec, stageEmbedding, logger)
 	indexedChunks, err := w.embedAndStoreBatched(recordCtx, ctx, rec, embedder, chunks)
 	if err != nil {
 		if errors.Is(err, errRecordCancelled) {
@@ -270,6 +288,7 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 		return
 	}
 
+	w.setStage(statusCtx, rec, stageExtracting, logger)
 	content, err := w.downloadRawContent(ctx, rec)
 	if err != nil {
 		logger.Warn("ingest: image download failed", "err", err)
@@ -320,6 +339,7 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 		return
 	}
 
+	w.setStage(statusCtx, rec, stageEmbedding, logger)
 	indexedChunks, err := w.embedAndStoreBatched(ctx, statusCtx, rec, embedder, chunks)
 	if err != nil {
 		if errors.Is(err, errRecordCancelled) {

@@ -29,7 +29,7 @@ func (r *recordsRepo) GetByID(ctx context.Context, id, domainID string) (domain.
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
-		       r.ingest_total_chunks, r.ingest_indexed_chunks,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -84,7 +84,7 @@ func (r *recordsRepo) List(
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
-		       r.ingest_total_chunks, r.ingest_indexed_chunks,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -145,6 +145,7 @@ func scanRecord(row interface {
 		pageCount           pgtype.Int4
 		ingestTotalChunks   pgtype.Int4
 		ingestIndexedChunks pgtype.Int4
+		ingestStage         pgtype.Text
 		sourceVersion       pgtype.Text
 		sourceModifiedAt    pgtype.Timestamptz
 		recError            pgtype.Text
@@ -157,7 +158,7 @@ func scanRecord(row interface {
 		&rec.ID, &rec.DomainID, &rec.UserID, &sourceID, &rec.Name, &format, &status,
 		&externalID, &externalURL, &externalRef, &mimeType,
 		&description, &chunkCount, &sizeBytes, &pageCount,
-		&ingestTotalChunks, &ingestIndexedChunks,
+		&ingestTotalChunks, &ingestIndexedChunks, &ingestStage,
 		&sourceVersion, &sourceModifiedAt, &recError,
 		&rec.CreatedAt, &rec.UpdatedAt,
 		&linkID, &linkName, &linkType, &linkStatus,
@@ -207,6 +208,10 @@ func scanRecord(row interface {
 		n := int(ingestIndexedChunks.Int32)
 		rec.IngestIndexedChunks = &n
 	}
+	if ingestStage.Valid {
+		s := ingestStage.String
+		rec.IngestStage = &s
+	}
 	if sourceVersion.Valid {
 		rec.SourceVersion = sourceVersion.String
 	}
@@ -238,7 +243,7 @@ func (r *recordsRepo) Create(ctx context.Context, rec domain.Record) (domain.Rec
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
-		          ingest_total_chunks, ingest_indexed_chunks,
+		          ingest_total_chunks, ingest_indexed_chunks, ingest_stage,
 		          source_version, source_modified_at, error,
 		          created_at, updated_at,
 		          NULL, NULL, NULL, NULL`
@@ -268,7 +273,7 @@ func (r *recordsRepo) ListQueued(ctx context.Context, limit int) ([]domain.Recor
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
-		       r.ingest_total_chunks, r.ingest_indexed_chunks,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -308,7 +313,7 @@ func (r *recordsRepo) UpdateStatus(ctx context.Context, id string, s domain.Reco
 	if s == domain.RecordStatusCancelled || s == domain.RecordStatusQueued {
 		_, err := r.pool.Exec(ctx,
 			`UPDATE records
-			 SET status=$1, error=NULL, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, updated_at=now()
+			 SET status=$1, error=NULL, ingest_total_chunks=NULL, ingest_indexed_chunks=NULL, ingest_stage=NULL, updated_at=now()
 			 WHERE id=$2`,
 			string(s), id,
 		)
@@ -333,6 +338,16 @@ func (r *recordsRepo) UpdateIngestProgress(ctx context.Context, id string, index
 	return err
 }
 
+func (r *recordsRepo) UpdateIngestStage(ctx context.Context, id, stage string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE records
+		 SET ingest_stage=$1, updated_at=now()
+		 WHERE id=$2 AND status <> 'cancelled'`,
+		stage, id,
+	)
+	return err
+}
+
 func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res domain.IngestResult) error {
 	var pageCount pgtype.Int4
 	if res.PageCount != nil {
@@ -347,6 +362,7 @@ func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res doma
 		     page_count=$3,
 		     ingest_total_chunks=NULL,
 		     ingest_indexed_chunks=NULL,
+		     ingest_stage=NULL,
 		     description=COALESCE(NULLIF($4, ''), description),
 		     error=NULL,
 		     updated_at=now()
@@ -367,7 +383,7 @@ func (r *recordsRepo) UpsertFromSource(ctx context.Context, rec domain.Record) (
 		SELECT r.id, r.domain_id, r.user_id, r.source_id, r.name, r.format, r.status,
 		       r.external_id, r.external_url, r.external_ref, r.mime_type,
 		       r.description, r.chunk_count, r.size_bytes, r.page_count,
-		       r.ingest_total_chunks, r.ingest_indexed_chunks,
+		       r.ingest_total_chunks, r.ingest_indexed_chunks, r.ingest_stage,
 		       r.source_version, r.source_modified_at, r.error,
 		       r.created_at, r.updated_at,
 		       s.id, s.name, s.source_type, s.status
@@ -425,7 +441,7 @@ func (r *recordsRepo) createInTx(ctx context.Context, tx pgx.Tx, rec domain.Reco
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
-		          ingest_total_chunks, ingest_indexed_chunks,
+		          ingest_total_chunks, ingest_indexed_chunks, ingest_stage,
 		          source_version, source_modified_at, error,
 		          created_at, updated_at,
 		          NULL, NULL, NULL, NULL`
@@ -482,7 +498,7 @@ func (r *recordsRepo) updateFromSourceInTx(
 		RETURNING id, domain_id, user_id, source_id, name, format, status,
 		          external_id, external_url, external_ref, mime_type,
 		          description, chunk_count, size_bytes, page_count,
-		          ingest_total_chunks, ingest_indexed_chunks,
+		          ingest_total_chunks, ingest_indexed_chunks, ingest_stage,
 		          source_version, source_modified_at, error,
 		          created_at, updated_at,
 		          NULL, NULL, NULL, NULL`

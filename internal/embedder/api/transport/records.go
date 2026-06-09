@@ -50,6 +50,7 @@ type recordResponse struct {
 	ChunkCount          *int                  `json:"chunks,omitempty"`
 	IngestTotalChunks   *int                  `json:"ingest_total_chunks,omitempty"`
 	IngestIndexedChunks *int                  `json:"ingest_indexed_chunks,omitempty"`
+	IngestStage         *string               `json:"ingest_stage,omitempty"`
 	SizeBytes           *int64                `json:"size_bytes,omitempty"`
 	PageCount           *int                  `json:"pages,omitempty"`
 	Error               *string               `json:"error,omitempty"`
@@ -81,6 +82,7 @@ func toRecordResponse(rec domain.Record) recordResponse {
 		ChunkCount:          rec.ChunkCount,
 		IngestTotalChunks:   rec.IngestTotalChunks,
 		IngestIndexedChunks: rec.IngestIndexedChunks,
+		IngestStage:         rec.IngestStage,
 		SizeBytes:           rec.SizeBytes,
 		PageCount:           rec.PageCount,
 		Error:               rec.Error,

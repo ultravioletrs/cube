@@ -63,6 +63,7 @@ export interface AppRecord {
   chunks: number | null
   ingestTotalChunks?: number | null
   ingestIndexedChunks?: number | null
+  ingestStage?: string | null
   size?: string
   pages?: number | null
   url?: string

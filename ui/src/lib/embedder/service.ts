@@ -14,6 +14,7 @@ interface RecordDTO {
   chunks?: number | null
   ingest_total_chunks?: number | null
   ingest_indexed_chunks?: number | null
+  ingest_stage?: string | null
   size_bytes?: number | null
   pages?: number | null
   external_url?: string
@@ -291,6 +292,7 @@ function mapRecord(dto: RecordDTO): AppRecord {
     chunks: dto.chunks ?? null,
     ingestTotalChunks: dto.ingest_total_chunks ?? null,
     ingestIndexedChunks: dto.ingest_indexed_chunks ?? null,
+    ingestStage: dto.ingest_stage ?? null,
     pages: dto.pages ?? null,
     size: bytesToLabel(dto.size_bytes ?? undefined),
     url: dto.external_url || undefined,
