@@ -68,8 +68,11 @@ docker-proxy:
 docker-agent:
 	$(call make_docker,agent,$(CUBE_AGENT_IMAGE))
 
+# Embedder needs a runtime with poppler-utils + tesseract (PDF/OCR text
+# extraction), so it uses its own Dockerfile instead of the scratch image.
 docker-embedder:
-	$(call make_docker,embedder,$(CUBE_EMBEDDER_IMAGE))
+	docker build --tag=$(CUBE_EMBEDDER_IMAGE):$(VERSION) --tag=$(CUBE_EMBEDDER_IMAGE):latest \
+		-f docker/Dockerfile.embedder .
 
 docker-guardrails:
 	docker build --tag=$(CUBE_GUARDRAILS_IMAGE):$(VERSION) --tag=$(CUBE_GUARDRAILS_IMAGE):latest \

@@ -171,6 +171,12 @@ services:
       timeout: 5s
       retries: 10
 
+  # Image embedding sidecar (CLIP) used for indexing images.
+  image-embedder:
+    image: ghcr.io/ultravioletrs/cube/image-embedder:${CUBE_TAG}
+    restart: on-failure
+    networks: [cube-net]
+
   cube-embedder:
     image: ghcr.io/ultravioletrs/cube/embedder:${CUBE_TAG}
     restart: on-failure
@@ -179,6 +185,8 @@ services:
         condition: service_started
       embedder-db:
         condition: service_healthy
+      image-embedder:
+        condition: service_started
     environment:
       EMBEDDER_HTTP_ADDR: ":8082"
       EMBEDDER_LOG_LEVEL: info
@@ -193,6 +201,7 @@ services:
       EMBEDDER_EMBEDDING_TEXT_BASE_URL: http://ollama:11434
       EMBEDDER_EMBEDDING_TEXT_MODEL: ${EMBEDDING_MODEL}
       EMBEDDER_EMBEDDING_TEXT_DIMENSIONS: "768"
+      EMBEDDER_IMAGE_EMBEDDING_URL: http://image-embedder:8090
       EMBEDDER_OBJECT_STORAGE_PROVIDER: local
       EMBEDDER_UPLOAD_DIR: /tmp/embedder/uploads
     volumes:
