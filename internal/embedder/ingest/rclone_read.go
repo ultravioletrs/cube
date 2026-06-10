@@ -27,7 +27,7 @@ func DownloadFromRcloneSource(
 		return "", nil, err
 	}
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ExtractText(FileMeta{
 		ID:       rec.ExternalID,
 		Name:     rec.Name,
 		MimeType: rec.MimeType,

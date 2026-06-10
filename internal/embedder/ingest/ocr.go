@@ -19,7 +19,7 @@ var (
 	runPDFOCRFunc   = runPDFOCR
 )
 
-func maybeImageOCR(file DriveFile, content []byte) (string, bool) {
+func maybeImageOCR(file FileMeta, content []byte) (string, bool) {
 	cfg := GetExtractionConfig().OCR
 	if !cfg.Enabled || !cfg.ImageEnabled {
 		return "", false

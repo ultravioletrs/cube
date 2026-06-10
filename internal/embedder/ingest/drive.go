@@ -4,27 +4,22 @@
 package ingest
 
 import (
-	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-	"rsc.io/pdf"
 )
 
 const (
@@ -80,25 +75,6 @@ type DriveFile struct {
 	// immediate parent folder ID. Empty for flat (whole-drive) listings.
 	FolderPath string `json:"-"`
 	FolderID   string `json:"-"`
-}
-
-// ImageIngestMode describes which signals should be indexed for an image.
-type ImageIngestMode string
-
-const (
-	ImageIngestModeNone   ImageIngestMode = ""
-	ImageIngestModeOCR    ImageIngestMode = "ocr_only"
-	ImageIngestModeImage  ImageIngestMode = "image_only"
-	ImageIngestModeHybrid ImageIngestMode = "hybrid"
-)
-
-// ExtractedDocument is normalized text plus metadata captured during extraction.
-type ExtractedDocument struct {
-	Text             string
-	PageCount        *int
-	ImageMode        ImageIngestMode
-	OCRText          string
-	OCRTextCharCount int
 }
 
 // DriveReader lists and downloads files from Google Drive.
@@ -179,6 +155,57 @@ func decodeCredentialJSON(raw string) ([]byte, error) {
 	return nil, fmt.Errorf("decode service account json: %w", err)
 }
 
+// listQuery pages through the Drive files.list API for the given query and
+// returns every matching file. Callers filter, partition and sort the result.
+func (d *DriveReader) listQuery(ctx context.Context, query string, pageSize int) ([]DriveFile, error) {
+	var all []DriveFile
+	pageToken := ""
+	for {
+		params := url.Values{
+			"q":        {query},
+			"fields":   {"nextPageToken,files(id,name,mimeType,version,modifiedTime,webViewLink,parents)"},
+			"pageSize": {strconv.Itoa(pageSize)},
+		}
+		if pageToken != "" {
+			params.Set("pageToken", pageToken)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), http.NoBody)
+		if err != nil {
+			return nil, fmt.Errorf("drive list request: %w", err)
+		}
+		resp, err := d.httpClient.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("drive list: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("drive list status %d: %s", resp.StatusCode, body)
+		}
+
+		var page struct {
+			Files         []DriveFile `json:"files"`
+			NextPageToken string      `json:"nextPageToken"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+			_ = resp.Body.Close()
+			return nil, fmt.Errorf("drive list decode: %w", err)
+		}
+		if err := resp.Body.Close(); err != nil {
+			return nil, fmt.Errorf("drive list close body: %w", err)
+		}
+
+		all = append(all, page.Files...)
+		if page.NextPageToken == "" {
+			break
+		}
+		pageToken = page.NextPageToken
+	}
+	return all, nil
+}
+
 // ListFiles returns all Drive files accessible to the token, optionally
 // restricted to a single folder. Binary files (PDFs, DOCX) and Google
 // Workspace files are both included.
@@ -188,58 +215,18 @@ func (d *DriveReader) ListFiles(ctx context.Context, folderID string) ([]DriveFi
 		q = fmt.Sprintf("'%s' in parents and (%s)", folderID, q)
 	}
 
-	var all []DriveFile
-	pageToken := ""
-	for {
-		params := url.Values{
-			"q":        {q},
-			"fields":   {"nextPageToken,files(id,name,mimeType,version,modifiedTime,webViewLink,parents)"},
-			"pageSize": {"1000"},
-		}
-		if pageToken != "" {
-			params.Set("pageToken", pageToken)
-		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("drive list files request: %w", err)
-		}
-		resp, err := d.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("drive list files: %w", err)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-
-			_ = resp.Body.Close()
-
-			return nil, fmt.Errorf("drive list files status %d: %s", resp.StatusCode, body)
-		}
-
-		var page struct {
-			Files         []DriveFile `json:"files"`
-			NextPageToken string      `json:"nextPageToken"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
-			_ = resp.Body.Close()
-
-			return nil, fmt.Errorf("drive list files decode: %w", err)
-		}
-		if err := resp.Body.Close(); err != nil {
-			return nil, fmt.Errorf("drive list files close body: %w", err)
-		}
-		for _, file := range page.Files {
-			if supportsDriveFile(file) {
-				all = append(all, file)
-			}
-		}
-		if page.NextPageToken == "" {
-			break
-		}
-		pageToken = page.NextPageToken
+	files, err := d.listQuery(ctx, q, 1000)
+	if err != nil {
+		return nil, err
 	}
-	return all, nil
+
+	out := make([]DriveFile, 0, len(files))
+	for _, file := range files {
+		if supportsDriveFile(file) {
+			out = append(out, file)
+		}
+	}
+	return out, nil
 }
 
 // GetFile returns Drive metadata for a single file ID.
@@ -367,61 +354,21 @@ func (d *DriveReader) ListFolderContent(ctx context.Context, folderID string) ([
 	}
 	q := fmt.Sprintf("'%s' in parents and trashed=false", parentID)
 
+	entries, err := d.listQuery(ctx, q, 1000)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var folders []DriveFile
 	var files []DriveFile
-	pageToken := ""
-	for {
-		params := url.Values{
-			"q":        {q},
-			"fields":   {"nextPageToken,files(id,name,mimeType,version,modifiedTime,webViewLink,parents)"},
-			"pageSize": {"1000"},
+	for _, file := range entries {
+		if isDriveFolder(file.MimeType) {
+			folders = append(folders, file)
+			continue
 		}
-		if pageToken != "" {
-			params.Set("pageToken", pageToken)
+		if supportsDriveFile(file) {
+			files = append(files, file)
 		}
-
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), http.NoBody)
-		if err != nil {
-			return nil, nil, fmt.Errorf("drive list folder content request: %w", err)
-		}
-		resp, err := d.httpClient.Do(req)
-		if err != nil {
-			return nil, nil, fmt.Errorf("drive list folder content: %w", err)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-
-			_ = resp.Body.Close()
-
-			return nil, nil, fmt.Errorf("drive list folder content status %d: %s", resp.StatusCode, body)
-		}
-
-		var page struct {
-			Files         []DriveFile `json:"files"`
-			NextPageToken string      `json:"nextPageToken"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
-			_ = resp.Body.Close()
-
-			return nil, nil, fmt.Errorf("drive list folder content decode: %w", err)
-		}
-		if err := resp.Body.Close(); err != nil {
-			return nil, nil, fmt.Errorf("drive list folder content close body: %w", err)
-		}
-		for _, file := range page.Files {
-			if strings.EqualFold(strings.TrimSpace(file.MimeType), "application/vnd.google-apps.folder") {
-				folders = append(folders, file)
-				continue
-			}
-			if supportsDriveFile(file) {
-				files = append(files, file)
-			}
-		}
-		if page.NextPageToken == "" {
-			break
-		}
-		pageToken = page.NextPageToken
 	}
 
 	sort.Slice(folders, func(i, j int) bool {
@@ -448,56 +395,16 @@ func (d *DriveReader) SearchFolders(ctx context.Context, scopeFolderID, nameQuer
 		query = fmt.Sprintf("%s and name contains '%s'", query, safe)
 	}
 
-	var folders []DriveFile
-	pageToken := ""
-	for {
-		params := url.Values{
-			"q":        {query},
-			"fields":   {"nextPageToken,files(id,name,mimeType,version,modifiedTime,webViewLink,parents)"},
-			"pageSize": {"200"},
-		}
-		if pageToken != "" {
-			params.Set("pageToken", pageToken)
-		}
+	entries, err := d.listQuery(ctx, query, 200)
+	if err != nil {
+		return nil, err
+	}
 
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, driveFilesURL+"?"+params.Encode(), http.NoBody)
-		if err != nil {
-			return nil, fmt.Errorf("drive search folders request: %w", err)
+	folders := make([]DriveFile, 0, len(entries))
+	for _, folder := range entries {
+		if isDriveFolder(folder.MimeType) {
+			folders = append(folders, folder)
 		}
-		resp, err := d.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("drive search folders: %w", err)
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(resp.Body)
-
-			_ = resp.Body.Close()
-
-			return nil, fmt.Errorf("drive search folders status %d: %s", resp.StatusCode, body)
-		}
-
-		var page struct {
-			Files         []DriveFile `json:"files"`
-			NextPageToken string      `json:"nextPageToken"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
-			_ = resp.Body.Close()
-
-			return nil, fmt.Errorf("drive search folders decode: %w", err)
-		}
-		if err := resp.Body.Close(); err != nil {
-			return nil, fmt.Errorf("drive search folders close body: %w", err)
-		}
-		for _, folder := range page.Files {
-			if strings.EqualFold(strings.TrimSpace(folder.MimeType), "application/vnd.google-apps.folder") {
-				folders = append(folders, folder)
-			}
-		}
-		if page.NextPageToken == "" {
-			break
-		}
-		pageToken = page.NextPageToken
 	}
 
 	sort.Slice(folders, func(i, j int) bool {
@@ -542,181 +449,6 @@ func (d *DriveReader) DownloadFile(ctx context.Context, f DriveFile) ([]byte, er
 	return body, nil
 }
 
-// ExtractText normalizes Drive content into plain text.
-func ExtractText(f DriveFile, content []byte) (ExtractedDocument, error) {
-	mime := strings.ToLower(strings.TrimSpace(f.MimeType))
-
-	switch {
-	case strings.HasPrefix(mime, "application/vnd.google-apps."):
-		return ExtractedDocument{Text: string(content)}, nil
-	case mime == "application/pdf":
-		return extractPDF(content)
-	case mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-		return extractDOCX(content)
-	case mime == "image/svg+xml":
-		return ExtractedDocument{Text: string(content)}, nil
-	case strings.HasPrefix(mime, "image/"):
-		return extractImageText(f, content), nil
-	case isPlainTextLike(f.Name, mime):
-		return ExtractedDocument{Text: string(content)}, nil
-	default:
-		return ExtractedDocument{}, fmt.Errorf("unsupported MIME type for extraction: %q", f.MimeType)
-	}
-}
-
-func extractImageText(f DriveFile, content []byte) ExtractedDocument {
-	if text, ok := maybeImageOCR(f, content); ok {
-		cfg := GetExtractionConfig().OCR
-		charCount := len([]rune(condensedText(text)))
-		mode := ImageIngestModeHybrid
-		if charCount < cfg.MinTextChars {
-			mode = ImageIngestModeImage
-		}
-		return ExtractedDocument{
-			Text:             imageTextForMode(f, text, mode),
-			ImageMode:        mode,
-			OCRText:          text,
-			OCRTextCharCount: charCount,
-		}
-	}
-
-	return ExtractedDocument{Text: imageDescriptor(f, ""), ImageMode: ImageIngestModeImage}
-}
-
-func imageTextForMode(f DriveFile, ocrText string, mode ImageIngestMode) string {
-	if mode == ImageIngestModeImage {
-		return imageDescriptor(f, ocrText)
-	}
-	return ocrText
-}
-
-func imageDescriptor(f DriveFile, ocrText string) string {
-	name := strings.TrimSpace(f.Name)
-	if name == "" {
-		name = "unnamed-image"
-	}
-	mime := strings.TrimSpace(f.MimeType)
-	if mime == "" {
-		mime = "image/unknown"
-	}
-
-	// Image-only records still need a small text chunk so the record can be
-	// indexed in the existing text chunk table while the visual vector is stored
-	// separately in image_embeddings.
-	text := fmt.Sprintf("image file: %s; mime_type: %s", name, mime)
-	if strings.TrimSpace(ocrText) != "" {
-		text += "; detected_text: " + condensedText(ocrText)
-	}
-	return text
-}
-
-func extractPDF(content []byte) (ExtractedDocument, error) {
-	text, err := pdfToText(content)
-	if err != nil {
-		return ExtractedDocument{}, fmt.Errorf("extract pdf text: %w", err)
-	}
-	if fallbackText, ok := maybePDFFallbackOCR(content, text); ok {
-		text = fallbackText
-	}
-	return ExtractedDocument{
-		Text:      text,
-		PageCount: pdfPageCount(content),
-	}, nil
-}
-
-// pdfToText uses pdftotext (poppler) for accurate Unicode text extraction.
-func pdfToText(content []byte) (string, error) {
-	cmd := exec.Command("pdftotext", "-", "-")
-	cmd.Stdin = bytes.NewReader(content)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("pdftotext: %w", err)
-	}
-	return strings.ReplaceAll(string(out), "\x00", ""), nil
-}
-
-// pdfPageCount returns the page count using rsc.io/pdf, or nil on failure.
-func pdfPageCount(content []byte) *int {
-	reader, err := pdf.NewReader(bytes.NewReader(content), int64(len(content)))
-	if err != nil {
-		return nil
-	}
-	n := reader.NumPage()
-	return &n
-}
-
-func extractDOCX(content []byte) (ExtractedDocument, error) {
-	readerAt := bytes.NewReader(content)
-	archive, err := zip.NewReader(readerAt, int64(len(content)))
-	if err != nil {
-		return ExtractedDocument{}, fmt.Errorf("open docx zip: %w", err)
-	}
-
-	var documentXML []byte
-	for _, file := range archive.File {
-		if file.Name != "word/document.xml" {
-			continue
-		}
-		rc, err := file.Open()
-		if err != nil {
-			return ExtractedDocument{}, fmt.Errorf("open docx xml: %w", err)
-		}
-		documentXML, err = io.ReadAll(rc)
-		rc.Close()
-		if err != nil {
-			return ExtractedDocument{}, fmt.Errorf("read docx xml: %w", err)
-		}
-		break
-	}
-	if len(documentXML) == 0 {
-		return ExtractedDocument{}, fmt.Errorf("word/document.xml not found in docx")
-	}
-
-	decoder := xml.NewDecoder(bytes.NewReader(documentXML))
-	var (
-		paragraphs []string
-		builder    strings.Builder
-		inText     bool
-	)
-	for {
-		token, err := decoder.Token()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return ExtractedDocument{}, fmt.Errorf("decode docx xml: %w", err)
-		}
-
-		switch tok := token.(type) {
-		case xml.StartElement:
-			switch tok.Name.Local {
-			case "t":
-				inText = true
-			case "tab":
-				builder.WriteByte('\t')
-			case "br":
-				builder.WriteByte('\n')
-			}
-		case xml.EndElement:
-			switch tok.Name.Local {
-			case "t":
-				inText = false
-			case "p":
-				if paragraph := strings.TrimSpace(builder.String()); paragraph != "" {
-					paragraphs = append(paragraphs, paragraph)
-				}
-				builder.Reset()
-			}
-		case xml.CharData:
-			if inText {
-				builder.Write(tok)
-			}
-		}
-	}
-
-	return ExtractedDocument{Text: strings.Join(paragraphs, "\n\n")}, nil
-}
-
 func googleAppsExportMIME(mimeType string) string {
 	switch mimeType {
 	case "application/vnd.google-apps.spreadsheet":
@@ -724,6 +456,10 @@ func googleAppsExportMIME(mimeType string) string {
 	default:
 		return "text/plain"
 	}
+}
+
+func isDriveFolder(mimeType string) bool {
+	return strings.EqualFold(strings.TrimSpace(mimeType), "application/vnd.google-apps.folder")
 }
 
 func supportsDriveFile(f DriveFile) bool {
@@ -742,55 +478,4 @@ func supportsDriveFile(f DriveFile) bool {
 		return true
 	}
 	return isTextFileExt(filepath.Ext(strings.TrimSpace(f.Name)))
-}
-
-func isPlainTextLike(fileName, mime string) bool {
-	return isTextMIME(mime) || isTextFileExt(filepath.Ext(strings.TrimSpace(fileName)))
-}
-
-func isTextMIME(mime string) bool {
-	if strings.HasPrefix(mime, "text/") {
-		return true
-	}
-	switch mime {
-	case "application/json",
-		"application/xml",
-		"application/javascript",
-		"application/x-javascript",
-		"application/typescript",
-		"application/x-sh",
-		"application/sql",
-		"application/x-sql",
-		"application/yaml",
-		"application/x-yaml",
-		"application/toml",
-		"application/x-toml":
-		return true
-	default:
-		return false
-	}
-}
-
-func isTextFileExt(ext string) bool {
-	switch strings.ToLower(strings.TrimSpace(ext)) {
-	case ".txt", ".md", ".html", ".htm",
-		".go", ".js", ".ts", ".tsx", ".jsx",
-		".py", ".java", ".rs", ".c", ".cpp",
-		".h", ".hpp", ".cs", ".php", ".rb",
-		".kt", ".swift", ".sh", ".sql", ".yaml",
-		".yml", ".json", ".toml", ".xml", ".css":
-		return true
-	default:
-		return false
-	}
-}
-
-// parseDriveModifiedTime parses the Drive modifiedTime RFC3339 string.
-func parseDriveModifiedTime(s string) time.Time {
-	t, _ := time.Parse(time.RFC3339, s)
-	return t
-}
-
-func intPtr(v int) *int {
-	return &v
 }

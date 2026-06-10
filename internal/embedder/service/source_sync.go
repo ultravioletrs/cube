@@ -162,36 +162,6 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, domainID string) (res 
 	return result, nil
 }
 
-func recordFormatFromDriveFile(file ingest.DriveFile) domain.RecordFormat {
-	return DetectRecordFormat(file.Name, file.MimeType)
-}
-
-func filterDriveFilesBySelection(files []ingest.DriveFile, selectedIDs []string) []ingest.DriveFile {
-	if len(selectedIDs) == 0 {
-		return files
-	}
-
-	selected := make(map[string]struct{}, len(selectedIDs))
-	for _, id := range selectedIDs {
-		id = strings.TrimSpace(id)
-		if id == "" {
-			continue
-		}
-		selected[id] = struct{}{}
-	}
-	if len(selected) == 0 {
-		return files
-	}
-
-	filtered := make([]ingest.DriveFile, 0, len(files))
-	for _, file := range files {
-		if _, ok := selected[file.ID]; ok {
-			filtered = append(filtered, file)
-		}
-	}
-	return filtered
-}
-
 func (s *sourceSyncService) resolveStaleSourceExternalIDs(
 	ctx context.Context,
 	domainID, sourceID string,

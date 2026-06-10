@@ -82,6 +82,26 @@ func (g *googleOAuth) enabled() bool {
 	return g.clientID != "" && g.clientSecret != ""
 }
 
+// applyServerCredentials fills missing client_id/client_secret from the server's
+// configured OAuth app when a refresh token is present, so token refresh keeps
+// working without the client having to resend app credentials. It reports
+// whether cfg was modified.
+func (g *googleOAuth) applyServerCredentials(cfg *domain.GoogleDriveConfig) bool {
+	if strings.TrimSpace(cfg.RefreshToken) == "" || !g.enabled() {
+		return false
+	}
+	changed := false
+	if strings.TrimSpace(cfg.ClientID) == "" {
+		cfg.ClientID = g.clientID
+		changed = true
+	}
+	if strings.TrimSpace(cfg.ClientSecret) == "" {
+		cfg.ClientSecret = g.clientSecret
+		changed = true
+	}
+	return changed
+}
+
 func (g *googleOAuth) createState(userID string) (string, error) {
 	tokenBytes := make([]byte, 24)
 	if _, err := rand.Read(tokenBytes); err != nil {
@@ -148,6 +168,20 @@ func listDriveFiles(oauth *googleOAuth) http.HandlerFunc {
 		CurrentFolder  string         `json:"current_folder_id,omitempty"`
 		RequestedScope string         `json:"requested_scope,omitempty"`
 	}
+	toFileResponses := func(items []ingest.DriveFile) []fileResponse {
+		out := make([]fileResponse, 0, len(items))
+		for _, item := range items {
+			out = append(out, fileResponse{
+				ID:           item.ID,
+				Name:         item.Name,
+				MimeType:     item.MimeType,
+				ModifiedTime: item.ModifiedTime,
+				WebViewLink:  item.WebViewLink,
+				Parents:      item.Parents,
+			})
+		}
+		return out
+	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req request
@@ -164,14 +198,7 @@ func listDriveFiles(oauth *googleOAuth) http.HandlerFunc {
 			ClientID:     strings.TrimSpace(req.ClientID),
 			ClientSecret: strings.TrimSpace(req.ClientSecret),
 		}
-		if cfg.RefreshToken != "" && oauth.enabled() {
-			if cfg.ClientID == "" {
-				cfg.ClientID = oauth.clientID
-			}
-			if cfg.ClientSecret == "" {
-				cfg.ClientSecret = oauth.clientSecret
-			}
-		}
+		oauth.applyServerCredentials(&cfg)
 		if cfg.AccessToken == "" {
 			writeJSON(w, http.StatusBadRequest, errBody("access_token is required"))
 			return
@@ -194,19 +221,9 @@ func listDriveFiles(oauth *googleOAuth) http.HandlerFunc {
 				}
 				resp := response{
 					Files:          []fileResponse{},
-					Folders:        make([]fileResponse, 0, len(folders)),
+					Folders:        toFileResponses(folders),
 					CurrentFolder:  browseFolderID,
 					RequestedScope: cfg.FolderID,
-				}
-				for _, folder := range folders {
-					resp.Folders = append(resp.Folders, fileResponse{
-						ID:           folder.ID,
-						Name:         folder.Name,
-						MimeType:     folder.MimeType,
-						ModifiedTime: folder.ModifiedTime,
-						WebViewLink:  folder.WebViewLink,
-						Parents:      folder.Parents,
-					})
 				}
 				writeJSON(w, http.StatusOK, resp)
 				return
@@ -219,30 +236,10 @@ func listDriveFiles(oauth *googleOAuth) http.HandlerFunc {
 			}
 
 			resp := response{
-				Files:          make([]fileResponse, 0, len(files)),
-				Folders:        make([]fileResponse, 0, len(folders)),
+				Files:          toFileResponses(files),
+				Folders:        toFileResponses(folders),
 				CurrentFolder:  browseFolderID,
 				RequestedScope: cfg.FolderID,
-			}
-			for _, folder := range folders {
-				resp.Folders = append(resp.Folders, fileResponse{
-					ID:           folder.ID,
-					Name:         folder.Name,
-					MimeType:     folder.MimeType,
-					ModifiedTime: folder.ModifiedTime,
-					WebViewLink:  folder.WebViewLink,
-					Parents:      folder.Parents,
-				})
-			}
-			for _, file := range files {
-				resp.Files = append(resp.Files, fileResponse{
-					ID:           file.ID,
-					Name:         file.Name,
-					MimeType:     file.MimeType,
-					ModifiedTime: file.ModifiedTime,
-					WebViewLink:  file.WebViewLink,
-					Parents:      file.Parents,
-				})
 			}
 			writeJSON(w, http.StatusOK, resp)
 			return
@@ -255,19 +252,9 @@ func listDriveFiles(oauth *googleOAuth) http.HandlerFunc {
 		}
 
 		resp := response{
-			Files:          make([]fileResponse, 0, len(files)),
+			Files:          toFileResponses(files),
 			Folders:        []fileResponse{},
 			RequestedScope: cfg.FolderID,
-		}
-		for _, file := range files {
-			resp.Files = append(resp.Files, fileResponse{
-				ID:           file.ID,
-				Name:         file.Name,
-				MimeType:     file.MimeType,
-				ModifiedTime: file.ModifiedTime,
-				WebViewLink:  file.WebViewLink,
-				Parents:      file.Parents,
-			})
 		}
 		writeJSON(w, http.StatusOK, resp)
 	}
@@ -1128,13 +1115,7 @@ func createSource(svc domain.SourceService, oauth *googleOAuth) http.HandlerFunc
 				writeJSON(w, http.StatusBadRequest, errBody("invalid google_drive config"))
 				return
 			}
-			if strings.TrimSpace(cfg.RefreshToken) != "" && oauth.enabled() {
-				if strings.TrimSpace(cfg.ClientID) == "" {
-					cfg.ClientID = oauth.clientID
-				}
-				if strings.TrimSpace(cfg.ClientSecret) == "" {
-					cfg.ClientSecret = oauth.clientSecret
-				}
+			if oauth.applyServerCredentials(&cfg) {
 				raw, err := json.Marshal(cfg)
 				if err != nil {
 					writeJSON(w, http.StatusBadRequest, errBody("invalid google_drive config"))

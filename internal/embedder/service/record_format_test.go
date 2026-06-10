@@ -59,6 +59,24 @@ func TestDetectRecordFormat(t *testing.T) {
 			want:     domain.RecordFormatImage,
 		},
 		{
+			name:     "google docs mime maps to text",
+			fileName: "doc",
+			mimeType: "application/vnd.google-apps.document",
+			want:     domain.RecordFormatText,
+		},
+		{
+			name:     "json extension maps to code",
+			fileName: "config.json",
+			mimeType: "text/plain",
+			want:     domain.RecordFormatCode,
+		},
+		{
+			name:     "image by extension",
+			fileName: "photo.jpeg",
+			mimeType: "application/octet-stream",
+			want:     domain.RecordFormatImage,
+		},
+		{
 			name:     "fallback link",
 			fileName: "blob.bin",
 			mimeType: "application/octet-stream",

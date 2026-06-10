@@ -32,7 +32,7 @@ func TestExtractTextImageUsesOCRWhenEnabled(t *testing.T) {
 	)
 	defer restoreOCR()
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ExtractText(FileMeta{
 		Name:     "scan.png",
 		MimeType: "image/png",
 	}, []byte{0x89, 0x50, 0x4e, 0x47})
@@ -71,7 +71,7 @@ func TestExtractTextImageUsesHybridForLargeText(t *testing.T) {
 	)
 	defer restoreOCR()
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ExtractText(FileMeta{
 		Name:     "scan.png",
 		MimeType: "image/png",
 	}, []byte{0x89, 0x50, 0x4e, 0x47})
@@ -109,7 +109,7 @@ func TestExtractTextImageKeepsShortOCRAsDescriptor(t *testing.T) {
 	)
 	defer restoreOCR()
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ExtractText(FileMeta{
 		Name:     "poster.png",
 		MimeType: "image/png",
 	}, []byte{0x89, 0x50, 0x4e, 0x47})

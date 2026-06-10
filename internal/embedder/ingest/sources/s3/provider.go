@@ -64,7 +64,7 @@ func (p *sourceProvider) DownloadRecord(
 		return "", nil, err
 	}
 
-	doc, err := ingest.ExtractText(ingest.DriveFile{
+	doc, err := ingest.ExtractText(ingest.FileMeta{
 		ID:       rec.ExternalID,
 		Name:     rec.Name,
 		MimeType: rec.MimeType,

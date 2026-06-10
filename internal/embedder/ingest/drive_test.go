@@ -9,7 +9,7 @@ import (
 )
 
 func TestExtractTextImageUsesDescriptor(t *testing.T) {
-	doc, err := ExtractText(DriveFile{
+	doc, err := ExtractText(FileMeta{
 		Name:     "poster.png",
 		MimeType: "image/png",
 	}, []byte{0x89, 0x50, 0x4e, 0x47})

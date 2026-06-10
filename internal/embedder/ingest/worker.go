@@ -300,7 +300,7 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 		return
 	}
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ExtractText(FileMeta{
 		Name:     rec.Name,
 		MimeType: rec.MimeType,
 	}, content)
@@ -569,14 +569,6 @@ func isContextLengthError(err error) bool {
 	return strings.Contains(msg, "context length") || strings.Contains(msg, "input length exceeds")
 }
 
-func (w *Worker) storeImageEmbedding(ctx context.Context, rec domain.Record, logger *slog.Logger) error {
-	content, err := w.downloadRawContent(ctx, rec)
-	if err != nil {
-		return err
-	}
-	return w.storeImageEmbeddingContentWithRetry(ctx, rec, content, logger)
-}
-
 func (w *Worker) storeImageEmbeddingContentWithRetry(ctx context.Context, rec domain.Record, content []byte, logger *slog.Logger) error {
 	var lastErr error
 	for attempt := 1; attempt <= imageEmbeddingMaxAttempts; attempt++ {
@@ -699,7 +691,7 @@ func (w *Worker) downloadFromLocalSource(ctx context.Context, rec domain.Record,
 		return "", nil, err
 	}
 
-	doc, err := ExtractText(DriveFile{
+	doc, err := ExtractText(FileMeta{
 		Name:     rec.Name,
 		MimeType: rec.MimeType,
 	}, body)
