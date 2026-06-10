@@ -84,6 +84,48 @@ func TestNormalizeList(t *testing.T) {
 	}
 }
 
+func TestSelectionContains(t *testing.T) {
+	cases := []struct {
+		name     string
+		selected []string
+		filePath string
+		want     bool
+	}{
+		{
+			name:     "exact file",
+			selected: []string{"team/docs/a.txt"},
+			filePath: "team/docs/a.txt",
+			want:     true,
+		},
+		{
+			name:     "folder covers child",
+			selected: []string{"team/docs/sub"},
+			filePath: "team/docs/sub/b.txt",
+			want:     true,
+		},
+		{
+			name:     "folder does not cover sibling prefix",
+			selected: []string{"team/docs/sub"},
+			filePath: "team/docs/submarine/b.txt",
+			want:     false,
+		},
+		{
+			name:     "root covers all",
+			selected: []string{""},
+			filePath: "team/docs/sub/b.txt",
+			want:     true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := SelectionContains(tc.selected, tc.filePath); got != tc.want {
+				t.Fatalf("SelectionContains(%#v, %q) = %v, want %v", tc.selected, tc.filePath, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateScopesWithinRoot(t *testing.T) {
 	if err := ValidateScopesWithinRoot("", []string{"x"}); err != nil {
 		t.Errorf("empty root must pass: %v", err)

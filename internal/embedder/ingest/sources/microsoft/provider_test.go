@@ -90,7 +90,7 @@ func TestMicrosoftSourceProvider_ListAndDownload_Smoke(t *testing.T) {
 		DriveID:       driveID,
 		RootPath:      "team/docs",
 		ScopePaths:    []string{"team/docs"},
-		SelectedPaths: []string{"team/docs/sub/b.txt"},
+		SelectedPaths: []string{"team/docs/sub"},
 	}
 	raw, err := json.Marshal(cfg)
 	if err != nil {

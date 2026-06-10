@@ -578,24 +578,14 @@ func parseRFC3339Ptr(value string) *time.Time {
 }
 
 func filterSourceFilesBySelectedPaths(files []ingest.SourceFile, selectedPaths []string) []ingest.SourceFile {
+	selectedPaths = sourcepath.NormalizeList(selectedPaths)
 	if len(selectedPaths) == 0 {
-		return files
-	}
-	selected := make(map[string]struct{}, len(selectedPaths))
-	for _, p := range selectedPaths {
-		p = sourcepath.Normalize(p)
-		if p == "" {
-			continue
-		}
-		selected[p] = struct{}{}
-	}
-	if len(selected) == 0 {
 		return files
 	}
 
 	filtered := make([]ingest.SourceFile, 0, len(files))
 	for _, file := range files {
-		if _, ok := selected[sourcepath.Normalize(file.ExternalRef)]; ok {
+		if sourcepath.SelectionContains(selectedPaths, file.ExternalRef) {
 			filtered = append(filtered, file)
 		}
 	}

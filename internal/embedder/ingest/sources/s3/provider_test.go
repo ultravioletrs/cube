@@ -80,7 +80,7 @@ func TestS3SourceProvider_ListAndDownload_Smoke(t *testing.T) {
 		PathStyle:       testBoolPtr(true),
 		RootPath:        "team/docs",
 		ScopePaths:      []string{"team/docs"},
-		SelectedPaths:   []string{"team/docs/sub/b.txt"},
+		SelectedPaths:   []string{"team/docs/sub"},
 	})
 	if err != nil {
 		t.Fatalf("marshal config: %v", err)

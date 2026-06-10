@@ -106,6 +106,24 @@ func NormalizeList(values []string) []string {
 	return out
 }
 
+// SelectionContains reports whether filePath is covered by the selected paths:
+// an exact match of a selected file, or nested under a selected folder. An empty
+// selected entry ("") matches the whole tree. Used so picking a folder ingests
+// its entire subtree, not just an (impossible) exact file match.
+func SelectionContains(selected []string, filePath string) bool {
+	fp := Normalize(filePath)
+	for _, sel := range selected {
+		s := Normalize(sel)
+		if s == "" {
+			return true
+		}
+		if fp == s || strings.HasPrefix(fp, s+"/") {
+			return true
+		}
+	}
+	return false
+}
+
 // ValidateScopesWithinRoot errors if any scope path is outside rootPath.
 // Empty root or empty scope list passes.
 func ValidateScopesWithinRoot(rootPath string, scopePaths []string) error {

@@ -1,6 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useMemo, useState } from 'react'
+import { FolderOpen } from 'lucide-react'
 import {
   browseCloudPath,
   browseGoogleDrive,
@@ -396,7 +397,7 @@ export default function AddSourceModal({
 
     const interval = syncEnabled ? Number.parseInt(autoSyncInterval, 10) : 0
     const selectedPaths = Array.from(new Set(cloudSelection))
-    const rootPath = cloudCurrentPath || ''
+    const rootPath = selectedPaths.length > 0 ? '' : cloudCurrentPath || ''
 
     // Shared empty defaults so each branch only sets its own provider fields.
     const base: DriveSourceDraft = {
@@ -1054,21 +1055,30 @@ export default function AddSourceModal({
                     {visibleCloudFolders.map(folder => {
                       const checked = cloudSelection.includes(folder.path)
                       return (
-                        <label key={`dir-${folder.path}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '8px 10px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
+                        <div key={`dir-${folder.path}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '8px 10px', borderBottom: '1px solid var(--border)' }}>
                           <input
                             type="checkbox"
+                            aria-label={`Select folder ${folder.name}`}
                             checked={checked}
                             onChange={e => toggleCloudSelection(folder.path, e.target.checked, folder.name, 'folder')}
-                            style={{ marginTop: '2px', accentColor: 'var(--accent)' }}
+                            style={{ marginTop: '3px', accentColor: 'var(--accent)', cursor: 'pointer' }}
                           />
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>[DIR]</div>
-                            <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '520px' }}>
-                              {folder.name}
+                          <button
+                            type="button"
+                            onClick={() => { void loadCloudPath(folder.path) }}
+                            title="Open folder"
+                            style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', minWidth: 0, flex: 1, textAlign: 'left', background: 'none', border: 'none', padding: 0, color: 'inherit', cursor: 'pointer' }}
+                          >
+                            <FolderOpen size={14} style={{ marginTop: '2px', color: 'var(--text-dim)', flexShrink: 0 }} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>[DIR]</div>
+                              <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '520px' }}>
+                                {folder.name}
+                              </div>
+                              <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>{folder.path || '/'}</div>
                             </div>
-                            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>{folder.path || '/'}</div>
-                          </div>
-                        </label>
+                          </button>
+                        </div>
                       )
                     })}
 
