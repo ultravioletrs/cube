@@ -25,6 +25,7 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/imageembedding"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/google"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/localfs"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/rclone"
 	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
@@ -249,12 +250,19 @@ func main() {
 	chunksRepo := postgres.NewChunksRepository(pool)
 	imageEmbeddingsRepo := postgres.NewImageEmbeddingsRepository(pool)
 	conversationsRepo := postgres.NewConversationsRepository(pool)
+	uploadStore, err := objstore.NewStore(cfg.storageConfig)
+	if err != nil {
+		slog.Error("configure object storage", "provider", cfg.storageConfig.Provider, "err", err)
+		os.Exit(1)
+	}
+
 	rcloneClient := ingest.NewCommandRcloneClient(cfg.rcloneBinary, cfg.rcloneConfigDir, cfg.rcloneTimeout)
 	sourceProviders := ingest.NewSourceProviderRegistry(
 		google.NewSourceProvider(),
 		s3source.NewSourceProvider(),
 		microsoft.NewSourceProvider(),
 		rclone.NewSourceProvider(rcloneClient),
+		localfs.NewSourceProvider(uploadStore),
 	)
 	for alias, target := range domain.SourceProviderAliases() {
 		sourceProviders.RegisterAlias(alias, target)
@@ -268,18 +276,12 @@ func main() {
 		slog.Error("configure embeddings", "err", err)
 		os.Exit(1)
 	}
-	uploadStore, err := objstore.NewStore(cfg.storageConfig)
-	if err != nil {
-		slog.Error("configure object storage", "provider", cfg.storageConfig.Provider, "err", err)
-		os.Exit(1)
-	}
 
 	worker := ingest.NewWorker(
 		recordsRepo,
 		sourcesRepo,
 		chunksRepo,
 		embeddingRegistry,
-		uploadStore,
 		sourceProviders,
 		cfg.chunkSize,
 		cfg.chunkOverlap,

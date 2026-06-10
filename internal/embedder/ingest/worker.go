@@ -8,12 +8,9 @@ package ingest
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -23,7 +20,6 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/imageembedding"
 	embedmetrics "github.com/ultravioletrs/cube/internal/embedder/metrics"
 	"github.com/ultravioletrs/cube/internal/embedder/postgres"
-	objstore "github.com/ultravioletrs/cube/internal/embedder/storage"
 )
 
 // Worker polls for queued records and runs the embedding pipeline.
@@ -34,7 +30,6 @@ type Worker struct {
 	embeddings      *embedding.Registry
 	imageEmbeddings *postgres.ImageEmbeddingsRepository
 	imageEmbedder   *imageembedding.Client
-	store           objstore.Store
 	sourceProviders *SourceProviderRegistry
 	chunkSize       int
 	overlap         int
@@ -75,7 +70,6 @@ func NewWorker(
 	sources domain.SourceRepository,
 	chunks *postgres.ChunksRepository,
 	embeddings *embedding.Registry,
-	store objstore.Store,
 	sourceProviders *SourceProviderRegistry,
 	chunkSize, overlap int,
 ) *Worker {
@@ -84,7 +78,6 @@ func NewWorker(
 		sources:         sources,
 		chunks:          chunks,
 		embeddings:      embeddings,
-		store:           store,
 		sourceProviders: sourceProviders,
 		chunkSize:       chunkSize,
 		overlap:         overlap,
@@ -627,32 +620,19 @@ func (w *Worker) downloadContent(ctx context.Context, rec domain.Record) (string
 		return "", nil, err
 	}
 
-	switch src.Type {
-	case domain.SourceTypeLocalFS:
-		started := time.Now().UTC()
-		text, pageCount, err := w.downloadFromLocalSource(ctx, rec, src)
-		embedmetrics.ObserveSourceDownload(
-			string(src.Type),
-			string(domain.SourceTypeLocalFS),
-			time.Since(started),
-			err,
-		)
-		return text, pageCount, err
-	default:
-		provider, ok := w.sourceProviders.Provider(src.Type)
-		if !ok {
-			return "", nil, fmt.Errorf("unsupported source type %q for ingestion", src.Type)
-		}
-		started := time.Now().UTC()
-		text, pageCount, err := provider.DownloadRecord(ctx, rec, src)
-		embedmetrics.ObserveSourceDownload(
-			string(src.Type),
-			string(provider.Type()),
-			time.Since(started),
-			err,
-		)
-		return text, pageCount, err
+	provider, ok := w.sourceProviders.Provider(src.Type)
+	if !ok {
+		return "", nil, fmt.Errorf("unsupported source type %q for ingestion", src.Type)
 	}
+	started := time.Now().UTC()
+	text, pageCount, err := provider.DownloadRecord(ctx, rec, src)
+	embedmetrics.ObserveSourceDownload(
+		string(src.Type),
+		string(provider.Type()),
+		time.Since(started),
+		err,
+	)
+	return text, pageCount, err
 }
 
 func (w *Worker) downloadRawContent(ctx context.Context, rec domain.Record) ([]byte, error) {
@@ -665,10 +645,6 @@ func (w *Worker) downloadRawContent(ctx context.Context, rec domain.Record) ([]b
 		return nil, err
 	}
 
-	if src.Type == domain.SourceTypeLocalFS {
-		return w.downloadRawFromLocalSource(ctx, rec, src)
-	}
-
 	provider, ok := w.sourceProviders.Provider(src.Type)
 	if !ok {
 		return nil, fmt.Errorf("unsupported source type %q for raw image download", src.Type)
@@ -678,64 +654,4 @@ func (w *Worker) downloadRawContent(ctx context.Context, rec domain.Record) ([]b
 		return nil, fmt.Errorf("source type %q does not support raw content download", src.Type)
 	}
 	return rawProvider.DownloadRecordContent(ctx, rec, src)
-}
-
-type localUploadConfig struct {
-	Kind      string `json:"kind,omitempty"`
-	UploadDir string `json:"upload_dir"`
-}
-
-func (w *Worker) downloadFromLocalSource(ctx context.Context, rec domain.Record, src domain.Source) (string, *int, error) {
-	body, err := w.downloadRawFromLocalSource(ctx, rec, src)
-	if err != nil {
-		return "", nil, err
-	}
-
-	doc, err := ExtractText(FileMeta{
-		Name:     rec.Name,
-		MimeType: rec.MimeType,
-	}, body)
-	if err != nil {
-		return "", nil, err
-	}
-	return doc.Text, doc.PageCount, nil
-}
-
-func (w *Worker) downloadRawFromLocalSource(ctx context.Context, rec domain.Record, src domain.Source) ([]byte, error) {
-	if rec.ExternalID == "" {
-		return nil, fmt.Errorf("record %s is missing external_id", rec.ID)
-	}
-
-	// New direct uploads store external_id as an object key.
-	if strings.Contains(rec.ExternalID, "/") {
-		if w.store == nil {
-			return nil, fmt.Errorf("object storage is not configured")
-		}
-		body, err := w.store.Get(ctx, rec.ExternalID)
-		if err != nil {
-			return nil, err
-		}
-		return body, nil
-	}
-
-	// Legacy local_fs records might still point to upload_dir + file name.
-	var cfg localUploadConfig
-	if err := json.Unmarshal(src.Config, &cfg); err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(cfg.UploadDir) == "" {
-		return nil, fmt.Errorf("local source %s is missing upload_dir config", src.ID)
-	}
-
-	fileName := filepath.Base(rec.ExternalID)
-	if fileName != rec.ExternalID {
-		return nil, fmt.Errorf("invalid local upload file id")
-	}
-
-	path := filepath.Join(cfg.UploadDir, rec.UserID, fileName)
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
 }
