@@ -220,6 +220,84 @@ func TestS3SourceProvider_ListFilesInfersMIMEFromObjectKey(t *testing.T) {
 	}
 }
 
+func TestS3SourceProvider_ListFilesStatsExtensionlessObjectMIME(t *testing.T) {
+	const objectKey = "team/docs/f55cb722-9c38-4b16-a1dd-66a1b8bd9b20"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet &&
+			(r.URL.Path == "/docs" || r.URL.Path == "/docs/") &&
+			r.URL.Query().Get("list-type") == "2":
+			w.Header().Set("Content-Type", "application/xml")
+			_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>docs</Name>
+  <Prefix>team/docs/</Prefix>
+  <KeyCount>1</KeyCount>
+  <MaxKeys>1000</MaxKeys>
+  <IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>`+objectKey+`</Key>
+    <LastModified>2026-05-12T10:00:00.000Z</LastModified>
+    <ETag>"etag-image"</ETag>
+    <Size>256</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+</ListBucketResult>`)
+			return
+		case r.Method == http.MethodHead && r.URL.Path == "/docs/"+objectKey:
+			w.Header().Set("Content-Type", "image/png")
+			w.Header().Set("Last-Modified", "Tue, 12 May 2026 10:00:00 GMT")
+			w.Header().Set("ETag", `"etag-image"`)
+			return
+		default:
+			http.Error(w, "not found", http.StatusNotFound)
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			return
+		}
+	}))
+	defer srv.Close()
+
+	srvURL, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatalf("parse httptest server url: %v", err)
+	}
+
+	cfgRaw, err := json.Marshal(domain.S3Config{
+		Endpoint:        srvURL.Host,
+		Region:          "us-east-1",
+		Bucket:          "docs",
+		AccessKeyID:     "test-access",
+		SecretAccessKey: "test-secret",
+		UseSSL:          testBoolPtr(false),
+		PathStyle:       testBoolPtr(true),
+		RootPath:        "team/docs",
+		ScopePaths:      []string{"team/docs"},
+	})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+
+	provider := s3source.NewSourceProvider()
+	files, err := provider.ListFiles(context.Background(), "user-1", domain.Source{
+		ID:     "src-s3-1",
+		Type:   domain.SourceTypeS3,
+		Config: cfgRaw,
+	})
+	if err != nil {
+		t.Fatalf("ListFiles returned error: %v", err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("expected one file, got %d: %#v", len(files), files)
+	}
+	if files[0].Name != "f55cb722-9c38-4b16-a1dd-66a1b8bd9b20" {
+		t.Fatalf("unexpected file name: %q", files[0].Name)
+	}
+	if files[0].MimeType != "image/png" {
+		t.Fatalf("expected image/png mime from object metadata, got %q", files[0].MimeType)
+	}
+}
+
 func TestBrowseS3PathPagePaginatesFlatListing(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet ||

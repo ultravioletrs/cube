@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -208,6 +209,12 @@ func (w *Worker) processRecord(ctx context.Context, rec domain.Record) {
 	}
 	defer cancel()
 
+	if rec.Format != domain.RecordFormatImage && w.shouldProbeRawImage(rec) {
+		if handled := w.processRawImageRecordIfDetected(recordCtx, ctx, rec, logger); handled {
+			return
+		}
+	}
+
 	if rec.Format == domain.RecordFormatImage {
 		w.processImageRecord(recordCtx, ctx, rec, logger)
 		return
@@ -310,7 +317,70 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 	if doc.ImageMode == ImageIngestModeNone {
 		doc.ImageMode = ImageIngestModeImage
 	}
+	rec.Format = domain.RecordFormatImage
+	if strings.TrimSpace(doc.MimeType) != "" {
+		rec.MimeType = doc.MimeType
+	}
 
+	w.processImageDocument(ctx, statusCtx, rec, logger, content, doc)
+}
+
+func (w *Worker) processRawImageRecordIfDetected(ctx, statusCtx context.Context, rec domain.Record, logger *slog.Logger) bool {
+	if w.isCancelled(statusCtx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
+		return true
+	}
+
+	w.setStage(statusCtx, rec, stageExtracting, logger)
+	content, err := w.downloadRawContent(ctx, rec)
+	if err != nil {
+		return false
+	}
+	if w.isCancelled(ctx, rec) {
+		w.cleanupCancelledRecord(ctx, rec, logger)
+		return true
+	}
+
+	doc, err := ExtractText(FileMeta{
+		ID:       rec.ExternalID,
+		Name:     rec.Name,
+		MimeType: rec.MimeType,
+	}, content)
+	if err != nil || doc.ImageMode == ImageIngestModeNone {
+		return false
+	}
+
+	rec.Format = domain.RecordFormatImage
+	if strings.TrimSpace(doc.MimeType) != "" {
+		rec.MimeType = doc.MimeType
+	}
+	w.processImageDocument(ctx, statusCtx, rec, logger, content, doc)
+	return true
+}
+
+func (w *Worker) shouldProbeRawImage(rec domain.Record) bool {
+	if rec.Format != domain.RecordFormatLink {
+		return false
+	}
+	if path.Ext(strings.TrimSpace(rec.Name)) != "" || path.Ext(strings.TrimSpace(rec.ExternalID)) != "" {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(rec.MimeType)) {
+	case "", "application/octet-stream", "binary/octet-stream", "application/x-binary":
+		return true
+	default:
+		return false
+	}
+}
+
+func (w *Worker) processImageDocument(
+	ctx context.Context,
+	statusCtx context.Context,
+	rec domain.Record,
+	logger *slog.Logger,
+	content []byte,
+	doc ExtractedDocument,
+) {
 	chunks, plan := adaptiveChunk(doc.Text, w.chunkSize, w.overlap)
 	if len(chunks) == 0 {
 		_ = w.records.UpdateStatus(statusCtx, rec.ID, domain.RecordStatusFailed, "image produced zero chunks")
@@ -381,6 +451,8 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 		SizeBytes:   int64(len(content)),
 		PageCount:   doc.PageCount,
 		Description: imageIngestDescription(doc),
+		Format:      &rec.Format,
+		MimeType:    rec.MimeType,
 	})
 	logger.Info("ingest: image indexed", "chunks", indexedChunks, "mode", doc.ImageMode, "ocr_chars", doc.OCRTextCharCount)
 }

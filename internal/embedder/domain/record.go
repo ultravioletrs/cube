@@ -118,6 +118,8 @@ type IngestResult struct {
 	SizeBytes   int64
 	PageCount   *int
 	Description string
+	Format      *RecordFormat
+	MimeType    string
 }
 
 // RecordUpsertState describes what a sync operation changed.

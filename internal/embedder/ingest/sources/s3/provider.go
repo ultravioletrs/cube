@@ -325,11 +325,12 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile,
 
 			modified := obj.LastModified.UTC()
 			name := path.Base(key)
+			mimeType := s3ObjectMIMEType(ctx, client, bucket, key, name, obj.ContentType)
 			file := ingest.SourceFile{
 				ExternalID:       key,
 				Name:             name,
 				ExternalRef:      key,
-				MimeType:         ingest.NormalizeFileMIMEType(name, obj.ContentType),
+				MimeType:         mimeType,
 				SourceVersion:    strings.TrimSpace(obj.ETag),
 				SourceModifiedAt: &modified,
 			}
@@ -349,6 +350,41 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile,
 		return files[i].ExternalID < files[j].ExternalID
 	})
 	return files, nil
+}
+
+func s3ObjectMIMEType(
+	ctx context.Context,
+	client *minio.Client,
+	bucket, key, name, listedContentType string,
+) string {
+	mimeType := ingest.NormalizeFileMIMEType(name, listedContentType)
+	mimeType = ingest.NormalizeFileMIMEType(key, mimeType)
+	if mimeType != "" && !isGenericS3MIME(mimeType) {
+		return mimeType
+	}
+	if path.Ext(name) != "" || path.Ext(key) != "" {
+		return mimeType
+	}
+
+	stat, err := client.StatObject(ctx, bucket, key, minio.StatObjectOptions{})
+	if err != nil {
+		return mimeType
+	}
+	statMimeType := ingest.NormalizeFileMIMEType(name, stat.ContentType)
+	statMimeType = ingest.NormalizeFileMIMEType(key, statMimeType)
+	if statMimeType != "" {
+		return statMimeType
+	}
+	return mimeType
+}
+
+func isGenericS3MIME(mimeType string) bool {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "application/octet-stream", "binary/octet-stream", "application/x-binary":
+		return true
+	default:
+		return false
+	}
 }
 
 // ListS3FilesPreview lists S3 files for source configuration preview API.

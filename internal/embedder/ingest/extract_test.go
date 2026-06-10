@@ -75,6 +75,9 @@ func TestExtractTextInfersImageMIMEFromName(t *testing.T) {
 	if doc.ImageMode != ImageIngestModeImage {
 		t.Fatalf("expected image mode, got %q", doc.ImageMode)
 	}
+	if doc.MimeType != "image/png" {
+		t.Fatalf("expected normalized mime image/png, got %q", doc.MimeType)
+	}
 	if !strings.Contains(doc.Text, "mime_type: image/png") {
 		t.Fatalf("expected inferred image mime in descriptor, got %q", doc.Text)
 	}
@@ -87,6 +90,9 @@ func TestExtractTextInfersPlainTextFromContent(t *testing.T) {
 	}
 	if doc.Text != "hello from extensionless s3 object" {
 		t.Fatalf("unexpected text: %q", doc.Text)
+	}
+	if doc.MimeType != "text/plain" {
+		t.Fatalf("expected sniffed text/plain mime, got %q", doc.MimeType)
 	}
 }
 

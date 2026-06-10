@@ -380,6 +380,10 @@ func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res doma
 	if res.PageCount != nil {
 		pageCount = pgtype.Int4{Int32: int32(*res.PageCount), Valid: true}
 	}
+	var format string
+	if res.Format != nil {
+		format = string(*res.Format)
+	}
 
 	_, err := r.pool.Exec(ctx,
 		`UPDATE records
@@ -391,10 +395,12 @@ func (r *recordsRepo) UpdateAfterIngest(ctx context.Context, id string, res doma
 		     ingest_indexed_chunks=NULL,
 		     ingest_stage=NULL,
 		     description=COALESCE(NULLIF($4, ''), description),
+		     format=COALESCE(NULLIF($5, ''), format),
+		     mime_type=COALESCE(NULLIF($6, ''), mime_type),
 		     error=NULL,
 		     updated_at=now()
-		 WHERE id=$5 AND status <> 'cancelled'`,
-		res.ChunkCount, res.SizeBytes, pageCount, res.Description, id,
+		 WHERE id=$7 AND status <> 'cancelled'`,
+		res.ChunkCount, res.SizeBytes, pageCount, res.Description, format, res.MimeType, id,
 	)
 	return err
 }
@@ -436,7 +442,7 @@ func (r *recordsRepo) UpsertFromSource(ctx context.Context, rec domain.Record) (
 		return domain.RecordUpsertResult{}, fmt.Errorf("select record for upsert: %w", err)
 	}
 
-	needsRequeue := existing.SourceVersion != rec.SourceVersion || existing.Status != domain.RecordStatusIndexed
+	needsRequeue := sourceRecordNeedsRequeue(existing, rec)
 	if !needsRequeue {
 		rec.Status = existing.Status
 		rec.ChunkCount = existing.ChunkCount
@@ -575,6 +581,19 @@ func existingOrQueuedStatus(requeue bool, current domain.RecordStatus) domain.Re
 		return domain.RecordStatusIndexed
 	}
 	return current
+}
+
+func sourceRecordNeedsRequeue(existing, next domain.Record) bool {
+	if existing.SourceVersion != next.SourceVersion {
+		return true
+	}
+	if existing.Status != domain.RecordStatusIndexed {
+		return true
+	}
+	if existing.Format != next.Format {
+		return true
+	}
+	return strings.TrimSpace(existing.MimeType) != strings.TrimSpace(next.MimeType)
 }
 
 func (r *recordsRepo) DeleteBySourceExternalIDs(

@@ -41,6 +41,7 @@ const (
 type ExtractedDocument struct {
 	Text             string
 	PageCount        *int
+	MimeType         string
 	ImageMode        ImageIngestMode
 	OCRText          string
 	OCRTextCharCount int
@@ -51,22 +52,33 @@ func ExtractText(f FileMeta, content []byte) (ExtractedDocument, error) {
 	f.MimeType = normalizeFileMetaMIMEType(f, content)
 	mime := strings.ToLower(strings.TrimSpace(f.MimeType))
 
+	var doc ExtractedDocument
 	switch {
 	case strings.HasPrefix(mime, "application/vnd.google-apps."):
-		return ExtractedDocument{Text: string(content)}, nil
+		doc = ExtractedDocument{Text: string(content)}
 	case mime == "application/pdf":
-		return extractPDF(content)
+		var err error
+		doc, err = extractPDF(content)
+		if err != nil {
+			return ExtractedDocument{}, err
+		}
 	case mime == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-		return extractDOCX(content)
+		var err error
+		doc, err = extractDOCX(content)
+		if err != nil {
+			return ExtractedDocument{}, err
+		}
 	case mime == "image/svg+xml":
-		return ExtractedDocument{Text: string(content)}, nil
+		doc = ExtractedDocument{Text: string(content)}
 	case strings.HasPrefix(mime, "image/"):
-		return extractImageText(f, content), nil
+		doc = extractImageText(f, content)
 	case isPlainTextLike(f.Name, mime):
-		return ExtractedDocument{Text: string(content)}, nil
+		doc = ExtractedDocument{Text: string(content)}
 	default:
 		return ExtractedDocument{}, fmt.Errorf("unsupported MIME type for extraction: %q", f.MimeType)
 	}
+	doc.MimeType = f.MimeType
+	return doc, nil
 }
 
 func normalizeFileMetaMIMEType(f FileMeta, content []byte) string {
