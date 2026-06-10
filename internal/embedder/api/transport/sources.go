@@ -342,6 +342,8 @@ func browseS3Path() http.HandlerFunc {
 		PathStyle       *bool  `json:"path_style,omitempty"`
 		RootPath        string `json:"root_path,omitempty"`
 		Path            string `json:"path,omitempty"`
+		PageToken       string `json:"page_token,omitempty"`
+		PageSize        int    `json:"page_size,omitempty"`
 	}
 	type folderResponse struct {
 		Name string `json:"name"`
@@ -359,6 +361,8 @@ func browseS3Path() http.HandlerFunc {
 		ParentPath  string           `json:"parent_path,omitempty"`
 		Folders     []folderResponse `json:"folders"`
 		Files       []fileResponse   `json:"files"`
+		HasMore     bool             `json:"has_more"`
+		NextToken   string           `json:"next_page_token,omitempty"`
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -386,7 +390,7 @@ func browseS3Path() http.HandlerFunc {
 			return
 		}
 
-		entries, err := s3source.BrowseS3Path(r.Context(), cfg, req.Path)
+		page, err := s3source.BrowseS3PathPage(r.Context(), cfg, req.Path, req.PageSize, req.PageToken)
 		if err != nil {
 			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
 			return
@@ -395,8 +399,10 @@ func browseS3Path() http.HandlerFunc {
 		currentPath := normalizeBrowsePath(req.Path)
 		resp := response{
 			CurrentPath: currentPath,
-			Folders:     make([]folderResponse, 0, len(entries)),
-			Files:       make([]fileResponse, 0, len(entries)),
+			Folders:     make([]folderResponse, 0, len(page.Entries)),
+			Files:       make([]fileResponse, 0, len(page.Entries)),
+			HasMore:     page.HasMore,
+			NextToken:   page.NextPageToken,
 		}
 		if currentPath != "" {
 			parent := path.Dir("/" + currentPath)
@@ -405,7 +411,7 @@ func browseS3Path() http.HandlerFunc {
 			}
 		}
 
-		for _, entry := range entries {
+		for _, entry := range page.Entries {
 			if entry.IsDir {
 				resp.Folders = append(resp.Folders, folderResponse{
 					Name: entry.Name,

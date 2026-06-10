@@ -118,6 +118,18 @@ type S3BrowseEntry struct {
 	ModifiedAt *time.Time
 }
 
+// S3BrowsePage is one bounded page of a flat S3 path browse.
+type S3BrowsePage struct {
+	Entries       []S3BrowseEntry
+	NextPageToken string
+	HasMore       bool
+}
+
+const (
+	defaultBrowsePageSize = 100
+	maxBrowsePageSize     = 500
+)
+
 // BrowseS3Path browses one path level in an S3 bucket using configured credentials.
 func BrowseS3Path(ctx context.Context, cfg domain.S3Config, currentPath string) ([]S3BrowseEntry, error) {
 	client, err := newS3Client(cfg)
@@ -146,47 +158,131 @@ func BrowseS3Path(ctx context.Context, cfg domain.S3Config, currentPath string) 
 		if obj.Err != nil {
 			return nil, obj.Err
 		}
-		trimmed := strings.TrimPrefix(obj.Key, prefix)
-		trimmed = strings.TrimPrefix(trimmed, "/")
-		if trimmed == "" {
+		entry, ok := s3BrowseEntryFromObject(currentPath, prefix, obj)
+		if !ok {
 			continue
 		}
-
-		segment := trimmed
-		if idx := strings.Index(segment, "/"); idx >= 0 {
-			segment = segment[:idx]
-			childPath := sourcepath.Normalize(path.Join(currentPath, segment))
-			children[childPath] = S3BrowseEntry{
-				Name:  segment,
-				Path:  childPath,
-				IsDir: true,
-			}
-			continue
-		}
-
-		childPath := sourcepath.Normalize(path.Join(currentPath, segment))
-		modified := obj.LastModified.UTC()
-		children[childPath] = S3BrowseEntry{
-			Name:       segment,
-			Path:       childPath,
-			IsDir:      false,
-			MimeType:   strings.TrimSpace(obj.ContentType),
-			Size:       obj.Size,
-			ModifiedAt: &modified,
-		}
+		children[entry.Path] = entry
 	}
 
 	out := make([]S3BrowseEntry, 0, len(children))
 	for _, entry := range children {
 		out = append(out, entry)
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].IsDir != out[j].IsDir {
-			return out[i].IsDir
-		}
-		return out[i].Path < out[j].Path
-	})
+	sortS3BrowseEntries(out)
 	return out, nil
+}
+
+// BrowseS3PathPage browses one path level in bounded pages. pageToken is the
+// previously returned S3 key/prefix to start after.
+func BrowseS3PathPage(
+	ctx context.Context,
+	cfg domain.S3Config,
+	currentPath string,
+	pageSize int,
+	pageToken string,
+) (S3BrowsePage, error) {
+	client, err := newS3Client(cfg)
+	if err != nil {
+		return S3BrowsePage{}, err
+	}
+	bucket := strings.TrimSpace(cfg.Bucket)
+	currentPath = sourcepath.Normalize(currentPath)
+
+	root := sourcepath.Normalize(cfg.RootPath)
+	if root != "" && !sourcepath.IsWithinRoot(root, currentPath) {
+		return S3BrowsePage{}, fmt.Errorf("browse path %q is outside root_path %q", currentPath, root)
+	}
+
+	prefix := currentPath
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	pageToken = strings.TrimSpace(pageToken)
+	if pageToken != "" && prefix != "" && !strings.HasPrefix(pageToken, prefix) {
+		return S3BrowsePage{}, fmt.Errorf("page_token is outside browse path")
+	}
+	if pageSize <= 0 {
+		pageSize = defaultBrowsePageSize
+	}
+	if pageSize > maxBrowsePageSize {
+		pageSize = maxBrowsePageSize
+	}
+
+	entries := make([]S3BrowseEntry, 0, pageSize)
+	nextToken := ""
+	hasMore := false
+	opts := minio.ListObjectsOptions{
+		Prefix:     prefix,
+		Recursive:  false,
+		MaxKeys:    pageSize + 1,
+		StartAfter: pageToken,
+	}
+	for obj := range client.ListObjectsIter(ctx, bucket, opts) {
+		if obj.Err != nil {
+			return S3BrowsePage{}, obj.Err
+		}
+		entry, ok := s3BrowseEntryFromObject(currentPath, prefix, obj)
+		if !ok {
+			continue
+		}
+		if len(entries) >= pageSize {
+			hasMore = true
+			break
+		}
+		entries = append(entries, entry)
+		nextToken = strings.TrimSpace(obj.Key)
+	}
+
+	if !hasMore {
+		nextToken = ""
+	}
+
+	sortS3BrowseEntries(entries)
+	return S3BrowsePage{
+		Entries:       entries,
+		NextPageToken: nextToken,
+		HasMore:       hasMore,
+	}, nil
+}
+
+func s3BrowseEntryFromObject(currentPath, prefix string, obj minio.ObjectInfo) (S3BrowseEntry, bool) {
+	trimmed := strings.TrimPrefix(obj.Key, prefix)
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	if trimmed == "" {
+		return S3BrowseEntry{}, false
+	}
+
+	segment := trimmed
+	if idx := strings.Index(segment, "/"); idx >= 0 {
+		segment = segment[:idx]
+		childPath := sourcepath.Normalize(path.Join(currentPath, segment))
+		return S3BrowseEntry{
+			Name:  segment,
+			Path:  childPath,
+			IsDir: true,
+		}, true
+	}
+
+	childPath := sourcepath.Normalize(path.Join(currentPath, segment))
+	modified := obj.LastModified.UTC()
+	return S3BrowseEntry{
+		Name:       segment,
+		Path:       childPath,
+		IsDir:      false,
+		MimeType:   strings.TrimSpace(obj.ContentType),
+		Size:       obj.Size,
+		ModifiedAt: &modified,
+	}, true
+}
+
+func sortS3BrowseEntries(entries []S3BrowseEntry) {
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].IsDir != entries[j].IsDir {
+			return entries[i].IsDir
+		}
+		return entries[i].Path < entries[j].Path
+	})
 }
 
 func listS3Files(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile, error) {

@@ -71,6 +71,8 @@ interface CloudBrowseDTO {
   parent_path?: string
   folders: CloudBrowseFolderDTO[]
   files: CloudBrowseFileDTO[]
+  has_more?: boolean
+  next_page_token?: string
 }
 
 interface GoogleOAuthURLDTO {
@@ -199,6 +201,8 @@ export interface CloudBrowseResult {
   parentPath?: string
   folders: CloudFolderOption[]
   files: DriveFileOption[]
+  hasMore: boolean
+  nextPageToken?: string
 }
 
 export type CloudProvider = 's3' | 'microsoft'
@@ -697,6 +701,8 @@ function mapCloudBrowse(data: CloudBrowseDTO): CloudBrowseResult {
   return {
     currentPath: data.current_path,
     parentPath: data.parent_path,
+    hasMore: Boolean(data.has_more),
+    nextPageToken: data.next_page_token,
     folders: data.folders.map(folder => ({ name: folder.name, path: folder.path })),
     files: data.files.map(file => ({
       id: file.path,
@@ -716,6 +722,8 @@ export async function browseCloudPath(
   provider: CloudProvider,
   cfg: CloudBrowseConfig,
   path?: string,
+  pageToken?: string,
+  pageSize = 100,
 ): Promise<CloudBrowseResult> {
   const at = path ?? ''
   if (provider === 's3') {
@@ -731,6 +739,8 @@ export async function browseCloudPath(
         use_ssl: cfg.useSSL,
         path_style: cfg.pathStyle,
         path: at,
+        page_token: pageToken ?? '',
+        page_size: pageSize,
       }),
     })
     return mapCloudBrowse(data)

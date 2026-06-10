@@ -27,6 +27,7 @@ interface Props {
 
 type PickerBrowseTab = 'folders' | 'shared_drives' | 'recent' | 'upload'
 const PICKER_PAGE_SIZE = 80
+const CLOUD_PAGE_SIZE = 100
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
@@ -143,7 +144,10 @@ export default function AddSourceModal({
   const [cloudSelectionMeta, setCloudSelectionMetaMap] = useState<Record<string, { name: string; path: string; kind: 'file' | 'folder' }>>({})
   const [cloudSearch, setCloudSearch] = useState('')
   const [cloudLoading, setCloudLoading] = useState(false)
+  const [cloudLoadingMore, setCloudLoadingMore] = useState(false)
   const [cloudLoaded, setCloudLoaded] = useState(false)
+  const [cloudHasMore, setCloudHasMore] = useState(false)
+  const [cloudNextPageToken, setCloudNextPageToken] = useState('')
   const [cloudError, setCloudError] = useState('')
 
   const [syncEnabled, setSyncEnabled] = useState(true)
@@ -183,6 +187,13 @@ export default function AddSourceModal({
     if (!q) return cloudFiles
     return cloudFiles.filter(file => file.name.toLowerCase().includes(q) || file.path.toLowerCase().includes(q))
   }, [cloudFiles, cloudSearch])
+
+  const loadedCloudItems = useMemo(() => [
+    ...cloudFolders.map(folder => ({ path: folder.path, name: folder.name, kind: 'folder' as const })),
+    ...cloudFiles.map(file => ({ path: file.path, name: file.name, kind: 'file' as const })),
+  ], [cloudFolders, cloudFiles])
+  const selectedCloudPathSet = useMemo(() => new Set(cloudSelection), [cloudSelection])
+  const allLoadedCloudSelected = loadedCloudItems.length > 0 && loadedCloudItems.every(item => selectedCloudPathSet.has(item.path))
 
   const shownFolders = useMemo(() => folders.slice(0, folderVisibleLimit), [folders, folderVisibleLimit])
   const shownFiles = useMemo(() => visibleFiles.slice(0, fileVisibleLimit), [visibleFiles, fileVisibleLimit])
@@ -599,6 +610,53 @@ export default function AddSourceModal({
     clearFieldError('cloudSelection')
   }
 
+  function toggleLoadedCloudSelection(checked: boolean) {
+    if (loadedCloudItems.length === 0) return
+    const loadedPaths = new Set(loadedCloudItems.map(item => item.path))
+    setCloudSelection(prev => {
+      if (checked) return Array.from(new Set([...prev, ...loadedPaths]))
+      return prev.filter(path => !loadedPaths.has(path))
+    })
+    setCloudSelectionMetaMap(prev => {
+      const next = { ...prev }
+      if (checked) {
+        for (const item of loadedCloudItems) next[item.path] = item
+      } else {
+        for (const item of loadedCloudItems) delete next[item.path]
+      }
+      return next
+    })
+    clearFieldError('cloudSelection')
+  }
+
+  function selectCurrentCloudDirectory() {
+    if (!cloudCurrentPath) return
+    const parts = cloudCurrentPath.split('/').filter(Boolean)
+    toggleCloudSelection(cloudCurrentPath, true, parts[parts.length - 1] ?? cloudCurrentPath, 'folder')
+  }
+
+  function mergeCloudFolders(prev: CloudFolderOption[], next: CloudFolderOption[]): CloudFolderOption[] {
+    const seen = new Set(prev.map(folder => folder.path))
+    const merged = [...prev]
+    for (const folder of next) {
+      if (seen.has(folder.path)) continue
+      seen.add(folder.path)
+      merged.push(folder)
+    }
+    return merged
+  }
+
+  function mergeCloudFiles(prev: DriveFileOption[], next: DriveFileOption[]): DriveFileOption[] {
+    const seen = new Set(prev.map(file => file.path))
+    const merged = [...prev]
+    for (const file of next) {
+      if (seen.has(file.path)) continue
+      seen.add(file.path)
+      merged.push(file)
+    }
+    return merged
+  }
+
   // activeCloudProvider maps the non-Google provider tabs onto the path-based
   // cloud-browse provider. Google never reaches here.
   const activeCloudProvider: CloudProvider = providerTab === 's3' ? 's3' : 'microsoft'
@@ -634,28 +692,47 @@ export default function AddSourceModal({
     return Boolean(msAccessToken.trim() || (msClientID.trim() && msClientSecret))
   }
 
-  async function loadCloudPath(path?: string) {
+  async function loadCloudPath(path?: string, append = false, pageToken = '') {
     if (!cloudReady()) {
       setCloudError('Enter connection details first.')
       return
     }
-    setCloudLoading(true)
+    if (append) setCloudLoadingMore(true)
+    else setCloudLoading(true)
     setCloudError('')
     try {
-      const result = await browseCloudPath(authToken, activeCloudProvider, buildCloudConfig(), path)
+      const result = await browseCloudPath(authToken, activeCloudProvider, buildCloudConfig(), path, pageToken, CLOUD_PAGE_SIZE)
       setCloudCurrentPath(result.currentPath ?? '')
       setCloudParentPath(result.parentPath)
-      setCloudFolders(result.folders)
-      setCloudFiles(result.files)
+      setCloudFolders(prev => append ? mergeCloudFolders(prev, result.folders) : result.folders)
+      setCloudFiles(prev => append ? mergeCloudFiles(prev, result.files) : result.files)
+      setCloudHasMore(result.hasMore)
+      setCloudNextPageToken(result.nextPageToken ?? '')
       setCloudLoaded(true)
     } catch (err) {
       setCloudError(err instanceof Error ? err.message : 'Failed to browse remote path')
-      setCloudFolders([])
-      setCloudFiles([])
-      setCloudLoaded(false)
+      if (!append) {
+        setCloudFolders([])
+        setCloudFiles([])
+        setCloudHasMore(false)
+        setCloudNextPageToken('')
+        setCloudLoaded(false)
+      }
     } finally {
-      setCloudLoading(false)
+      if (append) setCloudLoadingMore(false)
+      else setCloudLoading(false)
     }
+  }
+
+  async function loadNextCloudPage() {
+    if (!cloudHasMore || !cloudNextPageToken || cloudLoading || cloudLoadingMore) return
+    await loadCloudPath(cloudCurrentPath || undefined, true, cloudNextPageToken)
+  }
+
+  function handleCloudListScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget
+    if (el.scrollHeight - el.scrollTop - el.clientHeight > 48) return
+    void loadNextCloudPage()
   }
 
   function cloudPathParts() {
@@ -1046,7 +1123,42 @@ export default function AddSourceModal({
                 )}
 
                 {cloudLoaded && (
-                  <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: loadedCloudItems.length === 0 ? 'default' : 'pointer', opacity: loadedCloudItems.length === 0 ? 0.55 : 1 }}>
+                        <input
+                          type="checkbox"
+                          checked={allLoadedCloudSelected}
+                          disabled={loadedCloudItems.length === 0}
+                          onChange={e => toggleLoadedCloudSelection(e.target.checked)}
+                          style={{ accentColor: 'var(--accent)' }}
+                        />
+                        <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text)' }}>
+                          Select all loaded
+                        </span>
+                      </label>
+                      {cloudCurrentPath && (
+                        <button
+                          type="button"
+                          onClick={selectCurrentCloudDirectory}
+                          disabled={selectedCloudPathSet.has(cloudCurrentPath)}
+                          style={{ background: selectedCloudPathSet.has(cloudCurrentPath) ? 'rgba(0,212,180,0.1)' : 'none', border: '1px solid var(--border)', color: selectedCloudPathSet.has(cloudCurrentPath) ? 'var(--accent)' : 'var(--text-muted)', padding: '5px 8px', borderRadius: '7px', cursor: selectedCloudPathSet.has(cloudCurrentPath) ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
+                        >
+                          {selectedCloudPathSet.has(cloudCurrentPath) ? 'Current directory selected' : 'Select current directory'}
+                        </button>
+                      )}
+                    </div>
+                    <div style={hintStyle}>
+                      {loadedCloudItems.length} loaded{cloudHasMore ? ' · scroll for more' : ''}
+                    </div>
+                  </div>
+                )}
+
+                {cloudLoaded && (
+                  <div
+                    onScroll={handleCloudListScroll}
+                    style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}
+                  >
                     {visibleCloudFolders.map(folder => {
                       const checked = cloudSelection.includes(folder.path)
                       return (
@@ -1101,6 +1213,10 @@ export default function AddSourceModal({
                     {visibleCloudFolders.length === 0 && visibleCloudFiles.length === 0 && (
                       <div style={{ ...hintStyle, padding: '10px' }}>No items in this path.</div>
                     )}
+
+                    {cloudLoadingMore && (
+                      <div style={{ ...hintStyle, padding: '10px', borderTop: '1px solid var(--border)' }}>Loading more…</div>
+                    )}
                   </div>
                 )}
 
@@ -1126,7 +1242,12 @@ export default function AddSourceModal({
                       return (
                         <div key={path} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>{meta?.kind === 'folder' ? '[DIR]' : '[FILE]'}</span>
-                          <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{meta?.name ?? path}</span>
+                          <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                            {meta?.name ?? path}
+                            {meta?.kind === 'folder' && (
+                              <span style={{ color: 'var(--text-dim)', marginLeft: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>recursive</span>
+                            )}
+                          </span>
                           <button
                             type="button"
                             onClick={() => toggleCloudSelection(path, false, meta?.name ?? path, meta?.kind ?? 'file')}

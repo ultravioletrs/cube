@@ -121,6 +121,121 @@ func TestS3SourceProvider_ListAndDownload_Smoke(t *testing.T) {
 	}
 }
 
+func TestBrowseS3PathPagePaginatesFlatListing(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet ||
+			(r.URL.Path != "/docs" && r.URL.Path != "/docs/") ||
+			r.URL.Query().Get("list-type") != "2" {
+			http.Error(w, "not found", http.StatusNotFound)
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			return
+		}
+		if r.URL.Query().Get("max-keys") != "3" {
+			http.Error(w, "bad max-keys", http.StatusBadRequest)
+			t.Errorf("expected max-keys=3, got %q", r.URL.Query().Get("max-keys"))
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/xml")
+		switch r.URL.Query().Get("start-after") {
+		case "":
+			_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>docs</Name>
+  <Prefix></Prefix>
+  <KeyCount>3</KeyCount>
+  <MaxKeys>3</MaxKeys>
+  <Delimiter>/</Delimiter>
+  <IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>a.txt</Key>
+    <LastModified>2026-05-12T10:00:00.000Z</LastModified>
+    <ETag>"etag-a"</ETag>
+    <Size>12</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+  <Contents>
+    <Key>b.txt</Key>
+    <LastModified>2026-05-12T11:00:00.000Z</LastModified>
+    <ETag>"etag-b"</ETag>
+    <Size>21</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+  <CommonPrefixes>
+    <Prefix>c/</Prefix>
+  </CommonPrefixes>
+</ListBucketResult>`)
+		case "b.txt":
+			_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>docs</Name>
+  <Prefix></Prefix>
+  <KeyCount>2</KeyCount>
+  <MaxKeys>3</MaxKeys>
+  <Delimiter>/</Delimiter>
+  <IsTruncated>false</IsTruncated>
+  <CommonPrefixes>
+    <Prefix>c/</Prefix>
+  </CommonPrefixes>
+  <Contents>
+    <Key>d.txt</Key>
+    <LastModified>2026-05-12T12:00:00.000Z</LastModified>
+    <ETag>"etag-d"</ETag>
+    <Size>22</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+</ListBucketResult>`)
+		default:
+			http.Error(w, "bad start-after", http.StatusBadRequest)
+			t.Errorf("unexpected start-after %q", r.URL.Query().Get("start-after"))
+		}
+	}))
+	defer srv.Close()
+
+	srvURL, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatalf("parse httptest server url: %v", err)
+	}
+
+	cfg := domain.S3Config{
+		Endpoint:        srvURL.Host,
+		Region:          "us-east-1",
+		Bucket:          "docs",
+		AccessKeyID:     "test-access",
+		SecretAccessKey: "test-secret",
+		UseSSL:          testBoolPtr(false),
+		PathStyle:       testBoolPtr(true),
+	}
+
+	first, err := s3source.BrowseS3PathPage(context.Background(), cfg, "", 2, "")
+	if err != nil {
+		t.Fatalf("BrowseS3PathPage first page returned error: %v", err)
+	}
+	if len(first.Entries) != 2 || first.Entries[0].Path != "a.txt" || first.Entries[1].Path != "b.txt" {
+		t.Fatalf("unexpected first page: %#v", first.Entries)
+	}
+	if !first.HasMore || first.NextPageToken != "b.txt" {
+		t.Fatalf("expected first page to continue after b.txt, got has_more=%v token=%q", first.HasMore, first.NextPageToken)
+	}
+
+	second, err := s3source.BrowseS3PathPage(context.Background(), cfg, "", 2, first.NextPageToken)
+	if err != nil {
+		t.Fatalf("BrowseS3PathPage second page returned error: %v", err)
+	}
+	if second.HasMore || second.NextPageToken != "" {
+		t.Fatalf("expected second page to end, got has_more=%v token=%q", second.HasMore, second.NextPageToken)
+	}
+	if len(second.Entries) != 2 {
+		t.Fatalf("expected 2 second-page entries, got %d: %#v", len(second.Entries), second.Entries)
+	}
+	if !second.Entries[0].IsDir || second.Entries[0].Path != "c" {
+		t.Fatalf("expected directory c first on second page, got %#v", second.Entries[0])
+	}
+	if second.Entries[1].Path != "d.txt" {
+		t.Fatalf("expected d.txt second on second page, got %#v", second.Entries[1])
+	}
+}
+
 func testBoolPtr(v bool) *bool {
 	return &v
 }
