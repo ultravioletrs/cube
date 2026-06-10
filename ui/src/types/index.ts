@@ -54,6 +54,9 @@ export interface ChatMessage {
 export interface AppRecord {
   id: string
   sourceID?: string
+  sourceName?: string
+  sourceType?: SourceType
+  sourceStatus?: string
   name: string
   format: RecordFormat
   status: 'queued' | 'processing' | 'indexed' | 'failed' | 'cancelled'
@@ -67,6 +70,7 @@ export interface AppRecord {
   size?: string
   pages?: number | null
   url?: string
+  mimeType?: string
   folderPath?: string
   folderID?: string
 }

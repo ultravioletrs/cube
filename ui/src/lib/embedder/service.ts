@@ -5,6 +5,12 @@ import type { AppRecord, ChatMessage, Conversation, DriveSource, DriveSourceDraf
 interface RecordDTO {
   id: string
   source_id?: string
+  source?: {
+    id: string
+    name: string
+    source_type: string
+    status: string
+  }
   name: string
   format: string
   status: string
@@ -18,6 +24,7 @@ interface RecordDTO {
   size_bytes?: number | null
   pages?: number | null
   external_url?: string
+  mime_type?: string
   folder_path?: string | null
   folder_id?: string | null
 }
@@ -320,9 +327,14 @@ function toRecordFormat(format: string): RecordFormat {
 }
 
 function mapRecord(dto: RecordDTO): AppRecord {
+  const sourceType = dto.source?.source_type ? toSourceType(dto.source.source_type) : undefined
+
   return {
     id: dto.id,
-    sourceID: dto.source_id,
+    sourceID: dto.source?.id ?? dto.source_id,
+    sourceName: dto.source?.name,
+    sourceType,
+    sourceStatus: dto.source?.status,
     name: dto.name,
     format: toRecordFormat(dto.format),
     status: toRecordStatus(dto.status),
@@ -336,6 +348,7 @@ function mapRecord(dto: RecordDTO): AppRecord {
     pages: dto.pages ?? null,
     size: bytesToLabel(dto.size_bytes ?? undefined),
     url: dto.external_url || undefined,
+    mimeType: dto.mime_type || undefined,
     folderPath: dto.folder_path ?? undefined,
     folderID: dto.folder_id ?? undefined,
   }

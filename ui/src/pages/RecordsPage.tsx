@@ -8,6 +8,8 @@ import { imageIngestLabel, imageIngestStatusText, imageRecordSubtext } from '@/l
 import type { AppContext, AppRecord, RecordFormat } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import AddRecordModal from '@/components/AddRecordModal'
+import SourceProviderIcon from '@/components/SourceProviderIcon'
+import { sourceProviderLabel } from '@/lib/embedder/source-provider'
 
 const statusColors = {
   queued:     { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
@@ -18,6 +20,7 @@ const statusColors = {
 }
 
 const RECORD_POLL_INTERVAL_MS = 2500
+const RECORD_TABLE_MIN_WIDTH = '1180px'
 const statusFilterOptions: Array<{ value: AppRecord['status'] | 'all'; label: string }> = [
   { value: 'all', label: 'All statuses' },
   { value: 'indexed', label: 'Indexed' },
@@ -96,6 +99,70 @@ function RecordIcon({ record }: { record: AppRecord }) {
   if (record.format === 'image') return <ImageRecordIcon />
   if (record.format === 'link') return <LinkRecordIcon />
   return <DocBadge format={record.format} />
+}
+
+function recordFormatLabel(format: RecordFormat): string {
+  switch (format) {
+    case 'docx':
+      return 'DOCX'
+    case 'md':
+      return 'Markdown'
+    case 'pdf':
+      return 'PDF'
+    case 'text':
+      return 'Text'
+    case 'code':
+      return 'Code'
+    case 'image':
+      return 'Image'
+    case 'link':
+      return 'Link'
+    default:
+      return String(format).toUpperCase()
+  }
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/[-_.+]/)
+    .filter(Boolean)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function recordFileType(record: AppRecord): string {
+  const mime = record.mimeType?.toLowerCase()
+  if (!mime) return recordFormatLabel(record.format)
+
+  const mimeLabels: Record<string, string> = {
+    'application/json': 'JSON',
+    'application/msword': 'DOC',
+    'application/pdf': 'PDF',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+    'text/csv': 'CSV',
+    'text/html': 'HTML',
+    'text/markdown': 'Markdown',
+    'text/plain': 'Text',
+  }
+  if (mimeLabels[mime]) return mimeLabels[mime]
+  if (mime.startsWith('image/')) return mime.slice('image/'.length).toUpperCase()
+  if (mime.startsWith('text/')) return titleCase(mime.slice('text/'.length))
+
+  const subtype = mime.split('/')[1] ?? ''
+  if (!subtype || subtype === 'octet-stream') return recordFormatLabel(record.format)
+  const vendorSuffix = subtype.split('.').at(-1)?.split('+')[0]
+  return vendorSuffix ? titleCase(vendorSuffix) : recordFormatLabel(record.format)
+}
+
+function recordSourceLabel(record: AppRecord): string {
+  if (record.sourceName) return record.sourceName
+  if (record.sourceType) return sourceProviderLabel(record.sourceType)
+  return '—'
+}
+
+function recordFolderLabel(record: AppRecord): string {
+  const folder = record.folderPath?.trim()
+  return folder ? folder : '—'
 }
 
 function recordSubtext(record: AppRecord): string {
@@ -529,10 +596,19 @@ export default function RecordsPage() {
     return () => window.clearInterval(timer)
   }, [accessToken, records, refreshRecords])
 
-  const filtered = records.filter(r =>
-    r.name.toLowerCase().includes(search.toLowerCase()) ||
-    (r.url ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+  const searchTerm = search.trim().toLowerCase()
+  const filtered = records.filter(r => {
+    if (!searchTerm) return true
+    return [
+      r.name,
+      r.url,
+      r.sourceName,
+      r.sourceType ? sourceProviderLabel(r.sourceType) : '',
+      r.folderPath,
+      r.mimeType,
+      recordFormatLabel(r.format),
+    ].some(value => (value ?? '').toLowerCase().includes(searchTerm))
+  })
   const filteredIds = filtered.map(record => record.id)
   const selectedRecords = records.filter(record => selectedRecordIds.has(record.id))
   const selectedRecordCount = selectedRecords.length
@@ -677,46 +753,62 @@ export default function RecordsPage() {
     }
   }
 
-  const renderRecordRow = (record: AppRecord) => (
-    <div
-      key={record.id}
-      onClick={() => setSelectedId(selectedId === record.id ? null : record.id)}
-      style={{ display: 'flex', alignItems: 'center', padding: '14px 32px', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.15s ease', gap: '8px', background: selectedId === record.id ? 'rgba(0,212,180,0.05)' : 'transparent', borderLeft: selectedId === record.id ? '2px solid var(--accent)' : '2px solid transparent' }}
-      onMouseEnter={e => { if (selectedId !== record.id) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
-      onMouseLeave={e => { if (selectedId !== record.id) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-    >
-      <button
-        onClick={e => toggleRecordSelection(e, record.id)}
-        title={selectedRecordIds.has(record.id) ? 'Deselect record' : 'Select record'}
-        style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0 }}
+  const renderRecordRow = (record: AppRecord) => {
+    const sourceLabel = recordSourceLabel(record)
+    const sourceTitle = record.sourceType ? `${sourceLabel} · ${sourceProviderLabel(record.sourceType)}` : sourceLabel
+    const folderLabel = recordFolderLabel(record)
+    const fileType = recordFileType(record)
+    const typeTitle = record.mimeType ? `${fileType} · ${record.mimeType}` : fileType
+
+    return (
+      <div
+        key={record.id}
+        onClick={() => setSelectedId(selectedId === record.id ? null : record.id)}
+        style={{ display: 'flex', alignItems: 'center', padding: '14px 32px', borderBottom: '1px solid var(--border)', cursor: 'pointer', transition: 'all 0.15s ease', gap: '8px', background: selectedId === record.id ? 'rgba(0,212,180,0.05)' : 'transparent', borderLeft: selectedId === record.id ? '2px solid var(--accent)' : '2px solid transparent', minWidth: RECORD_TABLE_MIN_WIDTH }}
+        onMouseEnter={e => { if (selectedId !== record.id) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.03)' }}
+        onMouseLeave={e => { if (selectedId !== record.id) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
       >
-        <span style={{ width: '13px', height: '13px', borderRadius: '3px', border: `1px solid ${selectedRecordIds.has(record.id) ? 'var(--accent)' : 'var(--border)'}`, background: selectedRecordIds.has(record.id) ? 'var(--accent)' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-          {selectedRecordIds.has(record.id) && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M2 4.5l1.5 1.5L7 2.5" stroke="#070c16" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-        </span>
-      </button>
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-        <RecordIcon record={record} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13.5px', color: 'var(--text)', fontWeight: '500', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '380px' }}>{record.name}</div>
-          <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '380px' }}>{recordSubtext(record)}</div>
+        <button
+          onClick={e => toggleRecordSelection(e, record.id)}
+          title={selectedRecordIds.has(record.id) ? 'Deselect record' : 'Select record'}
+          style={{ width: '28px', height: '28px', background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0 }}
+        >
+          <span style={{ width: '13px', height: '13px', borderRadius: '3px', border: `1px solid ${selectedRecordIds.has(record.id) ? 'var(--accent)' : 'var(--border)'}`, background: selectedRecordIds.has(record.id) ? 'var(--accent)' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+            {selectedRecordIds.has(record.id) && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M2 4.5l1.5 1.5L7 2.5" stroke="#070c16" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+          </span>
+        </button>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+          <RecordIcon record={record} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13.5px', color: 'var(--text)', fontWeight: '500', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '380px' }}>{record.name}</div>
+            <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '380px' }}>{recordSubtext(record)}</div>
+          </div>
         </div>
+        <div title={sourceTitle} style={{ width: '180px', display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, color: sourceLabel === '—' ? 'var(--text-dim)' : 'var(--text-muted)' }}>
+          {record.sourceType && <SourceProviderIcon sourceType={record.sourceType} size={14} />}
+          <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12.5px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sourceLabel}</span>
+        </div>
+        <div title={folderLabel === '—' ? undefined : folderLabel} style={{ width: '180px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10.5px', color: folderLabel === '—' ? 'var(--text-dim)' : 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{folderLabel}</div>
+        <div style={{ width: '96px' }}>
+          <span title={typeTitle} style={{ display: 'inline-flex', maxWidth: '88px', padding: '3px 7px', borderRadius: '6px', border: '1px solid var(--border)', background: 'rgba(255,255,255,0.035)', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', boxSizing: 'border-box' }}>{fileType}</span>
+        </div>
+        <div style={{ width: '100px' }}><StatusBadge record={record} /></div>
+        <div style={{ width: '100px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>{recordDetail(record)}</div>
+        <div style={{ width: '110px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)' }}>{record.createdAt}</div>
+        <button
+          onClick={e => { void handleDeleteRecord(e, record.id) }}
+          title="Delete record"
+          style={{ width: '28px', height: '28px', background: 'none', border: '1px solid transparent', borderRadius: '6px', cursor: 'pointer', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#ff5050'; (e.currentTarget as HTMLButtonElement).style.color = '#ff5050' }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-dim)' }}
+        >
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.7 7.5A1 1 0 004.7 12.5h4.6a1 1 0 001-.95L11 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
       </div>
-      <div style={{ width: '100px' }}><StatusBadge record={record} /></div>
-      <div style={{ width: '100px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-muted)' }}>{recordDetail(record)}</div>
-      <div style={{ width: '110px', fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)' }}>{record.createdAt}</div>
-      <button
-        onClick={e => { void handleDeleteRecord(e, record.id) }}
-        title="Delete record"
-        style={{ width: '28px', height: '28px', background: 'none', border: '1px solid transparent', borderRadius: '6px', cursor: 'pointer', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.15s' }}
-        onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#ff5050'; (e.currentTarget as HTMLButtonElement).style.color = '#ff5050' }}
-        onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-dim)' }}
-      >
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-          <path d="M2 4h10M5 4V2.5h4V4M5.5 6.5v4M8.5 6.5v4M3 4l.7 7.5A1 1 0 004.7 12.5h4.6a1 1 0 001-.95L11 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-      </button>
-    </div>
-  )
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden', height: '100%' }}>
@@ -845,25 +937,29 @@ export default function RecordsPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', padding: '10px 32px', borderBottom: '1px solid var(--border)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '0.06em', flexShrink: 0 }}>
-          <button
-            onClick={toggleFilteredSelection}
-            disabled={filteredIds.length === 0}
-            title={allFilteredSelected ? 'Clear visible selection' : 'Select visible records'}
-            style={{ width: '28px', height: '20px', marginRight: '8px', background: 'none', border: 'none', color: 'var(--text-dim)', cursor: filteredIds.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
-          >
-            <span style={{ width: '12px', height: '12px', borderRadius: '3px', border: `1px solid ${allFilteredSelected ? 'var(--accent)' : 'var(--border)'}`, background: allFilteredSelected ? 'var(--accent)' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
-              {allFilteredSelected && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M2 4.5l1.5 1.5L7 2.5" stroke="#070c16" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-            </span>
-          </button>
-          <span style={{ flex: 1 }}>Record</span>
-          <span style={{ width: '100px' }}>Status</span>
-          <span style={{ width: '100px' }}>Details</span>
-          <span style={{ width: '110px' }}>Added</span>
-          <span style={{ width: '36px' }} />
-        </div>
+        <div style={{ flex: 1, minHeight: 0, overflowX: 'auto', overflowY: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', padding: '10px 32px', borderBottom: '1px solid var(--border)', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', letterSpacing: '0.06em', flexShrink: 0, minWidth: RECORD_TABLE_MIN_WIDTH }}>
+            <button
+              onClick={toggleFilteredSelection}
+              disabled={filteredIds.length === 0}
+              title={allFilteredSelected ? 'Clear visible selection' : 'Select visible records'}
+              style={{ width: '28px', height: '20px', marginRight: '8px', background: 'none', border: 'none', color: 'var(--text-dim)', cursor: filteredIds.length === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+            >
+              <span style={{ width: '12px', height: '12px', borderRadius: '3px', border: `1px solid ${allFilteredSelected ? 'var(--accent)' : 'var(--border)'}`, background: allFilteredSelected ? 'var(--accent)' : 'transparent', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                {allFilteredSelected && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M2 4.5l1.5 1.5L7 2.5" stroke="#070c16" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              </span>
+            </button>
+            <span style={{ flex: 1 }}>Record</span>
+            <span style={{ width: '180px' }}>Source</span>
+            <span style={{ width: '180px' }}>Folder</span>
+            <span style={{ width: '96px' }}>Type</span>
+            <span style={{ width: '100px' }}>Status</span>
+            <span style={{ width: '100px' }}>Details</span>
+            <span style={{ width: '110px' }}>Added</span>
+            <span style={{ width: '36px' }} />
+          </div>
 
-        <div style={{ overflowY: 'auto', flex: 1 }}>
+          <div style={{ overflowY: 'auto', flex: 1, minWidth: RECORD_TABLE_MIN_WIDTH }}>
           {!groupByFolder && filtered.map(renderRecordRow)}
 
           {groupByFolder && folderGroups.map(([key, recs]) => {
@@ -891,6 +987,7 @@ export default function RecordsPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {selected && (
