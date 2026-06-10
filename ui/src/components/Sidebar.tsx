@@ -374,9 +374,9 @@ export default function Sidebar({ activeWorkspace }: { activeWorkspace: ActiveWo
 
       {/* Navigation */}
       <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0', padding: '0 8px', overflowY: 'auto' }}>
+        <NavGroup label="AI" items={aiItems} currentPath={location.pathname} />
         <NavGroup label="Overview" items={overviewItems} currentPath={location.pathname} />
         <NavGroup label="Knowledge Base" items={knowledgeItems} currentPath={location.pathname} />
-        <NavGroup label="AI" items={aiItems} currentPath={location.pathname} />
         <NavGroup label="Platform" items={platform} currentPath={location.pathname} />
         <div style={{ flex: 1 }} />
         <NavGroup label="Account" items={bottomItems} currentPath={location.pathname} />
