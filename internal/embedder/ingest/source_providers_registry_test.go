@@ -12,23 +12,23 @@ import (
 
 func TestSourceProviderRegistry_AliasResolution(t *testing.T) {
 	reg := NewSourceProviderRegistry(&testSourceProvider{
-		tp: domain.SourceTypeRclone,
+		tp: domain.SourceTypeMicrosoft,
 		caps: SourceProviderCapabilities{
 			SupportsList:     true,
 			SupportsDownload: true,
 		},
 	})
-	reg.RegisterAlias(domain.SourceTypeDropbox, domain.SourceTypeRclone)
+	reg.RegisterAlias(domain.SourceTypeOneDrive, domain.SourceTypeMicrosoft)
 
-	provider, ok := reg.Provider(domain.SourceTypeDropbox)
+	provider, ok := reg.Provider(domain.SourceTypeOneDrive)
 	if !ok {
 		t.Fatal("expected alias provider to resolve")
 	}
-	if provider.Type() != domain.SourceTypeRclone {
-		t.Fatalf("expected alias to resolve to rclone provider, got %q", provider.Type())
+	if provider.Type() != domain.SourceTypeMicrosoft {
+		t.Fatalf("expected alias to resolve to microsoft provider, got %q", provider.Type())
 	}
 
-	caps, ok := reg.Capabilities(domain.SourceTypeDropbox)
+	caps, ok := reg.Capabilities(domain.SourceTypeOneDrive)
 	if !ok {
 		t.Fatal("expected capabilities to resolve via alias")
 	}

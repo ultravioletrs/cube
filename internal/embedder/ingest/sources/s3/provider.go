@@ -17,6 +17,7 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sourcepath"
 )
 
 type sourceProvider struct{}
@@ -94,7 +95,7 @@ func (p *sourceProvider) DownloadRecordContent(
 		return nil, err
 	}
 	bucket := strings.TrimSpace(cfg.Bucket)
-	obj, err := client.GetObject(ctx, bucket, normalizeRclonePath(rec.ExternalID), minio.GetObjectOptions{})
+	obj, err := client.GetObject(ctx, bucket, sourcepath.Normalize(rec.ExternalID), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -124,10 +125,10 @@ func BrowseS3Path(ctx context.Context, cfg domain.S3Config, currentPath string) 
 		return nil, err
 	}
 	bucket := strings.TrimSpace(cfg.Bucket)
-	currentPath = normalizeRclonePath(currentPath)
+	currentPath = sourcepath.Normalize(currentPath)
 
-	root := normalizeRclonePath(cfg.RootPath)
-	if root != "" && !isPathWithinRoot(root, currentPath) {
+	root := sourcepath.Normalize(cfg.RootPath)
+	if root != "" && !sourcepath.IsWithinRoot(root, currentPath) {
 		return nil, fmt.Errorf("browse path %q is outside root_path %q", currentPath, root)
 	}
 
@@ -154,7 +155,7 @@ func BrowseS3Path(ctx context.Context, cfg domain.S3Config, currentPath string) 
 		segment := trimmed
 		if idx := strings.Index(segment, "/"); idx >= 0 {
 			segment = segment[:idx]
-			childPath := normalizeRclonePath(path.Join(currentPath, segment))
+			childPath := sourcepath.Normalize(path.Join(currentPath, segment))
 			children[childPath] = S3BrowseEntry{
 				Name:  segment,
 				Path:  childPath,
@@ -163,7 +164,7 @@ func BrowseS3Path(ctx context.Context, cfg domain.S3Config, currentPath string) 
 			continue
 		}
 
-		childPath := normalizeRclonePath(path.Join(currentPath, segment))
+		childPath := sourcepath.Normalize(path.Join(currentPath, segment))
 		modified := obj.LastModified.UTC()
 		children[childPath] = S3BrowseEntry{
 			Name:       segment,
@@ -198,8 +199,8 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile,
 		return nil, fmt.Errorf("s3 bucket is required")
 	}
 
-	rootPath := normalizeRclonePath(cfg.RootPath)
-	scopes, err := normalizeRcloneScopes(rootPath, cfg.ScopePaths)
+	rootPath := sourcepath.Normalize(cfg.RootPath)
+	scopes, err := sourcepath.NormalizeScopes(rootPath, cfg.ScopePaths)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +222,7 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile,
 			if obj.Err != nil {
 				return nil, obj.Err
 			}
-			key := normalizeRclonePath(obj.Key)
+			key := sourcepath.Normalize(obj.Key)
 			if key == "" {
 				continue
 			}
@@ -329,7 +330,7 @@ func filterSourceFilesBySelectedPaths(files []ingest.SourceFile, selectedPaths [
 	}
 	selected := make(map[string]struct{}, len(selectedPaths))
 	for _, p := range selectedPaths {
-		p = normalizeRclonePath(p)
+		p = sourcepath.Normalize(p)
 		if p == "" {
 			continue
 		}
@@ -341,71 +342,9 @@ func filterSourceFilesBySelectedPaths(files []ingest.SourceFile, selectedPaths [
 
 	filtered := make([]ingest.SourceFile, 0, len(files))
 	for _, file := range files {
-		if _, ok := selected[normalizeRclonePath(file.ExternalRef)]; ok {
+		if _, ok := selected[sourcepath.Normalize(file.ExternalRef)]; ok {
 			filtered = append(filtered, file)
 		}
 	}
 	return filtered
-}
-
-func isPathWithinRoot(rootPath, scopedPath string) bool {
-	rootPath = normalizeRclonePath(rootPath)
-	scopedPath = normalizeRclonePath(scopedPath)
-	if rootPath == "" || scopedPath == "" {
-		return true
-	}
-	rootAbs := "/" + rootPath
-	scopeAbs := "/" + scopedPath
-	return scopeAbs == rootAbs || strings.HasPrefix(scopeAbs, rootAbs+"/")
-}
-
-func normalizeRclonePath(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "." || value == "/" {
-		return ""
-	}
-	clean := path.Clean("/" + strings.TrimPrefix(value, "/"))
-	if clean == "/" {
-		return ""
-	}
-	return strings.TrimPrefix(clean, "/")
-}
-
-func normalizeRcloneScopes(rootPath string, scopePaths []string) ([]string, error) {
-	rootPath = normalizeRclonePath(rootPath)
-	rootAbs := "/" + rootPath
-	if rootPath == "" {
-		rootAbs = "/"
-	}
-	if len(scopePaths) == 0 {
-		if rootPath == "" {
-			return []string{""}, nil
-		}
-		return []string{rootPath}, nil
-	}
-
-	seen := make(map[string]struct{}, len(scopePaths))
-	out := make([]string, 0, len(scopePaths))
-	for _, raw := range scopePaths {
-		scope := normalizeRclonePath(raw)
-		scopeAbs := "/" + scope
-		if scope == "" {
-			scopeAbs = "/"
-		}
-
-		if rootAbs != "/" {
-			if scopeAbs != rootAbs && !strings.HasPrefix(scopeAbs, rootAbs+"/") {
-				return nil, fmt.Errorf("scope path %q is outside approved root %q", raw, rootPath)
-			}
-		}
-
-		if _, ok := seen[scope]; ok {
-			continue
-		}
-		seen[scope] = struct{}{}
-		out = append(out, scope)
-	}
-
-	sort.Strings(out)
-	return out, nil
 }

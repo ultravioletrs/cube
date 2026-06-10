@@ -65,9 +65,7 @@ function SourceRow(
     ? 'Google Drive'
     : source.sourceType === 's3'
       ? 'S3'
-      : source.sourceType === 'microsoft'
-        ? 'OneDrive / SharePoint'
-        : 'Cloud Storage'
+      : 'OneDrive / SharePoint'
   function pathScope(rootPath?: string, selectedPaths?: string[]): string {
     if (selectedPaths && selectedPaths.length > 0) return `${selectedPaths.length} selected paths`
     return rootPath || 'full scope'
@@ -80,9 +78,7 @@ function SourceRow(
         : 'full scope')
     : source.sourceType === 's3'
       ? pathScope(source.s3?.rootPath, source.s3?.selectedPaths)
-      : source.sourceType === 'microsoft'
-        ? pathScope(source.microsoft?.rootPath, source.microsoft?.selectedPaths)
-        : source.rcloneRootPath || source.rcloneScopePaths?.join(', ') || '—'
+      : pathScope(source.microsoft?.rootPath, source.microsoft?.selectedPaths)
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '14px 32px', borderBottom: '1px solid var(--border)', gap: '8px', borderLeft: '2px solid transparent' }}>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>

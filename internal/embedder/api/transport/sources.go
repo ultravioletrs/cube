@@ -38,7 +38,6 @@ func MountSources(
 	googleOAuthClientSecret string,
 ) {
 	oauth := newGoogleOAuth(googleOAuthClientID, googleOAuthClientSecret)
-	rclone := ingest.NewCommandRcloneClient("", "", 0)
 
 	r.Get("/api/v1/sources", listSources(svc))
 	r.Post("/api/v1/sources", createSource(svc, oauth))
@@ -49,8 +48,6 @@ func MountSources(
 	r.Post("/api/v1/sources/s3/files", listS3Files())
 	r.Post("/api/v1/sources/microsoft/browse", browseMicrosoftPath())
 	r.Post("/api/v1/sources/microsoft/files", listMicrosoftFiles())
-	r.Post("/api/v1/sources/rclone/browse", browseRclonePath(rclone))
-	r.Post("/api/v1/sources/rclone/files", listRcloneFiles(rclone))
 	r.Post("/api/v1/sources/{id}/sync", syncSource(syncSvc, trigger))
 	r.Get("/api/v1/sources/{id}", getSource(svc))
 	r.Put("/api/v1/sources/{id}/credentials", updateSourceCredentials(svc))
@@ -255,85 +252,6 @@ func listDriveFiles(oauth *googleOAuth) http.HandlerFunc {
 			Files:          toFileResponses(files),
 			Folders:        []fileResponse{},
 			RequestedScope: cfg.FolderID,
-		}
-		writeJSON(w, http.StatusOK, resp)
-	}
-}
-
-func listRcloneFiles(rclone ingest.RcloneClient) http.HandlerFunc {
-	type request struct {
-		Remote     string   `json:"remote"`
-		RootPath   string   `json:"root_path,omitempty"`
-		ScopePaths []string `json:"scope_paths,omitempty"`
-	}
-	type fileResponse struct {
-		ExternalID   string `json:"external_id"`
-		Name         string `json:"name"`
-		Path         string `json:"path"`
-		MimeType     string `json:"mime_type"`
-		Size         int64  `json:"size"`
-		ModifiedTime string `json:"modified_time,omitempty"`
-	}
-	type response struct {
-		Files []fileResponse `json:"files"`
-	}
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if rclone == nil {
-			writeJSON(w, http.StatusUnprocessableEntity, errBody("rclone source browse is not configured"))
-			return
-		}
-
-		var req request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
-			return
-		}
-
-		req.Remote = strings.TrimSpace(req.Remote)
-		req.RootPath = strings.TrimSpace(req.RootPath)
-		scopePaths := make([]string, 0, len(req.ScopePaths))
-		for _, scope := range req.ScopePaths {
-			scope = strings.TrimSpace(scope)
-			if scope == "" {
-				continue
-			}
-			scopePaths = append(scopePaths, scope)
-		}
-		if req.Remote == "" {
-			writeJSON(w, http.StatusBadRequest, errBody("rclone remote is required"))
-			return
-		}
-		if req.RootPath == "" && len(scopePaths) == 0 {
-			writeJSON(w, http.StatusBadRequest, errBody("rclone root_path or scope_paths is required"))
-			return
-		}
-
-		files, err := rclone.ListFiles(r.Context(), ingest.RcloneListRequest{
-			UserID:     auth.UserID(r.Context()),
-			SourceID:   "preview",
-			Remote:     req.Remote,
-			RootPath:   req.RootPath,
-			ScopePaths: scopePaths,
-		})
-		if err != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
-			return
-		}
-
-		resp := response{Files: make([]fileResponse, 0, len(files))}
-		for _, file := range files {
-			item := fileResponse{
-				ExternalID: file.ExternalID,
-				Name:       file.Name,
-				Path:       file.Path,
-				MimeType:   file.MimeType,
-				Size:       file.Size,
-			}
-			if file.ModifiedAt != nil {
-				item.ModifiedTime = file.ModifiedAt.UTC().Format(time.RFC3339)
-			}
-			resp.Files = append(resp.Files, item)
 		}
 		writeJSON(w, http.StatusOK, resp)
 	}
@@ -673,96 +591,6 @@ func browseMicrosoftPath() http.HandlerFunc {
 			}
 			resp.Files = append(resp.Files, item)
 		}
-		writeJSON(w, http.StatusOK, resp)
-	}
-}
-
-func browseRclonePath(rclone ingest.RcloneClient) http.HandlerFunc {
-	type request struct {
-		Remote string `json:"remote"`
-		Path   string `json:"path,omitempty"`
-	}
-	type folderResponse struct {
-		Name string `json:"name"`
-		Path string `json:"path"`
-	}
-	type fileResponse struct {
-		Name         string `json:"name"`
-		Path         string `json:"path"`
-		MimeType     string `json:"mime_type"`
-		Size         int64  `json:"size"`
-		ModifiedTime string `json:"modified_time,omitempty"`
-	}
-	type response struct {
-		CurrentPath string           `json:"current_path"`
-		ParentPath  string           `json:"parent_path,omitempty"`
-		Folders     []folderResponse `json:"folders"`
-		Files       []fileResponse   `json:"files"`
-	}
-
-	return func(w http.ResponseWriter, r *http.Request) {
-		if rclone == nil {
-			writeJSON(w, http.StatusUnprocessableEntity, errBody("rclone source browse is not configured"))
-			return
-		}
-
-		var req request
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeJSON(w, http.StatusBadRequest, errBody("invalid request body"))
-			return
-		}
-
-		req.Remote = strings.TrimSpace(req.Remote)
-		req.Path = strings.TrimSpace(req.Path)
-		if req.Remote == "" {
-			writeJSON(w, http.StatusBadRequest, errBody("rclone remote is required"))
-			return
-		}
-
-		entries, err := rclone.Browse(r.Context(), ingest.RcloneBrowseRequest{
-			UserID:   auth.UserID(r.Context()),
-			SourceID: "preview",
-			Remote:   req.Remote,
-			Path:     req.Path,
-		})
-		if err != nil {
-			writeJSON(w, http.StatusUnprocessableEntity, errBody(err.Error()))
-			return
-		}
-
-		currentPath := normalizeBrowsePath(req.Path)
-		resp := response{
-			CurrentPath: currentPath,
-			Folders:     make([]folderResponse, 0, len(entries)),
-			Files:       make([]fileResponse, 0, len(entries)),
-		}
-		if currentPath != "" {
-			parent := path.Dir("/" + currentPath)
-			if parent != "/" {
-				resp.ParentPath = strings.TrimPrefix(parent, "/")
-			}
-		}
-
-		for _, entry := range entries {
-			if entry.IsDir {
-				resp.Folders = append(resp.Folders, folderResponse{
-					Name: entry.Name,
-					Path: entry.Path,
-				})
-				continue
-			}
-			item := fileResponse{
-				Name:     entry.Name,
-				Path:     entry.Path,
-				MimeType: entry.MimeType,
-				Size:     entry.Size,
-			}
-			if entry.ModifiedAt != nil {
-				item.ModifiedTime = entry.ModifiedAt.UTC().Format(time.RFC3339)
-			}
-			resp.Files = append(resp.Files, item)
-		}
-
 		writeJSON(w, http.StatusOK, resp)
 	}
 }

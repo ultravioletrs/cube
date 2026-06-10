@@ -8,11 +8,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path"
 	"sort"
 	"strings"
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sourcepath"
 )
 
 type sourcesService struct {
@@ -45,13 +45,6 @@ func (s *sourcesService) Create(ctx context.Context, src domain.Source) (domain.
 	}
 	if src.Type == domain.SourceTypeGoogleDrive {
 		sanitized, err := sanitizeGoogleDriveConfig(src.Config)
-		if err != nil {
-			return domain.Source{}, err
-		}
-		src.Config = sanitized
-	}
-	if isRcloneBackedSourceType(src.Type) {
-		sanitized, err := sanitizeRcloneConfig(src.Type, src.Config)
 		if err != nil {
 			return domain.Source{}, err
 		}
@@ -257,9 +250,9 @@ func sanitizeS3Config(raw json.RawMessage) (json.RawMessage, error) {
 	cfg.AccessKeyID = strings.TrimSpace(cfg.AccessKeyID)
 	cfg.SecretAccessKey = strings.TrimSpace(cfg.SecretAccessKey)
 	cfg.SessionToken = strings.TrimSpace(cfg.SessionToken)
-	cfg.RootPath = normalizeRclonePath(cfg.RootPath)
-	cfg.ScopePaths = normalizeRcloneScopeList(cfg.ScopePaths)
-	cfg.SelectedPaths = normalizeRclonePathList(cfg.SelectedPaths)
+	cfg.RootPath = sourcepath.Normalize(cfg.RootPath)
+	cfg.ScopePaths = sourcepath.NormalizeList(cfg.ScopePaths)
+	cfg.SelectedPaths = sourcepath.NormalizeList(cfg.SelectedPaths)
 	cfg.ConfigRef = strings.TrimSpace(cfg.ConfigRef)
 
 	if cfg.UseSSL == nil {
@@ -284,10 +277,10 @@ func sanitizeS3Config(raw json.RawMessage) (json.RawMessage, error) {
 	if cfg.AccessKeyID != "" && cfg.SecretAccessKey == "" {
 		return nil, fmt.Errorf("s3 secret_access_key is required when access_key_id is set")
 	}
-	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.ScopePaths); err != nil {
+	if err := sourcepath.ValidateScopesWithinRoot(cfg.RootPath, cfg.ScopePaths); err != nil {
 		return nil, fmt.Errorf("invalid s3 scope_paths: %w", err)
 	}
-	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.SelectedPaths); err != nil {
+	if err := sourcepath.ValidateScopesWithinRoot(cfg.RootPath, cfg.SelectedPaths); err != nil {
 		return nil, fmt.Errorf("invalid s3 selected_paths: %w", err)
 	}
 
@@ -333,70 +326,6 @@ func boolPtr(v bool) *bool {
 	return &v
 }
 
-func isRcloneBackedSourceType(t domain.SourceType) bool {
-	return domain.IsRcloneBackedSourceType(t)
-}
-
-func sanitizeRcloneConfig(sourceType domain.SourceType, raw json.RawMessage) (json.RawMessage, error) {
-	var cfg domain.RcloneConfig
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &cfg); err != nil {
-			return nil, fmt.Errorf("decode rclone config: %w", err)
-		}
-	}
-
-	cfg.Backend = strings.ToLower(strings.TrimSpace(cfg.Backend))
-	cfg.Remote = strings.TrimSpace(cfg.Remote)
-	cfg.RootPath = normalizeRclonePath(cfg.RootPath)
-	cfg.ScopePaths = normalizeRcloneScopeList(cfg.ScopePaths)
-	cfg.SelectedPaths = normalizeRclonePathList(cfg.SelectedPaths)
-	cfg.ConfigRef = strings.TrimSpace(cfg.ConfigRef)
-
-	if cfg.Backend != "" && !isValidRcloneBackendName(cfg.Backend) {
-		return nil, fmt.Errorf("rclone backend %q is invalid", cfg.Backend)
-	}
-	if sourceType == domain.SourceTypeDropbox {
-		cfg.Backend = "dropbox"
-		if cfg.Remote == "" {
-			cfg.Remote = "dropbox"
-		}
-	}
-	if cfg.Remote == "" {
-		return nil, fmt.Errorf("rclone remote is required")
-	}
-	if cfg.RootPath == "" && len(cfg.ScopePaths) == 0 && len(cfg.SelectedPaths) == 0 {
-		return nil, fmt.Errorf("rclone root_path, scope_paths or selected_paths is required")
-	}
-	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.ScopePaths); err != nil {
-		return nil, err
-	}
-	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.SelectedPaths); err != nil {
-		return nil, err
-	}
-
-	sanitized, err := json.Marshal(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("encode rclone config: %w", err)
-	}
-	return sanitized, nil
-}
-
-func isValidRcloneBackendName(value string) bool {
-	if value == "" {
-		return false
-	}
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z':
-		case r >= '0' && r <= '9':
-		case r == '_', r == '-', r == '+':
-		default:
-			return false
-		}
-	}
-	return true
-}
-
 func sanitizeMicrosoftConfig(raw json.RawMessage) (json.RawMessage, error) {
 	var cfg domain.MicrosoftConfig
 	if len(raw) > 0 {
@@ -412,18 +341,18 @@ func sanitizeMicrosoftConfig(raw json.RawMessage) (json.RawMessage, error) {
 	cfg.RefreshToken = normalizeOAuthValue(cfg.RefreshToken)
 	cfg.DriveID = strings.TrimSpace(cfg.DriveID)
 	cfg.SiteID = strings.TrimSpace(cfg.SiteID)
-	cfg.RootPath = normalizeRclonePath(cfg.RootPath)
-	cfg.ScopePaths = normalizeRcloneScopeList(cfg.ScopePaths)
-	cfg.SelectedPaths = normalizeRclonePathList(cfg.SelectedPaths)
+	cfg.RootPath = sourcepath.Normalize(cfg.RootPath)
+	cfg.ScopePaths = sourcepath.NormalizeList(cfg.ScopePaths)
+	cfg.SelectedPaths = sourcepath.NormalizeList(cfg.SelectedPaths)
 	cfg.ConfigRef = strings.TrimSpace(cfg.ConfigRef)
 
 	if cfg.RootPath == "" && len(cfg.ScopePaths) == 0 && len(cfg.SelectedPaths) == 0 {
 		return nil, fmt.Errorf("microsoft root_path, scope_paths or selected_paths is required")
 	}
-	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.ScopePaths); err != nil {
+	if err := sourcepath.ValidateScopesWithinRoot(cfg.RootPath, cfg.ScopePaths); err != nil {
 		return nil, fmt.Errorf("invalid microsoft scope_paths: %w", err)
 	}
-	if err := validateRcloneScopesWithinRoot(cfg.RootPath, cfg.SelectedPaths); err != nil {
+	if err := sourcepath.ValidateScopesWithinRoot(cfg.RootPath, cfg.SelectedPaths); err != nil {
 		return nil, fmt.Errorf("invalid microsoft selected_paths: %w", err)
 	}
 
@@ -452,81 +381,4 @@ func sanitizeMicrosoftConfig(raw json.RawMessage) (json.RawMessage, error) {
 		return nil, fmt.Errorf("encode microsoft config: %w", err)
 	}
 	return sanitized, nil
-}
-
-func normalizeRclonePath(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "." || value == "/" {
-		return ""
-	}
-	clean := path.Clean("/" + strings.TrimPrefix(value, "/"))
-	if clean == "/" {
-		return ""
-	}
-	return strings.TrimPrefix(clean, "/")
-}
-
-func normalizeRcloneScopeList(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	set := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		scope := normalizeRclonePath(value)
-		if scope == "" {
-			continue
-		}
-		set[scope] = struct{}{}
-	}
-	if len(set) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(set))
-	for scope := range set {
-		out = append(out, scope)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func normalizeRclonePathList(values []string) []string {
-	if len(values) == 0 {
-		return nil
-	}
-	set := make(map[string]struct{}, len(values))
-	for _, value := range values {
-		item := normalizeRclonePath(value)
-		if item == "" {
-			continue
-		}
-		set[item] = struct{}{}
-	}
-	if len(set) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(set))
-	for item := range set {
-		out = append(out, item)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func validateRcloneScopesWithinRoot(rootPath string, scopePaths []string) error {
-	rootPath = normalizeRclonePath(rootPath)
-	if rootPath == "" || len(scopePaths) == 0 {
-		return nil
-	}
-	rootAbs := "/" + rootPath
-
-	for _, scope := range scopePaths {
-		scopeAbs := "/" + normalizeRclonePath(scope)
-		if scopeAbs == "/" {
-			continue
-		}
-		if scopeAbs != rootAbs && !strings.HasPrefix(scopeAbs, rootAbs+"/") {
-			return fmt.Errorf("rclone scope path %q is outside root_path %q", scope, rootPath)
-		}
-	}
-	return nil
 }

@@ -2,7 +2,7 @@
 
 Cube Embedder is the RAG ingestion and retrieval service in Cube AI. It manages:
 
-- source registration (`google_drive`, `microsoft`, `s3`, plus `rclone` fallback types)
+- source registration (`google_drive`, `s3`, `microsoft`/`onedrive`/`sharepoint`)
 - record ingestion (including direct uploads)
 - chunking and embedding
 - user-scoped vector retrieval
@@ -92,10 +92,6 @@ The service is configured via `EMBEDDER_*` environment variables (see `docker/lo
 | `EMBEDDER_OBJECT_STORAGE_PROVIDER` | Storage backend (`s3` or `local`) | `local` |
 | `EMBEDDER_S3_*` | S3/SeaweedFS credentials and endpoint | required for `s3` |
 | `EMBEDDER_UPLOAD_DIR` | Local upload path when provider is `local` | `/tmp/embedder/uploads` |
-| `EMBEDDER_RCLONE_BINARY` | rclone binary path for fallback sources | `/usr/bin/rclone` |
-| `EMBEDDER_RCLONE_CONFIG_DIR` | rclone config base directory | `/etc/cube/rclone` |
-| `EMBEDDER_RCLONE_TIMEOUT` | Timeout for rclone list/read operations | `2m` |
-| `EMBEDDER_RCLONE_PREFLIGHT` | Run startup check (`rclone version` + config dir) and fail fast on errors | `true` |
 | `EMBEDDER_OCR_ENABLED` | Enable OCR preprocessing | `false` |
 | `EMBEDDER_OCR_IMAGE_ENABLED` | Run OCR on `image/*` records | `true` |
 | `EMBEDDER_OCR_PDF_FALLBACK_ENABLED` | Run OCR for PDFs when `pdftotext` output is too small | `true` |
@@ -122,7 +118,7 @@ All `/api/v1/*` routes require `Authorization: Bearer <token>`.
 | `GET` | `/health` | Health check |
 | `GET` | `/metrics` | Prometheus metrics |
 | `GET` | `/api/v1/sources` | List sources |
-| `POST` | `/api/v1/sources` | Create source (`google_drive`, `s3`, `microsoft`, `onedrive`, `sharepoint`, `dropbox` or `rclone`) |
+| `POST` | `/api/v1/sources` | Create source (`google_drive`, `s3`, `microsoft`, `onedrive` or `sharepoint`) |
 | `POST` | `/api/v1/sources/{id}/sync` | Sync source and enqueue records |
 | `DELETE` | `/api/v1/sources/{id}` | Delete source |
 | `POST` | `/api/v1/records/upload` | Direct file upload and queue ingest |

@@ -26,15 +26,11 @@ const (
 	SourceTypeMicrosoft   SourceType = "microsoft"
 	SourceTypeOneDrive    SourceType = "onedrive"
 	SourceTypeSharePoint  SourceType = "sharepoint"
-	SourceTypeDropbox     SourceType = "dropbox"
 	SourceTypeS3          SourceType = "s3"
-	SourceTypeRclone      SourceType = "rclone"
 )
 
 var supportedSourceTypes = []SourceType{
 	SourceTypeLocalFS,
-	SourceTypeRclone,
-	SourceTypeDropbox,
 	SourceTypeGoogleDrive,
 	SourceTypeS3,
 	SourceTypeMicrosoft,
@@ -48,14 +44,11 @@ var userCreatableSourceTypes = []SourceType{
 	SourceTypeMicrosoft,
 	SourceTypeOneDrive,
 	SourceTypeSharePoint,
-	SourceTypeDropbox,
-	SourceTypeRclone,
 }
 
 var sourceProviderAliases = map[SourceType]SourceType{
 	SourceTypeOneDrive:   SourceTypeMicrosoft,
 	SourceTypeSharePoint: SourceTypeMicrosoft,
-	SourceTypeDropbox:    SourceTypeRclone,
 }
 
 // SupportedSourceTypes returns all source types accepted by the service layer.
@@ -89,11 +82,6 @@ func IsSupportedSourceType(t SourceType) bool {
 // IsUserCreatableSourceType checks whether the source type is allowed through source-create APIs.
 func IsUserCreatableSourceType(t SourceType) bool {
 	return containsSourceType(userCreatableSourceTypes, t)
-}
-
-// IsRcloneBackedSourceType reports whether a source type is implemented by rclone.
-func IsRcloneBackedSourceType(t SourceType) bool {
-	return t == SourceTypeRclone || t == SourceTypeDropbox
 }
 
 // HumanSourceTypeList formats a list of source types for error/help messages.
@@ -165,17 +153,6 @@ type GoogleDriveConfig struct {
 	ClientSecret       string   `json:"client_secret,omitempty"`
 	AccessToken        string   `json:"access_token,omitempty"`
 	RefreshToken       string   `json:"refresh_token,omitempty"`
-}
-
-// RcloneConfig is the expected shape of Source.Config for SourceTypeRclone.
-// It describes a constrained sync target within one rclone remote.
-type RcloneConfig struct {
-	Backend       string   `json:"backend,omitempty"`
-	Remote        string   `json:"remote,omitempty"`
-	RootPath      string   `json:"root_path,omitempty"`
-	ScopePaths    []string `json:"scope_paths,omitempty"`
-	SelectedPaths []string `json:"selected_paths,omitempty"`
-	ConfigRef     string   `json:"config_ref,omitempty"`
 }
 
 // S3Config is the expected shape of Source.Config for SourceTypeS3.

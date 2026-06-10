@@ -239,10 +239,6 @@ services:
       EMBEDDER_LLM_MODEL: ${EMBEDDER_LLM_MODEL:-llama3.2:3b}
       EMBEDDER_LLM_API_KEY: ${EMBEDDER_LLM_API_KEY:-}
       EMBEDDER_GUARDRAILS_URL: ${EMBEDDER_GUARDRAILS_URL:-http://guardrails:8001}
-      EMBEDDER_RCLONE_BINARY: /usr/bin/rclone
-      EMBEDDER_RCLONE_CONFIG_DIR: /etc/cube/rclone
-      EMBEDDER_RCLONE_TIMEOUT: ${EMBEDDER_RCLONE_TIMEOUT:-2m}
-      EMBEDDER_RCLONE_PREFLIGHT: "false"
       EMBEDDER_OCR_ENABLED: ${EMBEDDER_OCR_ENABLED:-false}
       EMBEDDER_OCR_IMAGE_ENABLED: ${EMBEDDER_OCR_IMAGE_ENABLED:-true}
       EMBEDDER_OCR_PDF_FALLBACK_ENABLED: ${EMBEDDER_OCR_PDF_FALLBACK_ENABLED:-true}
@@ -255,7 +251,6 @@ services:
       EMBEDDER_INGEST_EMBED_BATCH_SIZE: ${EMBEDDER_INGEST_EMBED_BATCH_SIZE:-16}
     volumes:
       - cube-embedder-upload-volume:/tmp/embedder/uploads
-      - ./rclone:/etc/cube/rclone:ro
     ports:
       - ${EMBEDDER_PORT:-8082}:8082
 

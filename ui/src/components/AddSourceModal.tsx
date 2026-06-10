@@ -7,10 +7,10 @@ import {
   exchangeGoogleOAuth,
   getGoogleOAuthURL,
   type CloudBrowseConfig,
+  type CloudFolderOption,
   type CloudProvider,
   type DriveFileOption,
   type DriveFolderOption,
-  type RcloneFolderOption,
 } from '@/lib/embedder/service'
 import { resolveDriveFileTypeVisual } from '@/lib/embedder/file-type'
 import type { DriveSourceDraft, MicrosoftConfig, S3Config } from '@/types'
@@ -90,7 +90,7 @@ export default function AddSourceModal({
   initialGoogleAccessToken = '',
   initialGoogleRefreshToken = '',
 }: Props) {
-  const [providerTab, setProviderTab] = useState<'google' | 's3' | 'microsoft' | 'rclone'>('google')
+  const [providerTab, setProviderTab] = useState<'google' | 's3' | 'microsoft'>('google')
   const [name, setName] = useState('')
   const [importMode, setImportMode] = useState<'selected' | 'all'>('selected')
 
@@ -125,9 +125,6 @@ export default function AddSourceModal({
   const [showFilePicker, setShowFilePicker] = useState(false)
   const [pickerSelectionIDs, setPickerSelectionIDs] = useState<string[]>([])
 
-  const [rcloneRemote, setRcloneRemote] = useState('')
-  const [rcloneConfigRef, setRcloneConfigRef] = useState('')
-
   // S3 credentials.
   const [s3Endpoint, setS3Endpoint] = useState('')
   const [s3Region, setS3Region] = useState('')
@@ -147,7 +144,7 @@ export default function AddSourceModal({
   const [msSiteID, setMsSiteID] = useState('')
   const [cloudCurrentPath, setCloudCurrentPath] = useState('')
   const [cloudParentPath, setCloudParentPath] = useState<string | undefined>(undefined)
-  const [cloudFolders, setCloudFolders] = useState<RcloneFolderOption[]>([])
+  const [cloudFolders, setCloudFolders] = useState<CloudFolderOption[]>([])
   const [cloudFiles, setCloudFiles] = useState<DriveFileOption[]>([])
   const [cloudSelection, setCloudSelection] = useState<string[]>([])
   const [cloudSelectionMeta, setCloudSelectionMetaMap] = useState<Record<string, { name: string; path: string; kind: 'file' | 'folder' }>>({})
@@ -378,8 +375,6 @@ export default function AddSourceModal({
         if (!msAccessToken.trim() && !(msClientID.trim() && msClientSecret)) {
           e.microsoft = 'Provide an access token or client id + secret'
         }
-      } else if (!rcloneRemote.trim()) {
-        e.rcloneRemote = 'Storage remote is required'
       }
       if (cloudSelection.length === 0 && !cloudCurrentPath) {
         e.cloudSelection = 'Select at least one file/folder or browse to a root path'
@@ -444,7 +439,7 @@ export default function AddSourceModal({
         selectedPaths,
       }
       source = { ...base, sourceType: 's3', s3 }
-    } else if (providerTab === 'microsoft') {
+    } else {
       const microsoft: MicrosoftConfig = {
         tenantID: msTenantID.trim(),
         clientID: msClientID.trim(),
@@ -457,16 +452,6 @@ export default function AddSourceModal({
         selectedPaths,
       }
       source = { ...base, sourceType: 'microsoft', microsoft }
-    } else {
-      source = {
-        ...base,
-        sourceType: 'rclone',
-        rcloneRemote: rcloneRemote.trim(),
-        rcloneRootPath: rootPath,
-        rcloneScopePaths: [],
-        selectedRclonePaths: selectedPaths,
-        rcloneConfigRef: rcloneConfigRef.trim(),
-      }
     }
 
     setSaving(true)
@@ -623,49 +608,37 @@ export default function AddSourceModal({
 
   // activeCloudProvider maps the non-Google provider tabs onto the path-based
   // cloud-browse provider. Google never reaches here.
-  const activeCloudProvider: CloudProvider = providerTab === 's3'
-    ? 's3'
-    : providerTab === 'microsoft'
-      ? 'microsoft'
-      : 'rclone'
+  const activeCloudProvider: CloudProvider = providerTab === 's3' ? 's3' : 'microsoft'
 
   function buildCloudConfig(): CloudBrowseConfig {
-    switch (activeCloudProvider) {
-      case 's3':
-        return {
-          endpoint: s3Endpoint.trim(),
-          region: s3Region.trim(),
-          bucket: s3Bucket.trim(),
-          accessKeyID: s3AccessKeyID.trim(),
-          secretAccessKey: s3SecretAccessKey,
-          sessionToken: s3SessionToken.trim(),
-          pathStyle: s3PathStyle,
-        }
-      case 'microsoft':
-        return {
-          tenantID: msTenantID.trim(),
-          clientID: msClientID.trim(),
-          clientSecret: msClientSecret,
-          accessToken: msAccessToken.trim(),
-          refreshToken: msRefreshToken.trim(),
-          driveID: msDriveID.trim(),
-          siteID: msSiteID.trim(),
-        }
-      default:
-        return { remote: rcloneRemote.trim(), configRef: rcloneConfigRef.trim() }
+    if (activeCloudProvider === 's3') {
+      return {
+        endpoint: s3Endpoint.trim(),
+        region: s3Region.trim(),
+        bucket: s3Bucket.trim(),
+        accessKeyID: s3AccessKeyID.trim(),
+        secretAccessKey: s3SecretAccessKey,
+        sessionToken: s3SessionToken.trim(),
+        pathStyle: s3PathStyle,
+      }
+    }
+    return {
+      tenantID: msTenantID.trim(),
+      clientID: msClientID.trim(),
+      clientSecret: msClientSecret,
+      accessToken: msAccessToken.trim(),
+      refreshToken: msRefreshToken.trim(),
+      driveID: msDriveID.trim(),
+      siteID: msSiteID.trim(),
     }
   }
 
   // cloudReady reports whether enough credentials exist to browse the remote.
   function cloudReady(): boolean {
-    switch (activeCloudProvider) {
-      case 's3':
-        return Boolean(s3Bucket.trim())
-      case 'microsoft':
-        return Boolean(msAccessToken.trim() || (msClientID.trim() && msClientSecret))
-      default:
-        return Boolean(rcloneRemote.trim())
+    if (activeCloudProvider === 's3') {
+      return Boolean(s3Bucket.trim())
     }
+    return Boolean(msAccessToken.trim() || (msClientID.trim() && msClientSecret))
   }
 
   async function loadCloudPath(path?: string) {
@@ -772,7 +745,6 @@ export default function AddSourceModal({
               { id: 'google', label: 'Google Drive' },
               { id: 's3', label: 'S3' },
               { id: 'microsoft', label: 'OneDrive / SharePoint' },
-              { id: 'rclone', label: 'Other Clouds' },
             ] as Array<{ id: typeof providerTab; label: string }>).map(tab => (
               <button
                 key={tab.id}
@@ -1018,33 +990,6 @@ export default function AddSourceModal({
                       </Field>
                     </div>
                   </div>
-                </div>
-              )}
-
-              {providerTab === 'rclone' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.025)', borderRadius: '10px', border: `1px solid ${errors.rcloneRemote ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
-                  <Field label="Storage Remote *" hint="Example: gdrive, onedrive, dropbox, s3" error={errors.rcloneRemote}>
-                    <input
-                      type="text"
-                      placeholder="gdrive"
-                      value={rcloneRemote}
-                      onChange={e => {
-                        setRcloneRemote(e.target.value)
-                        clearFieldError('rcloneRemote')
-                      }}
-                      style={{ ...inputStyle, borderColor: errors.rcloneRemote ? 'rgba(255,107,107,0.5)' : undefined }}
-                    />
-                  </Field>
-
-                  <Field label="Config Ref (optional)" hint="Optional config reference if backend expects it.">
-                    <input
-                      type="text"
-                      placeholder="secret/cloud-storage"
-                      value={rcloneConfigRef}
-                      onChange={e => setRcloneConfigRef(e.target.value)}
-                      style={inputStyle}
-                    />
-                  </Field>
                 </div>
               )}
 

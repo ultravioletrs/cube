@@ -17,6 +17,7 @@ import (
 
 	"github.com/ultravioletrs/cube/internal/embedder/domain"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest"
+	"github.com/ultravioletrs/cube/internal/embedder/ingest/sourcepath"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
@@ -143,9 +144,9 @@ func BrowseMicrosoftPath(ctx context.Context, cfg domain.MicrosoftConfig, curren
 		return nil, err
 	}
 
-	currentPath = normalizeRclonePath(currentPath)
-	root := normalizeRclonePath(cfg.RootPath)
-	if root != "" && !isPathWithinRoot(root, currentPath) {
+	currentPath = sourcepath.Normalize(currentPath)
+	root := sourcepath.Normalize(cfg.RootPath)
+	if root != "" && !sourcepath.IsWithinRoot(root, currentPath) {
 		return nil, fmt.Errorf("browse path %q is outside root_path %q", currentPath, root)
 	}
 
@@ -172,7 +173,7 @@ func BrowseMicrosoftPath(ctx context.Context, cfg domain.MicrosoftConfig, curren
 
 	entries := make([]MicrosoftBrowseEntry, 0, len(children))
 	for _, child := range children {
-		childPath := normalizeRclonePath(path.Join(currentPath, child.Name))
+		childPath := sourcepath.Normalize(path.Join(currentPath, child.Name))
 		entries = append(entries, MicrosoftBrowseEntry{
 			Name:       child.Name,
 			Path:       childPath,
@@ -198,8 +199,8 @@ func listMicrosoftFiles(ctx context.Context, baseClient *http.Client, cfg domain
 		return nil, err
 	}
 
-	rootPath := normalizeRclonePath(cfg.RootPath)
-	scopes, err := normalizeRcloneScopes(rootPath, cfg.ScopePaths)
+	rootPath := sourcepath.Normalize(cfg.RootPath)
+	scopes, err := sourcepath.NormalizeScopes(rootPath, cfg.ScopePaths)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +261,7 @@ func normalizeMicrosoftConfig(cfg domain.MicrosoftConfig) domain.MicrosoftConfig
 	cfg.RefreshToken = strings.TrimSpace(cfg.RefreshToken)
 	cfg.DriveID = strings.TrimSpace(cfg.DriveID)
 	cfg.SiteID = strings.TrimSpace(cfg.SiteID)
-	cfg.RootPath = normalizeRclonePath(cfg.RootPath)
+	cfg.RootPath = sourcepath.Normalize(cfg.RootPath)
 	cfg.ScopePaths = normalizeMicrosoftPathList(cfg.ScopePaths)
 	cfg.SelectedPaths = normalizeMicrosoftPathList(cfg.SelectedPaths)
 	return cfg
@@ -338,7 +339,7 @@ func (g *microsoftGraphClient) ListScope(ctx context.Context, scopePath string, 
 		return nil
 	}
 
-	return g.collectFilesRecursive(ctx, item.ID, normalizeRclonePath(scopePath), out)
+	return g.collectFilesRecursive(ctx, item.ID, sourcepath.Normalize(scopePath), out)
 }
 
 func (g *microsoftGraphClient) collectFilesRecursive(
@@ -353,7 +354,7 @@ func (g *microsoftGraphClient) collectFilesRecursive(
 	}
 
 	for _, child := range children {
-		childPath := normalizeRclonePath(path.Join(parentPath, child.Name))
+		childPath := sourcepath.Normalize(path.Join(parentPath, child.Name))
 		if child.Folder != nil {
 			if err := g.collectFilesRecursive(ctx, child.ID, childPath, out); err != nil {
 				return err
@@ -375,7 +376,7 @@ func (g *microsoftGraphClient) collectFilesRecursive(
 }
 
 func (g *microsoftGraphClient) ResolveItemByPath(ctx context.Context, relPath string) (microsoftDriveItem, error) {
-	relPath = normalizeRclonePath(relPath)
+	relPath = sourcepath.Normalize(relPath)
 	selectQ := "$select=id,name,webUrl,lastModifiedDateTime,eTag,size,file,folder"
 
 	var endpoint string
@@ -514,7 +515,7 @@ func microsoftGraphErrorMessage(body []byte) string {
 }
 
 func encodeMicrosoftPath(relPath string) string {
-	relPath = normalizeRclonePath(relPath)
+	relPath = sourcepath.Normalize(relPath)
 	if relPath == "" {
 		return ""
 	}
@@ -531,7 +532,7 @@ func normalizeMicrosoftPathList(values []string) []string {
 	}
 	set := make(map[string]struct{}, len(values))
 	for _, value := range values {
-		value = normalizeRclonePath(value)
+		value = sourcepath.Normalize(value)
 		if value == "" {
 			continue
 		}
@@ -556,7 +557,7 @@ func microsoftMimeType(item microsoftDriveItem) string {
 }
 
 func microsoftItemToSourceFile(item microsoftDriveItem, itemPath string) ingest.SourceFile {
-	itemPath = normalizeRclonePath(itemPath)
+	itemPath = sourcepath.Normalize(itemPath)
 	return ingest.SourceFile{
 		ExternalID:       strings.TrimSpace(item.ID),
 		Name:             strings.TrimSpace(item.Name),
@@ -576,64 +577,13 @@ func parseRFC3339Ptr(value string) *time.Time {
 	return &t
 }
 
-func normalizeRclonePath(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || value == "." || value == "/" {
-		return ""
-	}
-	clean := path.Clean("/" + strings.TrimPrefix(value, "/"))
-	if clean == "/" {
-		return ""
-	}
-	return strings.TrimPrefix(clean, "/")
-}
-
-func normalizeRcloneScopes(rootPath string, scopePaths []string) ([]string, error) {
-	rootPath = normalizeRclonePath(rootPath)
-	rootAbs := "/" + rootPath
-	if rootPath == "" {
-		rootAbs = "/"
-	}
-	if len(scopePaths) == 0 {
-		if rootPath == "" {
-			return []string{""}, nil
-		}
-		return []string{rootPath}, nil
-	}
-
-	seen := make(map[string]struct{}, len(scopePaths))
-	out := make([]string, 0, len(scopePaths))
-	for _, raw := range scopePaths {
-		scope := normalizeRclonePath(raw)
-		scopeAbs := "/" + scope
-		if scope == "" {
-			scopeAbs = "/"
-		}
-
-		if rootAbs != "/" {
-			if scopeAbs != rootAbs && !strings.HasPrefix(scopeAbs, rootAbs+"/") {
-				return nil, fmt.Errorf("scope path %q is outside approved root %q", raw, rootPath)
-			}
-		}
-
-		if _, ok := seen[scope]; ok {
-			continue
-		}
-		seen[scope] = struct{}{}
-		out = append(out, scope)
-	}
-
-	sort.Strings(out)
-	return out, nil
-}
-
 func filterSourceFilesBySelectedPaths(files []ingest.SourceFile, selectedPaths []string) []ingest.SourceFile {
 	if len(selectedPaths) == 0 {
 		return files
 	}
 	selected := make(map[string]struct{}, len(selectedPaths))
 	for _, p := range selectedPaths {
-		p = normalizeRclonePath(p)
+		p = sourcepath.Normalize(p)
 		if p == "" {
 			continue
 		}
@@ -645,7 +595,7 @@ func filterSourceFilesBySelectedPaths(files []ingest.SourceFile, selectedPaths [
 
 	filtered := make([]ingest.SourceFile, 0, len(files))
 	for _, file := range files {
-		if _, ok := selected[normalizeRclonePath(file.ExternalRef)]; ok {
+		if _, ok := selected[sourcepath.Normalize(file.ExternalRef)]; ok {
 			filtered = append(filtered, file)
 		}
 	}
@@ -665,17 +615,6 @@ func sourceFileNewer(a, b ingest.SourceFile) bool {
 		return a.SourceVersion > b.SourceVersion
 	}
 	return a.ExternalRef > b.ExternalRef
-}
-
-func isPathWithinRoot(rootPath, scopedPath string) bool {
-	rootPath = normalizeRclonePath(rootPath)
-	scopedPath = normalizeRclonePath(scopedPath)
-	if rootPath == "" || scopedPath == "" {
-		return true
-	}
-	rootAbs := "/" + rootPath
-	scopeAbs := "/" + scopedPath
-	return scopeAbs == rootAbs || strings.HasPrefix(scopeAbs, rootAbs+"/")
 }
 
 type microsoftDriveItem struct {

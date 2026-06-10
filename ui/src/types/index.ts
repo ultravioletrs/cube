@@ -78,7 +78,7 @@ export interface Conversation {
   updatedAt: string
 }
 
-export type SourceType = 'google_drive' | 's3' | 'microsoft' | 'rclone'
+export type SourceType = 'google_drive' | 's3' | 'microsoft'
 
 // S3Config holds native S3/MinIO connection + scope fields.
 export interface S3Config {
@@ -112,11 +112,6 @@ export interface MicrosoftConfig {
 export interface DriveSourceDraft {
   sourceType: SourceType
   name: string
-  rcloneRemote?: string
-  rcloneRootPath?: string
-  rcloneScopePaths?: string[]
-  selectedRclonePaths?: string[]
-  rcloneConfigRef?: string
   s3?: S3Config
   microsoft?: MicrosoftConfig
   folderLink: string
@@ -134,11 +129,6 @@ export interface DriveSource {
   id: string
   sourceType: SourceType
   name: string
-  rcloneRemote?: string
-  rcloneRootPath?: string
-  rcloneScopePaths?: string[]
-  selectedRclonePaths?: string[]
-  rcloneConfigRef?: string
   s3?: S3Config
   microsoft?: MicrosoftConfig
   folderLink: string

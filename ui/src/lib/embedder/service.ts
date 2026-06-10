@@ -53,7 +53,7 @@ interface SourceSyncDTO {
   deleted: number
 }
 
-interface RcloneBrowseFileDTO {
+interface CloudBrowseFileDTO {
   name: string
   path: string
   mime_type: string
@@ -61,16 +61,16 @@ interface RcloneBrowseFileDTO {
   modified_time?: string
 }
 
-interface RcloneBrowseFolderDTO {
+interface CloudBrowseFolderDTO {
   name: string
   path: string
 }
 
-interface RcloneBrowseDTO {
+interface CloudBrowseDTO {
   current_path: string
   parent_path?: string
-  folders: RcloneBrowseFolderDTO[]
-  files: RcloneBrowseFileDTO[]
+  folders: CloudBrowseFolderDTO[]
+  files: CloudBrowseFileDTO[]
 }
 
 interface GoogleOAuthURLDTO {
@@ -187,30 +187,25 @@ export interface DriveFolderOption {
 
 export interface DriveBrowseResult { files: DriveFileOption[] }
 
-export interface RcloneFolderOption {
+export interface CloudFolderOption {
   name: string
   path: string
 }
 
-export interface RcloneBrowseResult {
+// CloudBrowseResult is the unified shape of every path-based cloud browse
+// (S3, Microsoft) — their endpoints return identical structures.
+export interface CloudBrowseResult {
   currentPath: string
   parentPath?: string
-  folders: RcloneFolderOption[]
+  folders: CloudFolderOption[]
   files: DriveFileOption[]
 }
 
-// CloudBrowseResult is the unified shape of every path-based cloud browse
-// (rclone, S3, Microsoft) — their endpoints return identical structures.
-export type CloudBrowseResult = RcloneBrowseResult
-
-export type CloudProvider = 's3' | 'microsoft' | 'rclone'
+export type CloudProvider = 's3' | 'microsoft'
 
 // CloudBrowseConfig carries the union of credential fields for the path-based
 // providers; only the fields relevant to the active provider are sent.
 export interface CloudBrowseConfig {
-  // rclone
-  remote?: string
-  configRef?: string
   // s3
   endpoint?: string
   region?: string
@@ -360,7 +355,7 @@ function toSourceType(raw: string): SourceType {
     case 'sharepoint':
       return 'microsoft'
     default:
-      return 'rclone'
+      return 'google_drive'
   }
 }
 
@@ -382,15 +377,6 @@ function mapSource(dto: SourceDTO): DriveSource {
   const refreshToken = typeof config.refresh_token === 'string' ? config.refresh_token : ''
   const clientId = typeof config.client_id === 'string' ? config.client_id : ''
   const clientSecret = typeof config.client_secret === 'string' ? config.client_secret : ''
-  const rcloneRemote = typeof config.remote === 'string' ? config.remote : ''
-  const rcloneRootPath = typeof config.root_path === 'string' ? config.root_path : ''
-  const rcloneScopePaths = Array.isArray(config.scope_paths)
-    ? config.scope_paths.filter((v): v is string => typeof v === 'string')
-    : []
-  const selectedRclonePaths = Array.isArray(config.selected_paths)
-    ? config.selected_paths.filter((v): v is string => typeof v === 'string')
-    : []
-  const rcloneConfigRef = typeof config.config_ref === 'string' ? config.config_ref : ''
 
   const s3: S3Config = {
     endpoint: asString(config.endpoint),
@@ -422,11 +408,6 @@ function mapSource(dto: SourceDTO): DriveSource {
     id: dto.id,
     sourceType,
     name: dto.name,
-    rcloneRemote,
-    rcloneRootPath,
-    rcloneScopePaths,
-    selectedRclonePaths,
-    rcloneConfigRef,
     s3,
     microsoft,
     folderLink,
@@ -599,13 +580,7 @@ function buildSourceConfig(source: DriveSourceDraft): Record<string, unknown> {
       }
     }
     default:
-      return {
-        remote: source.rcloneRemote ?? '',
-        root_path: source.rcloneRootPath ?? '',
-        scope_paths: source.rcloneScopePaths ?? [],
-        selected_paths: source.selectedRclonePaths ?? [],
-        config_ref: source.rcloneConfigRef ?? '',
-      }
+      return {}
   }
 }
 
@@ -718,63 +693,7 @@ export async function browseGoogleDrive(
   }
 }
 
-export async function listRcloneFilesForSource(
-  token: string,
-  source: Pick<DriveSourceDraft, 'rcloneRemote' | 'rcloneRootPath' | 'rcloneScopePaths'>,
-): Promise<DriveBrowseResult> {
-  const data = await apiJSON<RcloneBrowseDTO>('/api/v1/sources/rclone/files', token, {
-    method: 'POST',
-    body: JSON.stringify({
-      remote: source.rcloneRemote ?? '',
-      root_path: source.rcloneRootPath ?? '',
-      scope_paths: source.rcloneScopePaths ?? [],
-    }),
-  })
-
-  return {
-    files: data.files.map(file => ({
-      id: file.path,
-      name: file.name,
-      path: file.path,
-      mimeType: file.mime_type,
-      modifiedTime: file.modified_time,
-      size: file.size,
-    })),
-  }
-}
-
-export async function browseRclonePath(
-  token: string,
-  remote: string,
-  path?: string,
-): Promise<RcloneBrowseResult> {
-  const data = await apiJSON<RcloneBrowseDTO>('/api/v1/sources/rclone/browse', token, {
-    method: 'POST',
-    body: JSON.stringify({
-      remote,
-      path: path ?? '',
-    }),
-  })
-
-  return {
-    currentPath: data.current_path,
-    parentPath: data.parent_path,
-    folders: data.folders.map(folder => ({
-      name: folder.name,
-      path: folder.path,
-    })),
-    files: data.files.map(file => ({
-      id: file.path,
-      name: file.name,
-      path: file.path,
-      mimeType: file.mime_type,
-      modifiedTime: file.modified_time,
-      size: file.size,
-    })),
-  }
-}
-
-function mapCloudBrowse(data: RcloneBrowseDTO): CloudBrowseResult {
+function mapCloudBrowse(data: CloudBrowseDTO): CloudBrowseResult {
   return {
     currentPath: data.current_path,
     parentPath: data.parent_path,
@@ -800,7 +719,7 @@ export async function browseCloudPath(
 ): Promise<CloudBrowseResult> {
   const at = path ?? ''
   if (provider === 's3') {
-    const data = await apiJSON<RcloneBrowseDTO>('/api/v1/sources/s3/browse', token, {
+    const data = await apiJSON<CloudBrowseDTO>('/api/v1/sources/s3/browse', token, {
       method: 'POST',
       body: JSON.stringify({
         endpoint: cfg.endpoint ?? '',
@@ -816,26 +735,19 @@ export async function browseCloudPath(
     })
     return mapCloudBrowse(data)
   }
-  if (provider === 'microsoft') {
-    const data = await apiJSON<RcloneBrowseDTO>('/api/v1/sources/microsoft/browse', token, {
-      method: 'POST',
-      body: JSON.stringify({
-        tenant_id: cfg.tenantID ?? '',
-        client_id: cfg.clientID ?? '',
-        client_secret: cfg.clientSecret ?? '',
-        access_token: cfg.accessToken ?? '',
-        refresh_token: cfg.refreshToken ?? '',
-        drive_id: cfg.driveID ?? '',
-        site_id: cfg.siteID ?? '',
-        path: at,
-      }),
-    })
-    return mapCloudBrowse(data)
-  }
-  // rclone
-  const data = await apiJSON<RcloneBrowseDTO>('/api/v1/sources/rclone/browse', token, {
+  // microsoft
+  const data = await apiJSON<CloudBrowseDTO>('/api/v1/sources/microsoft/browse', token, {
     method: 'POST',
-    body: JSON.stringify({ remote: cfg.remote ?? '', path: at }),
+    body: JSON.stringify({
+      tenant_id: cfg.tenantID ?? '',
+      client_id: cfg.clientID ?? '',
+      client_secret: cfg.clientSecret ?? '',
+      access_token: cfg.accessToken ?? '',
+      refresh_token: cfg.refreshToken ?? '',
+      drive_id: cfg.driveID ?? '',
+      site_id: cfg.siteID ?? '',
+      path: at,
+    }),
   })
   return mapCloudBrowse(data)
 }

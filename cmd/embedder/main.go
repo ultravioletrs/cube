@@ -27,7 +27,6 @@ import (
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/google"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/localfs"
 	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/microsoft"
-	"github.com/ultravioletrs/cube/internal/embedder/ingest/sources/rclone"
 	s3source "github.com/ultravioletrs/cube/internal/embedder/ingest/sources/s3"
 	"github.com/ultravioletrs/cube/internal/embedder/llm"
 	"github.com/ultravioletrs/cube/internal/embedder/llm/guardrails"
@@ -46,10 +45,6 @@ type config struct {
 	logLevel                string
 	googleOAuthClientID     string
 	googleOAuthClientSecret string
-	rcloneBinary            string
-	rcloneConfigDir         string
-	rcloneTimeout           time.Duration
-	rclonePreflight         bool
 	extractionConfig        ingest.ExtractionConfig
 	imageEmbeddingConfig    imageEmbeddingConfig
 	embeddingConfig         embedding.Config
@@ -116,10 +111,6 @@ func loadConfig() config {
 		logLevel:                env("EMBEDDER_LOG_LEVEL", "info"),
 		googleOAuthClientID:     env("EMBEDDER_GOOGLE_OAUTH_CLIENT_ID", ""),
 		googleOAuthClientSecret: env("EMBEDDER_GOOGLE_OAUTH_CLIENT_SECRET", ""),
-		rcloneBinary:            env("EMBEDDER_RCLONE_BINARY", "rclone"),
-		rcloneConfigDir:         env("EMBEDDER_RCLONE_CONFIG_DIR", "/etc/cube/rclone"),
-		rcloneTimeout:           envDuration("EMBEDDER_RCLONE_TIMEOUT", 2*time.Minute),
-		rclonePreflight:         envBool("EMBEDDER_RCLONE_PREFLIGHT", true),
 		extractionConfig: ingest.ExtractionConfig{
 			OCR: ingest.OCRConfig{
 				Enabled:                  envBool("EMBEDDER_OCR_ENABLED", false),
@@ -204,10 +195,6 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if err := runRclonePreflight(ctx, cfg); err != nil {
-		slog.Error("rclone preflight failed", "err", err)
-		os.Exit(1)
-	}
 	if err := runOCRPreflight(ctx, cfg.extractionConfig); err != nil {
 		slog.Error("ocr preflight failed", "err", err)
 		os.Exit(1)
@@ -256,12 +243,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	rcloneClient := ingest.NewCommandRcloneClient(cfg.rcloneBinary, cfg.rcloneConfigDir, cfg.rcloneTimeout)
 	sourceProviders := ingest.NewSourceProviderRegistry(
 		google.NewSourceProvider(),
 		s3source.NewSourceProvider(),
 		microsoft.NewSourceProvider(),
-		rclone.NewSourceProvider(rcloneClient),
 		localfs.NewSourceProvider(uploadStore),
 	)
 	for alias, target := range domain.SourceProviderAliases() {
@@ -460,53 +445,6 @@ func mustEnv(key string) string {
 		os.Exit(1)
 	}
 	return v
-}
-
-func runRclonePreflight(ctx context.Context, cfg config) error {
-	if !cfg.rclonePreflight {
-		slog.Info("rclone preflight skipped")
-		return nil
-	}
-
-	binary := strings.TrimSpace(cfg.rcloneBinary)
-	if binary == "" {
-		return fmt.Errorf("EMBEDDER_RCLONE_BINARY is empty")
-	}
-	configDir := strings.TrimSpace(cfg.rcloneConfigDir)
-	if configDir == "" {
-		return fmt.Errorf("EMBEDDER_RCLONE_CONFIG_DIR is empty")
-	}
-
-	stat, err := os.Stat(configDir)
-	if err != nil {
-		return fmt.Errorf("check EMBEDDER_RCLONE_CONFIG_DIR %q: %w", configDir, err)
-	}
-	if !stat.IsDir() {
-		return fmt.Errorf("EMBEDDER_RCLONE_CONFIG_DIR %q is not a directory", configDir)
-	}
-	if _, err := os.ReadDir(configDir); err != nil {
-		return fmt.Errorf("read EMBEDDER_RCLONE_CONFIG_DIR %q: %w", configDir, err)
-	}
-
-	timeout := cfg.rcloneTimeout
-	if timeout <= 0 || timeout > 15*time.Second {
-		timeout = 15 * time.Second
-	}
-	runCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	out, err := exec.CommandContext(runCtx, binary, "version").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("exec %q version: %w (%s)", binary, err, strings.TrimSpace(string(out)))
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	versionLine := ""
-	if len(lines) > 0 {
-		versionLine = strings.TrimSpace(lines[0])
-	}
-	slog.Info("rclone preflight passed", "binary", binary, "config_dir", configDir, "version", versionLine)
-	return nil
 }
 
 func runOCRPreflight(ctx context.Context, cfg ingest.ExtractionConfig) error {

@@ -5,7 +5,7 @@ This checklist is for rolling out source providers in production with minimal ri
 ## Scope
 
 - Native providers: `google_drive`, `s3`, `microsoft` (`onedrive`, `sharepoint` aliases)
-- Fallback provider: `rclone` (`dropbox` alias and future backends)
+- Direct uploads: `local_fs` (object-store / upload-dir backed)
 
 ## Preconditions
 
@@ -14,20 +14,15 @@ This checklist is for rolling out source providers in production with minimal ri
    - Google provider list/download smoke
    - S3 provider list/download smoke
    - Microsoft provider list/download smoke
-3. Confirm embedder runtime preflight passes:
-   - `EMBEDDER_RCLONE_BINARY` points to a valid binary
-   - `EMBEDDER_RCLONE_CONFIG_DIR` exists and is readable
 
 ## Deployment Steps
 
-1. Deploy embedder with read-only `rclone` config mount.
-2. Enable `EMBEDDER_RCLONE_PREFLIGHT=true` (default) in all environments.
-3. Verify `/metrics` endpoint is reachable from observability stack.
-4. Create one source of each target type in staging and run manual sync:
+1. Deploy embedder image.
+2. Verify `/metrics` endpoint is reachable from observability stack.
+3. Create one source of each target type in staging and run manual sync:
    - `google_drive`
    - `s3`
    - `microsoft` (or `onedrive` / `sharepoint`)
-   - `dropbox` (rclone fallback)
 
 ## Metrics To Watch
 
@@ -53,6 +48,5 @@ This checklist is for rolling out source providers in production with minimal ri
 ## Rollback Plan
 
 1. Disable creation of newly introduced source types in API client/feature flag.
-2. Route affected source types to fallback provider where possible.
-3. Revert to previous embedder image if preflight or runtime compatibility fails.
-4. Keep source records intact; avoid destructive cleanup during rollback.
+2. Revert to previous embedder image if runtime compatibility fails.
+3. Keep source records intact; avoid destructive cleanup during rollback.
