@@ -6,6 +6,7 @@ package google
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -166,6 +167,11 @@ func applyDriveSelection(
 		}
 		file, err := reader.GetFile(ctx, id)
 		if err != nil {
+			// Skip a selected file that has gone away or can't be ingested rather
+			// than failing the entire sync over one stale reference.
+			if errors.Is(err, ingest.ErrDriveNotFound) || errors.Is(err, ingest.ErrUnsupportedDriveFile) {
+				continue
+			}
 			return nil, err
 		}
 		collected[file.ID] = file

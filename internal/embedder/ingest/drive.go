@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,6 +36,14 @@ var (
 	driveFilesURL     = "https://www.googleapis.com/drive/v3/files"
 	driveExportURLFmt = "https://www.googleapis.com/drive/v3/files/%s/export"
 	driveDownloadURL  = "https://www.googleapis.com/drive/v3/files/%s?alt=media"
+)
+
+var (
+	// ErrDriveNotFound is returned when a Drive item no longer exists (404/410),
+	// so callers can skip stale references instead of failing the whole sync.
+	ErrDriveNotFound = errors.New("drive file not found")
+	// ErrUnsupportedDriveFile is returned when a file's MIME type cannot be ingested.
+	ErrUnsupportedDriveFile = errors.New("drive file has unsupported MIME type")
 )
 
 // SetDriveAPIEndpoints overrides Drive API endpoints and returns a restore function.
@@ -255,6 +264,9 @@ func (d *DriveReader) GetFile(ctx context.Context, fileID string) (DriveFile, er
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusGone {
+		return DriveFile{}, fmt.Errorf("drive get file %s: %w", id, ErrDriveNotFound)
+	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		return DriveFile{}, fmt.Errorf("drive get file status %d: %s", resp.StatusCode, body)
@@ -265,7 +277,7 @@ func (d *DriveReader) GetFile(ctx context.Context, fileID string) (DriveFile, er
 		return DriveFile{}, fmt.Errorf("drive get file decode: %w", err)
 	}
 	if !supportsDriveFile(file) {
-		return DriveFile{}, fmt.Errorf("drive file %s has unsupported MIME type %q", id, file.MimeType)
+		return DriveFile{}, fmt.Errorf("drive file %s (%q): %w", id, file.MimeType, ErrUnsupportedDriveFile)
 	}
 	return file, nil
 }

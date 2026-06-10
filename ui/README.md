@@ -60,12 +60,12 @@ npm run dev -- --host 0.0.0.0
 
 ## Available scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server with HMR |
-| `npm run build` | Type-check and build for production (output: `dist/`) |
-| `npm run preview` | Serve the production build locally |
-| `npm run lint` | Run ESLint |
+| Script            | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `npm run dev`     | Start development server with HMR                     |
+| `npm run build`   | Type-check and build for production (output: `dist/`) |
+| `npm run preview` | Serve the production build locally                    |
+| `npm run lint`    | Run ESLint                                            |
 
 ## Chat record selection
 
