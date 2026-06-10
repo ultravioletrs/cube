@@ -95,18 +95,21 @@ func (s *sourceSyncService) Sync(ctx context.Context, id, domainID string) (res 
 			continue
 		}
 		liveExternalIDs[externalID] = struct{}{}
+		mimeType := ingest.NormalizeFileMIMEType(file.Name, file.MimeType)
+		mimeType = ingest.NormalizeFileMIMEType(externalID, mimeType)
+		mimeType = ingest.NormalizeFileMIMEType(file.ExternalRef, mimeType)
 
 		upsert, err := s.records.UpsertFromSource(ctx, domain.Record{
 			DomainID:         src.DomainID,
 			UserID:           src.UserID,
 			SourceID:         src.ID,
 			Name:             file.Name,
-			Format:           DetectRecordFormat(file.Name, file.MimeType),
+			Format:           DetectRecordFormat(file.Name, mimeType),
 			Status:           domain.RecordStatusQueued,
 			ExternalID:       externalID,
 			ExternalURL:      file.ExternalURL,
 			ExternalRef:      file.ExternalRef,
-			MimeType:         file.MimeType,
+			MimeType:         mimeType,
 			SourceVersion:    file.SourceVersion,
 			SourceModifiedAt: file.SourceModifiedAt,
 			FolderPath:       nonEmptyPtr(file.FolderPath),

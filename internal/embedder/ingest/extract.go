@@ -9,6 +9,8 @@ import (
 	"encoding/xml"
 	"fmt"
 	"io"
+	stdmime "mime"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -46,6 +48,7 @@ type ExtractedDocument struct {
 
 // ExtractText normalizes file content into plain text.
 func ExtractText(f FileMeta, content []byte) (ExtractedDocument, error) {
+	f.MimeType = normalizeFileMetaMIMEType(f, content)
 	mime := strings.ToLower(strings.TrimSpace(f.MimeType))
 
 	switch {
@@ -64,6 +67,128 @@ func ExtractText(f FileMeta, content []byte) (ExtractedDocument, error) {
 	default:
 		return ExtractedDocument{}, fmt.Errorf("unsupported MIME type for extraction: %q", f.MimeType)
 	}
+}
+
+func normalizeFileMetaMIMEType(f FileMeta, content []byte) string {
+	mimeType := NormalizeFileMIMEType(f.Name, f.MimeType)
+	mimeType = NormalizeFileMIMEType(f.ID, mimeType)
+	if inferred := mimeTypeFromContent(content); inferred != "" && (mimeType == "" || isGenericBinaryMIME(mimeType)) {
+		return inferred
+	}
+	return mimeType
+}
+
+// NormalizeFileMIMEType returns a media type usable by the extraction pipeline.
+// Object stores often omit content-type metadata, or return the generic
+// application/octet-stream type, so fall back to stable extension mappings.
+func NormalizeFileMIMEType(fileName, mimeType string) string {
+	normalized := normalizeMediaType(mimeType)
+	if normalized != "" && !isGenericBinaryMIME(normalized) {
+		return normalized
+	}
+	if inferred := mimeTypeFromExtension(fileName); inferred != "" {
+		return inferred
+	}
+	return normalized
+}
+
+func normalizeMediaType(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+	mediaType, _, err := stdmime.ParseMediaType(value)
+	if err == nil {
+		return strings.ToLower(strings.TrimSpace(mediaType))
+	}
+	return value
+}
+
+func isGenericBinaryMIME(mimeType string) bool {
+	switch mimeType {
+	case "application/octet-stream", "binary/octet-stream", "application/x-binary":
+		return true
+	default:
+		return false
+	}
+}
+
+func mimeTypeFromExtension(fileName string) string {
+	ext := strings.ToLower(strings.TrimSpace(filepath.Ext(strings.TrimSpace(fileName))))
+	switch ext {
+	case ".pdf":
+		return "application/pdf"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".md", ".markdown":
+		return "text/markdown"
+	case ".html", ".htm":
+		return "text/html"
+	case ".txt":
+		return "text/plain"
+	case ".svg":
+		return "image/svg+xml"
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".bmp":
+		return "image/bmp"
+	case ".tif", ".tiff":
+		return "image/tiff"
+	}
+
+	if ext == "" {
+		return ""
+	}
+	if inferred := normalizeMediaType(stdmime.TypeByExtension(ext)); inferred != "" && !isGenericBinaryMIME(inferred) {
+		return inferred
+	}
+	if isTextFileExt(ext) {
+		return "text/plain"
+	}
+	return ""
+}
+
+func mimeTypeFromContent(content []byte) string {
+	if len(content) == 0 {
+		return ""
+	}
+	if isDOCXContent(content) {
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	}
+
+	sniff := content
+	if len(sniff) > 512 {
+		sniff = sniff[:512]
+	}
+	detected := normalizeMediaType(http.DetectContentType(sniff))
+	if detected == "" || isGenericBinaryMIME(detected) {
+		return ""
+	}
+	return detected
+}
+
+func isDOCXContent(content []byte) bool {
+	if len(content) < 4 || string(content[:2]) != "PK" {
+		return false
+	}
+
+	reader := bytes.NewReader(content)
+	archive, err := zip.NewReader(reader, int64(len(content)))
+	if err != nil {
+		return false
+	}
+	for _, file := range archive.File {
+		if file.Name == "word/document.xml" {
+			return true
+		}
+	}
+	return false
 }
 
 func extractImageText(f FileMeta, content []byte) ExtractedDocument {

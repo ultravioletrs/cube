@@ -54,12 +54,15 @@ describe('atomAuthService', () => {
       identity: 'jane@example.com',
       password: 'secret123',
     })).resolves.toMatchObject({
-      user: { id: 'entity-1' },
+      user: { id: 'entity-1', email: 'jane@example.com', username: 'jane' },
       tokens: { accessToken: 'jwt-token', refreshToken: '' },
       expiresAt: '2999-06-07T12:00:00Z',
     })
 
     expect(getStoredAtomAccessToken()).toBe('jwt-token')
+    expect(JSON.parse(localStorage.getItem(ATOM_SESSION_STORAGE_KEY) ?? '{}')).toMatchObject({
+      identity: 'jane@example.com',
+    })
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/graphql', expect.objectContaining({
       method: 'POST',
       credentials: 'omit',
@@ -68,7 +71,10 @@ describe('atomAuthService', () => {
   })
 
   it('restores and validates a stored bearer-token session', async () => {
-    localStorage.setItem(ATOM_SESSION_STORAGE_KEY, storedSession())
+    localStorage.setItem(ATOM_SESSION_STORAGE_KEY, JSON.stringify({
+      ...JSON.parse(storedSession()),
+      identity: 'jane',
+    }))
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       graphQLResponse({
         session: {
@@ -81,7 +87,7 @@ describe('atomAuthService', () => {
     )
 
     await expect(atomAuthService.getSession()).resolves.toMatchObject({
-      user: { id: 'entity-1' },
+      user: { id: 'entity-1', email: '', username: 'jane' },
       tokens: { accessToken: 'jwt-token' },
     })
     expect(fetchMock).toHaveBeenCalledWith('http://localhost:8080/graphql', expect.objectContaining({

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { ATTESTATION_ENABLED } from '@/lib/features'
+import { userDisplayName, userEmail, userInitials } from '@/lib/auth/user-display'
 import type { ActiveWorkspace } from '@/types'
 
 const CubeAILogo = () => (
@@ -287,11 +288,9 @@ function UserMenuInline() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
 
-  const initials = (() => {
-    if (!user) return '?'
-    if (user.firstName && user.lastName) return (user.firstName[0] + user.lastName[0]).toUpperCase()
-    return (user.email?.[0] ?? '?').toUpperCase()
-  })()
+  const initials = user ? userInitials(user) : '?'
+  const name = user ? userDisplayName(user) : 'User'
+  const email = user ? userEmail(user) : ''
 
   return (
     <div style={{ position: 'relative', padding: '8px 12px', borderTop: '1px solid var(--border)' }}>
@@ -304,10 +303,10 @@ function UserMenuInline() {
         </div>
         <div style={{ flex: 1, textAlign: 'left', overflow: 'hidden' }}>
           <p style={{ margin: 0, fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '12px', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {user?.firstName ? `${user.firstName} ${user.lastName ?? ''}`.trim() : user?.email ?? 'User'}
+            {name}
           </p>
           <p style={{ margin: 0, fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {user?.email ?? ''}
+            {email}
           </p>
         </div>
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ color: 'var(--text-dim)', flexShrink: 0 }}>

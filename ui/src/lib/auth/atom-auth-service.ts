@@ -14,6 +14,7 @@ interface StoredAtomSession {
   entityId: string
   sessionId: string
   expiresAt: string
+  identity?: string
 }
 
 interface GraphQLError {
@@ -105,11 +106,13 @@ function isExpired(expiresAt: string): boolean {
   return Number.isNaN(expires) || expires <= Date.now()
 }
 
-function authUser(entityID: string): AuthUser {
+function authUser(entityID: string, identity = ''): AuthUser {
+  const cleanIdentity = identity.trim()
+  const isEmail = cleanIdentity.includes('@')
   return {
     id: entityID,
-    email: entityID,
-    username: entityID,
+    email: isEmail ? cleanIdentity : '',
+    username: isEmail ? cleanIdentity.split('@')[0] : cleanIdentity,
     role: entityID === ADMIN_ENTITY_ID ? 'admin' : 'user',
   }
 }
@@ -123,7 +126,7 @@ function authTokens(accessToken: string): AuthTokens {
 
 function toSession(stored: StoredAtomSession): AuthSession {
   return {
-    user: authUser(stored.entityId),
+    user: authUser(stored.entityId, stored.identity),
     tokens: authTokens(stored.accessToken),
     expiresAt: stored.expiresAt,
   }
@@ -160,6 +163,7 @@ function parseStoredSession(value: string | null): StoredAtomSession | null {
       entityId: parsed.entityId,
       sessionId: parsed.sessionId,
       expiresAt: parsed.expiresAt,
+      identity: typeof parsed.identity === 'string' ? parsed.identity.trim() : undefined,
     }
   } catch {
     return null
@@ -258,6 +262,7 @@ export const atomAuthService: AuthService = {
       entityId: data.login.entityId,
       sessionId: data.login.sessionId,
       expiresAt: data.login.expiresAt,
+      identity: identity.trim(),
     }
     if (
       !session.accessToken

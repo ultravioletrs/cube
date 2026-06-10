@@ -2,18 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '@/hooks/useAuth'
-
-function initials(user: { firstName?: string; lastName?: string; email: string }): string {
-  const f = user.firstName?.[0] ?? ''
-  const l = user.lastName?.[0] ?? ''
-  if (f && l) return `${f}${l}`.toUpperCase()
-  return user.email.slice(0, 2).toUpperCase()
-}
-
-function displayName(user: { firstName?: string; lastName?: string; email: string }): string {
-  const parts = [user.firstName, user.lastName].filter(Boolean)
-  return parts.length > 0 ? parts.join(' ') : user.email
-}
+import { userDisplayName, userInitials, userMetadataRows } from '@/lib/auth/user-display'
 
 export default function UserMenu() {
   const [open, setOpen] = useState(false)
@@ -34,8 +23,9 @@ export default function UserMenu() {
 
   if (!user) return null
 
-  const abbr = initials(user)
-  const name = displayName(user)
+  const abbr = userInitials(user)
+  const name = userDisplayName(user)
+  const metadataRows = userMetadataRows(user)
 
   return (
     <div ref={containerRef} style={{ position: 'relative', flexShrink: 0 }}>
@@ -56,11 +46,7 @@ export default function UserMenu() {
               )}
             </div>
           </div>
-          {[
-            { label: 'EMAIL', value: user.email },
-            { label: 'USERNAME', value: user.username },
-            ...(user.role ? [{ label: 'ROLE', value: user.role }] : []),
-          ].map(({ label, value }) => (
+          {metadataRows.map(({ label, value }) => (
             <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '10px' }}>
               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', letterSpacing: '0.08em' }}>{label}</span>
               <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text-muted)', fontWeight: '500', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>

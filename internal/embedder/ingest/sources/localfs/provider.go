@@ -66,6 +66,7 @@ func (p *sourceProvider) DownloadRecord(
 	}
 
 	doc, err := ingest.ExtractText(ingest.FileMeta{
+		ID:       rec.ExternalID,
 		Name:     rec.Name,
 		MimeType: rec.MimeType,
 	}, body)

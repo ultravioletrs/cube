@@ -121,6 +121,48 @@ func TestSourceSyncService_AliasProviderE2E(t *testing.T) {
 	}
 }
 
+func TestSourceSyncService_NormalizesMissingMIMEFromName(t *testing.T) {
+	source := domain.Source{
+		ID:       "src-s3",
+		DomainID: "domain-1",
+		UserID:   "user-1",
+		Type:     domain.SourceTypeS3,
+		Name:     "Docs",
+		Config:   json.RawMessage(`{"bucket":"docs","root_path":"team/docs"}`),
+		Status:   domain.SourceStatusActive,
+	}
+	sources := &sourceRepoSyncStub{source: source}
+	records := &recordRepoSyncStub{}
+	providers := ingest.NewSourceProviderRegistry(&staticSourceProvider{
+		providerType: domain.SourceTypeS3,
+		files: []ingest.SourceFile{{
+			ExternalID:    "team/docs/report.pdf",
+			Name:          "report",
+			ExternalRef:   "team/docs/report.pdf",
+			SourceVersion: "etag-1",
+		}},
+		prunesStale: true,
+	})
+
+	svc := NewSourceSyncService(sources, records, providers)
+	res, err := svc.Sync(context.Background(), source.ID, source.DomainID)
+	if err != nil {
+		t.Fatalf("sync failed: %v", err)
+	}
+	if res.Discovered != 1 || res.Queued != 1 {
+		t.Fatalf("expected discovered=1 queued=1, got discovered=%d queued=%d", res.Discovered, res.Queued)
+	}
+	if len(records.upserts) != 1 {
+		t.Fatalf("expected one record upsert, got %d", len(records.upserts))
+	}
+	if records.upserts[0].MimeType != "application/pdf" {
+		t.Fatalf("expected inferred pdf mime, got %q", records.upserts[0].MimeType)
+	}
+	if records.upserts[0].Format != domain.RecordFormatPDF {
+		t.Fatalf("expected pdf format, got %q", records.upserts[0].Format)
+	}
+}
+
 type staticSourceProvider struct {
 	providerType domain.SourceType
 	files        []ingest.SourceFile

@@ -314,6 +314,7 @@ function SourcesPanel({
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const activeSet = useMemo(() => new Set(activeSources), [activeSources])
 
@@ -337,12 +338,22 @@ function SourcesPanel({
     return () => { cancelled = true }
   }, [customizeOpen, debouncedQuery, debouncedFolder, searchRecords])
 
-  const loadMore = () => {
-    setBusy(true)
-    searchRecords(debouncedQuery, debouncedFolder, results.length, RECORD_PAGE)
-      .then(page => { setResults(prev => [...prev, ...page.records]); setTotal(page.total) })
-      .catch(e => setError(e instanceof Error ? e.message : 'Failed to load records'))
-      .finally(() => setBusy(false))
+  const loadMore = async () => {
+    if (loading || loadingMore || results.length >= total) return
+    const offset = results.length
+    setLoadingMore(true)
+    setError(null)
+    try {
+      const page = await searchRecords(debouncedQuery, debouncedFolder, offset, RECORD_PAGE)
+      const seen = new Set(results.map(record => record.id))
+      const nextRecords = page.records.filter(record => !seen.has(record.id))
+      setResults(prev => [...prev, ...nextRecords])
+      setTotal(nextRecords.length === 0 && page.records.length === 0 ? offset : page.total)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load records')
+    } finally {
+      setLoadingMore(false)
+    }
   }
 
   // Resolve every record id matching the current query/folder, bounded by the cap.
@@ -512,11 +523,11 @@ function SourcesPanel({
           )}
           {results.length < total && (
             <button
-              onClick={loadMore}
-              disabled={busy}
-              style={{ width: '100%', marginTop: '6px', background: 'none', border: '1px dashed var(--border)', borderRadius: '6px', cursor: busy ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', padding: '5px 6px', opacity: busy ? 0.6 : 1 }}
+              onClick={() => { void loadMore() }}
+              disabled={loadingMore}
+              style={{ width: '100%', marginTop: '6px', background: 'none', border: '1px dashed var(--border)', borderRadius: '6px', cursor: loadingMore ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: 'var(--text-dim)', padding: '5px 6px', opacity: loadingMore ? 0.6 : 1 }}
             >
-              {busy ? 'Loading…' : `Show more (${total - results.length})`}
+              {loadingMore ? 'Loading...' : `Show more (${total - results.length})`}
             </button>
           )}
         </div>

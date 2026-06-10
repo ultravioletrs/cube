@@ -270,7 +270,7 @@ func s3BrowseEntryFromObject(currentPath, prefix string, obj minio.ObjectInfo) (
 		Name:       segment,
 		Path:       childPath,
 		IsDir:      false,
-		MimeType:   strings.TrimSpace(obj.ContentType),
+		MimeType:   ingest.NormalizeFileMIMEType(segment, obj.ContentType),
 		Size:       obj.Size,
 		ModifiedAt: &modified,
 	}, true
@@ -324,11 +324,12 @@ func listS3Files(ctx context.Context, cfg domain.S3Config) ([]ingest.SourceFile,
 			}
 
 			modified := obj.LastModified.UTC()
+			name := path.Base(key)
 			file := ingest.SourceFile{
 				ExternalID:       key,
-				Name:             path.Base(key),
+				Name:             name,
 				ExternalRef:      key,
-				MimeType:         strings.TrimSpace(obj.ContentType),
+				MimeType:         ingest.NormalizeFileMIMEType(name, obj.ContentType),
 				SourceVersion:    strings.TrimSpace(obj.ETag),
 				SourceModifiedAt: &modified,
 			}

@@ -103,12 +103,14 @@ func TestS3SourceProvider_ListAndDownload_Smoke(t *testing.T) {
 	if files[0].ExternalID != "team/docs/sub/b.txt" {
 		t.Fatalf("unexpected external id: %q", files[0].ExternalID)
 	}
+	if files[0].MimeType != "text/plain" {
+		t.Fatalf("expected inferred text/plain mime, got %q", files[0].MimeType)
+	}
 
 	text, pageCount, err := provider.DownloadRecord(context.Background(), domain.Record{
 		ID:         "rec-s3-1",
 		ExternalID: "team/docs/sub/b.txt",
-		Name:       "b.txt",
-		MimeType:   "text/plain",
+		Name:       "b",
 	}, src)
 	if err != nil {
 		t.Fatalf("DownloadRecord returned error: %v", err)
@@ -118,6 +120,103 @@ func TestS3SourceProvider_ListAndDownload_Smoke(t *testing.T) {
 	}
 	if pageCount != nil {
 		t.Fatalf("expected nil page count, got %d", *pageCount)
+	}
+}
+
+func TestS3SourceProvider_ListFilesInfersMIMEFromObjectKey(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet ||
+			(r.URL.Path != "/docs" && r.URL.Path != "/docs/") ||
+			r.URL.Query().Get("list-type") != "2" {
+			http.Error(w, "not found", http.StatusNotFound)
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.String())
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = io.WriteString(w, `<?xml version="1.0" encoding="UTF-8"?>
+<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+  <Name>docs</Name>
+  <Prefix>team/docs/</Prefix>
+  <KeyCount>4</KeyCount>
+  <MaxKeys>1000</MaxKeys>
+  <IsTruncated>false</IsTruncated>
+  <Contents>
+    <Key>team/docs/report.pdf</Key>
+    <LastModified>2026-05-12T10:00:00.000Z</LastModified>
+    <ETag>"etag-pdf"</ETag>
+    <Size>1024</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+  <Contents>
+    <Key>team/docs/notes.md</Key>
+    <LastModified>2026-05-12T10:00:00.000Z</LastModified>
+    <ETag>"etag-md"</ETag>
+    <Size>12</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+  <Contents>
+    <Key>team/docs/scan.png</Key>
+    <LastModified>2026-05-12T10:00:00.000Z</LastModified>
+    <ETag>"etag-png"</ETag>
+    <Size>256</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+  <Contents>
+    <Key>team/docs/archive.bin</Key>
+    <LastModified>2026-05-12T10:00:00.000Z</LastModified>
+    <ETag>"etag-bin"</ETag>
+    <Size>64</Size>
+    <StorageClass>STANDARD</StorageClass>
+  </Contents>
+</ListBucketResult>`)
+	}))
+	defer srv.Close()
+
+	srvURL, err := url.Parse(srv.URL)
+	if err != nil {
+		t.Fatalf("parse httptest server url: %v", err)
+	}
+
+	cfgRaw, err := json.Marshal(domain.S3Config{
+		Endpoint:        srvURL.Host,
+		Region:          "us-east-1",
+		Bucket:          "docs",
+		AccessKeyID:     "test-access",
+		SecretAccessKey: "test-secret",
+		UseSSL:          testBoolPtr(false),
+		PathStyle:       testBoolPtr(true),
+		RootPath:        "team/docs",
+		ScopePaths:      []string{"team/docs"},
+	})
+	if err != nil {
+		t.Fatalf("marshal config: %v", err)
+	}
+
+	provider := s3source.NewSourceProvider()
+	files, err := provider.ListFiles(context.Background(), "user-1", domain.Source{
+		ID:     "src-s3-1",
+		Type:   domain.SourceTypeS3,
+		Config: cfgRaw,
+	})
+	if err != nil {
+		t.Fatalf("ListFiles returned error: %v", err)
+	}
+
+	got := make(map[string]string, len(files))
+	for _, file := range files {
+		got[file.Name] = file.MimeType
+	}
+	want := map[string]string{
+		"archive.bin": "",
+		"notes.md":    "text/markdown",
+		"report.pdf":  "application/pdf",
+		"scan.png":    "image/png",
+	}
+	for name, mimeType := range want {
+		if got[name] != mimeType {
+			t.Fatalf("expected %s mime %q, got %q in %#v", name, mimeType, got[name], got)
+		}
 	}
 }
 
@@ -213,6 +312,9 @@ func TestBrowseS3PathPagePaginatesFlatListing(t *testing.T) {
 	}
 	if len(first.Entries) != 2 || first.Entries[0].Path != "a.txt" || first.Entries[1].Path != "b.txt" {
 		t.Fatalf("unexpected first page: %#v", first.Entries)
+	}
+	if first.Entries[0].MimeType != "text/plain" || first.Entries[1].MimeType != "text/plain" {
+		t.Fatalf("expected inferred text/plain mimes, got %#v", first.Entries)
 	}
 	if !first.HasMore || first.NextPageToken != "b.txt" {
 		t.Fatalf("expected first page to continue after b.txt, got has_more=%v token=%q", first.HasMore, first.NextPageToken)

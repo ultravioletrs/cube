@@ -294,6 +294,7 @@ func (w *Worker) processImageRecord(ctx, statusCtx context.Context, rec domain.R
 	}
 
 	doc, err := ExtractText(FileMeta{
+		ID:       rec.ExternalID,
 		Name:     rec.Name,
 		MimeType: rec.MimeType,
 	}, content)
