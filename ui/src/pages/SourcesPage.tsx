@@ -93,12 +93,12 @@ function SourceRow(
 
       <button
         onClick={onOpen}
-        title="Open in prompt"
+        title="Browse source records"
         style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 10px', background: 'none', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', transition: 'all 0.15s', flexShrink: 0 }}
         onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)' }}
         onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-dim)' }}
       >
-        Open
+        Browse
       </button>
 
       {source.sourceType === 'google_drive' && (
@@ -273,7 +273,7 @@ export default function SourcesPage() {
             source={source}
             syncing={!!syncing[source.id]}
             onEdit={() => setEditingSource(source)}
-            onOpen={() => navigate('/chat', { state: { sourceID: source.id, sourceName: source.name } })}
+            onOpen={() => navigate('/records', { state: { sourceID: source.id, sourceName: source.name } })}
             onSync={() => { void handleSync(source.id) }}
             onDelete={() => { void handleDelete(source.id) }}
           />

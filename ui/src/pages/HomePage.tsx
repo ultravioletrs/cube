@@ -385,8 +385,8 @@ export default function HomePage() {
     }
   }
 
-  function handleOpenSourceChat(sourceID: string, sourceName: string) {
-    navigate('/chat', { state: { sourceID, sourceName } })
+  function handleBrowseSourceRecords(sourceID: string, sourceName: string) {
+    navigate('/records', { state: { sourceID, sourceName } })
   }
 
   return (
@@ -563,7 +563,7 @@ export default function HomePage() {
                 return (
                   <div
                     key={ds.id}
-                    onClick={() => handleOpenSourceChat(ds.id, ds.name)}
+                    onClick={() => handleBrowseSourceRecords(ds.id, ds.name)}
                     style={{ display: 'flex', flexDirection: 'column', padding: '14px 32px', borderBottom: '1px solid var(--border)', gap: '8px', borderLeft: '2px solid transparent', cursor: 'pointer' }}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%' }}>

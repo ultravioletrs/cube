@@ -1,7 +1,7 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { cancelRecordIngest, deleteRecord, listRecords, retryRecordIngest, uploadRecordFile } from '@/lib/embedder/service'
 import { imageIngestLabel, imageIngestStatusText, imageRecordSubtext } from '@/lib/embedder/image-ingest'
@@ -34,6 +34,11 @@ const formatFilterOptions: Array<{ value: RecordFormat | 'all'; label: string }>
   { value: 'image', label: 'Image' },
   { value: 'link', label: 'Link' },
 ]
+
+interface RecordsRouteState {
+  sourceID?: string
+  sourceName?: string
+}
 
 function ingestProgress(record: AppRecord): number | null {
   const total = record.ingestTotalChunks ?? 0
@@ -469,15 +474,20 @@ function DetailPanel({ record, onClose, onStartChat, onRetry, onCancel }: { reco
 
 export default function RecordsPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { tokens } = useAuth()
   const { records, setRecords, driveSources, activeDomain } = useOutletContext<AppContext>()
+  const routeState = (location.state ?? null) as RecordsRouteState | null
+  const routeSourceID = typeof routeState?.sourceID === 'string' ? routeState.sourceID : ''
+  const routeSourceName = typeof routeState?.sourceName === 'string' ? routeState.sourceName : ''
+  const appliedRouteKeyRef = useRef('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = records.find(r => r.id === selectedId) ?? null
   const [showAddRecord, setShowAddRecord] = useState(false)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<AppRecord['status'] | 'all'>('all')
   const [formatFilter, setFormatFilter] = useState<RecordFormat | 'all'>('all')
-  const [sourceFilter, setSourceFilter] = useState('all')
+  const [sourceFilter, setSourceFilter] = useState(routeSourceID || 'all')
   const [selectedRecordIds, setSelectedRecordIds] = useState<Set<string>>(() => new Set())
   const [bulkWorking, setBulkWorking] = useState(false)
   const [groupByFolder, setGroupByFolder] = useState(false)
@@ -490,6 +500,15 @@ export default function RecordsPage() {
   const domainID = activeDomain?.id ?? ''
 
   const refreshRecords = useCallback(() => { setRefreshTick(t => t + 1) }, [])
+
+  useEffect(() => {
+    if (!routeSourceID || appliedRouteKeyRef.current === location.key) return
+    appliedRouteKeyRef.current = location.key
+    setSourceFilter(routeSourceID)
+    setSearch('')
+    setSelectedId(null)
+    setSelectedRecordIds(new Set())
+  }, [location.key, routeSourceID])
 
   useEffect(() => {
     if (!accessToken) return
@@ -520,6 +539,13 @@ export default function RecordsPage() {
   const selectedFilteredCount = filteredIds.filter(id => selectedRecordIds.has(id)).length
   const allFilteredSelected = filteredIds.length > 0 && selectedFilteredCount === filteredIds.length
   const hasActiveFilters = statusFilter !== 'all' || formatFilter !== 'all' || sourceFilter !== 'all'
+  const sourceFilterOptions = [
+    { value: 'all', label: 'All sources' },
+    ...driveSources.map(source => ({ value: source.id, label: source.name })),
+  ]
+  if (routeSourceID && !sourceFilterOptions.some(option => option.value === routeSourceID)) {
+    sourceFilterOptions.push({ value: routeSourceID, label: routeSourceName || 'Selected source' })
+  }
 
   const folderGroups: Array<[string, AppRecord[]]> = (() => {
     if (!groupByFolder) return []
@@ -750,10 +776,7 @@ export default function RecordsPage() {
           <FilterSelect
             label="Source"
             value={sourceFilter}
-            options={[
-              { value: 'all', label: 'All sources' },
-              ...driveSources.map(source => ({ value: source.id, label: source.name })),
-            ]}
+            options={sourceFilterOptions}
             onChange={setSourceFilter}
           />
           {(hasActiveFilters || search) && (
