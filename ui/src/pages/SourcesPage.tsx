@@ -61,14 +61,28 @@ function SourceRow(
   },
 ) {
   const c = driveStatusColors[source.status] ?? driveStatusColors.active
-  const sourceKindLabel = source.sourceType === 'google_drive' ? 'Google Drive' : 'Cloud Storage'
+  const sourceKindLabel = source.sourceType === 'google_drive'
+    ? 'Google Drive'
+    : source.sourceType === 's3'
+      ? 'S3'
+      : source.sourceType === 'microsoft'
+        ? 'OneDrive / SharePoint'
+        : 'Cloud Storage'
+  function pathScope(rootPath?: string, selectedPaths?: string[]): string {
+    if (selectedPaths && selectedPaths.length > 0) return `${selectedPaths.length} selected paths`
+    return rootPath || 'full scope'
+  }
   const sourceLocation = source.sourceType === 'google_drive'
     ? (source.selectedFileIDs.length > 0
       ? `${source.selectedFileIDs.length} selected files`
       : source.selectedFolderIDs.length > 0
         ? `${source.selectedFolderIDs.length} selected folders`
         : 'full scope')
-    : source.rcloneRootPath || source.rcloneScopePaths?.join(', ') || '—'
+    : source.sourceType === 's3'
+      ? pathScope(source.s3?.rootPath, source.s3?.selectedPaths)
+      : source.sourceType === 'microsoft'
+        ? pathScope(source.microsoft?.rootPath, source.microsoft?.selectedPaths)
+        : source.rcloneRootPath || source.rcloneScopePaths?.join(', ') || '—'
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '14px 32px', borderBottom: '1px solid var(--border)', gap: '8px', borderLeft: '2px solid transparent' }}>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>

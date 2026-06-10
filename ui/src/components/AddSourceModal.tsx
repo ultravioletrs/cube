@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useMemo, useState } from 'react'
 import {
+  browseCloudPath,
   browseGoogleDrive,
-  browseRclonePath,
   exchangeGoogleOAuth,
   getGoogleOAuthURL,
+  type CloudBrowseConfig,
+  type CloudProvider,
   type DriveFileOption,
   type DriveFolderOption,
   type RcloneFolderOption,
 } from '@/lib/embedder/service'
 import { resolveDriveFileTypeVisual } from '@/lib/embedder/file-type'
-import type { DriveSourceDraft } from '@/types'
+import type { DriveSourceDraft, MicrosoftConfig, S3Config } from '@/types'
 
 interface Props {
   authToken: string
@@ -88,7 +90,7 @@ export default function AddSourceModal({
   initialGoogleAccessToken = '',
   initialGoogleRefreshToken = '',
 }: Props) {
-  const [providerTab, setProviderTab] = useState<'google' | 'rclone'>('google')
+  const [providerTab, setProviderTab] = useState<'google' | 's3' | 'microsoft' | 'rclone'>('google')
   const [name, setName] = useState('')
   const [importMode, setImportMode] = useState<'selected' | 'all'>('selected')
 
@@ -125,16 +127,34 @@ export default function AddSourceModal({
 
   const [rcloneRemote, setRcloneRemote] = useState('')
   const [rcloneConfigRef, setRcloneConfigRef] = useState('')
-  const [rcloneCurrentPath, setRcloneCurrentPath] = useState('')
-  const [rcloneParentPath, setRcloneParentPath] = useState<string | undefined>(undefined)
-  const [rcloneFolders, setRcloneFolders] = useState<RcloneFolderOption[]>([])
-  const [rcloneFiles, setRcloneFiles] = useState<DriveFileOption[]>([])
-  const [rcloneSelection, setRcloneSelection] = useState<string[]>([])
-  const [rcloneSelectionMeta, setRcloneSelectionMetaMap] = useState<Record<string, { name: string; path: string; kind: 'file' | 'folder' }>>({})
-  const [rcloneSearch, setRcloneSearch] = useState('')
-  const [rcloneLoading, setRcloneLoading] = useState(false)
-  const [rcloneLoaded, setRcloneLoaded] = useState(false)
-  const [rcloneError, setRcloneError] = useState('')
+
+  // S3 credentials.
+  const [s3Endpoint, setS3Endpoint] = useState('')
+  const [s3Region, setS3Region] = useState('')
+  const [s3Bucket, setS3Bucket] = useState('')
+  const [s3AccessKeyID, setS3AccessKeyID] = useState('')
+  const [s3SecretAccessKey, setS3SecretAccessKey] = useState('')
+  const [s3SessionToken, setS3SessionToken] = useState('')
+  const [s3PathStyle, setS3PathStyle] = useState(false)
+
+  // Microsoft (OneDrive / SharePoint) credentials.
+  const [msTenantID, setMsTenantID] = useState('')
+  const [msClientID, setMsClientID] = useState('')
+  const [msClientSecret, setMsClientSecret] = useState('')
+  const [msAccessToken, setMsAccessToken] = useState('')
+  const [msRefreshToken, setMsRefreshToken] = useState('')
+  const [msDriveID, setMsDriveID] = useState('')
+  const [msSiteID, setMsSiteID] = useState('')
+  const [cloudCurrentPath, setCloudCurrentPath] = useState('')
+  const [cloudParentPath, setCloudParentPath] = useState<string | undefined>(undefined)
+  const [cloudFolders, setCloudFolders] = useState<RcloneFolderOption[]>([])
+  const [cloudFiles, setCloudFiles] = useState<DriveFileOption[]>([])
+  const [cloudSelection, setCloudSelection] = useState<string[]>([])
+  const [cloudSelectionMeta, setCloudSelectionMetaMap] = useState<Record<string, { name: string; path: string; kind: 'file' | 'folder' }>>({})
+  const [cloudSearch, setCloudSearch] = useState('')
+  const [cloudLoading, setCloudLoading] = useState(false)
+  const [cloudLoaded, setCloudLoaded] = useState(false)
+  const [cloudError, setCloudError] = useState('')
 
   const [syncEnabled, setSyncEnabled] = useState(true)
   const [autoSyncInterval, setAutoSyncInterval] = useState('60')
@@ -162,17 +182,17 @@ export default function AddSourceModal({
 
   const folderPathLabel = useMemo(() => folderPathItems.map(item => item.name).join(' / '), [folderPathItems])
 
-  const visibleRcloneFolders = useMemo(() => {
-    const q = rcloneSearch.trim().toLowerCase()
-    if (!q) return rcloneFolders
-    return rcloneFolders.filter(folder => folder.name.toLowerCase().includes(q) || folder.path.toLowerCase().includes(q))
-  }, [rcloneFolders, rcloneSearch])
+  const visibleCloudFolders = useMemo(() => {
+    const q = cloudSearch.trim().toLowerCase()
+    if (!q) return cloudFolders
+    return cloudFolders.filter(folder => folder.name.toLowerCase().includes(q) || folder.path.toLowerCase().includes(q))
+  }, [cloudFolders, cloudSearch])
 
-  const visibleRcloneFiles = useMemo(() => {
-    const q = rcloneSearch.trim().toLowerCase()
-    if (!q) return rcloneFiles
-    return rcloneFiles.filter(file => file.name.toLowerCase().includes(q) || file.path.toLowerCase().includes(q))
-  }, [rcloneFiles, rcloneSearch])
+  const visibleCloudFiles = useMemo(() => {
+    const q = cloudSearch.trim().toLowerCase()
+    if (!q) return cloudFiles
+    return cloudFiles.filter(file => file.name.toLowerCase().includes(q) || file.path.toLowerCase().includes(q))
+  }, [cloudFiles, cloudSearch])
 
   const shownFolders = useMemo(() => folders.slice(0, folderVisibleLimit), [folders, folderVisibleLimit])
   const shownFiles = useMemo(() => visibleFiles.slice(0, fileVisibleLimit), [visibleFiles, fileVisibleLimit])
@@ -352,9 +372,17 @@ export default function AddSourceModal({
         e.selectedFileIDs = 'Select at least one file or folder to sync'
       }
     } else {
-      if (!rcloneRemote.trim()) e.rcloneRemote = 'Rclone remote is required'
-      if (rcloneSelection.length === 0 && !rcloneCurrentPath) {
-        e.rcloneSelection = 'Select at least one file/folder or browse to a root path'
+      if (providerTab === 's3') {
+        if (!s3Bucket.trim()) e.s3Bucket = 'Bucket is required'
+      } else if (providerTab === 'microsoft') {
+        if (!msAccessToken.trim() && !(msClientID.trim() && msClientSecret)) {
+          e.microsoft = 'Provide an access token or client id + secret'
+        }
+      } else if (!rcloneRemote.trim()) {
+        e.rcloneRemote = 'Storage remote is required'
+      }
+      if (cloudSelection.length === 0 && !cloudCurrentPath) {
+        e.cloudSelection = 'Select at least one file/folder or browse to a root path'
       }
     }
     if (syncEnabled && (!autoSyncInterval || Number.parseInt(autoSyncInterval, 10) < 1)) {
@@ -371,45 +399,75 @@ export default function AddSourceModal({
       return
     }
 
-    const source: DriveSourceDraft = providerTab === 'google'
-      ? {
+    const interval = syncEnabled ? Number.parseInt(autoSyncInterval, 10) : 0
+    const selectedPaths = Array.from(new Set(cloudSelection))
+    const rootPath = cloudCurrentPath || ''
+
+    // Shared empty defaults so each branch only sets its own provider fields.
+    const base: DriveSourceDraft = {
+      sourceType: 'google_drive',
+      name: name.trim(),
+      folderLink: '',
+      accessToken: '',
+      refreshToken: '',
+      clientId: '',
+      clientSecret: '',
+      selectedFileIDs: [],
+      selectedFolderIDs: [],
+      syncEnabled,
+      autoSyncInterval: interval,
+    }
+
+    let source: DriveSourceDraft
+    if (providerTab === 'google') {
+      source = {
+        ...base,
         sourceType: 'google_drive',
-        name: name.trim(),
         folderLink: currentFolderID,
         accessToken: googleAccessToken,
         refreshToken: googleRefreshToken,
-        clientId: '',
-        clientSecret: '',
         selectedFileIDs: importMode === 'selected' ? selectedFileIDs : [],
         selectedFolderIDs: importMode === 'selected'
           ? selectedFolderIDs
           : (currentFolderID ? [currentFolderID] : []),
-        syncEnabled,
-        autoSyncInterval: syncEnabled ? Number.parseInt(autoSyncInterval, 10) : 0,
-        rcloneRemote: '',
-        rcloneRootPath: '',
-        rcloneScopePaths: [],
-        selectedRclonePaths: [],
-        rcloneConfigRef: '',
       }
-      : {
+    } else if (providerTab === 's3') {
+      const s3: S3Config = {
+        endpoint: s3Endpoint.trim(),
+        region: s3Region.trim(),
+        bucket: s3Bucket.trim(),
+        accessKeyID: s3AccessKeyID.trim(),
+        secretAccessKey: s3SecretAccessKey,
+        sessionToken: s3SessionToken.trim(),
+        pathStyle: s3PathStyle,
+        rootPath,
+        selectedPaths,
+      }
+      source = { ...base, sourceType: 's3', s3 }
+    } else if (providerTab === 'microsoft') {
+      const microsoft: MicrosoftConfig = {
+        tenantID: msTenantID.trim(),
+        clientID: msClientID.trim(),
+        clientSecret: msClientSecret,
+        accessToken: msAccessToken.trim(),
+        refreshToken: msRefreshToken.trim(),
+        driveID: msDriveID.trim(),
+        siteID: msSiteID.trim(),
+        rootPath,
+        selectedPaths,
+      }
+      source = { ...base, sourceType: 'microsoft', microsoft }
+    } else {
+      source = {
+        ...base,
         sourceType: 'rclone',
-        name: name.trim(),
-        folderLink: '',
-        accessToken: '',
-        refreshToken: '',
-        clientId: '',
-        clientSecret: '',
-        selectedFileIDs: [],
-        selectedFolderIDs: [],
-        syncEnabled,
-        autoSyncInterval: syncEnabled ? Number.parseInt(autoSyncInterval, 10) : 0,
         rcloneRemote: rcloneRemote.trim(),
-        rcloneRootPath: rcloneCurrentPath || '',
+        rcloneRootPath: rootPath,
         rcloneScopePaths: [],
-        selectedRclonePaths: Array.from(new Set(rcloneSelection)),
+        selectedRclonePaths: selectedPaths,
         rcloneConfigRef: rcloneConfigRef.trim(),
       }
+    }
 
     setSaving(true)
     try {
@@ -547,48 +605,95 @@ export default function AddSourceModal({
     }
   }
 
-  function setRcloneSelectionMetaEntry(path: string, name: string, kind: 'file' | 'folder') {
-    setRcloneSelectionMetaMap(prev => ({
+  function setCloudSelectionMetaEntry(path: string, name: string, kind: 'file' | 'folder') {
+    setCloudSelectionMetaMap(prev => ({
       ...prev,
       [path]: { path, name, kind },
     }))
   }
 
-  function toggleRcloneSelection(path: string, checked: boolean, name: string, kind: 'file' | 'folder') {
-    setRcloneSelection(prev => {
+  function toggleCloudSelection(path: string, checked: boolean, name: string, kind: 'file' | 'folder') {
+    setCloudSelection(prev => {
       if (checked) return Array.from(new Set([...prev, path]))
       return prev.filter(item => item !== path)
     })
-    setRcloneSelectionMetaEntry(path, name, kind)
-    clearFieldError('rcloneSelection')
+    setCloudSelectionMetaEntry(path, name, kind)
+    clearFieldError('cloudSelection')
   }
 
-  async function loadRclonePath(path?: string) {
-    if (!rcloneRemote.trim()) {
-      setRcloneError('Enter rclone remote first (example: gdrive).')
+  // activeCloudProvider maps the non-Google provider tabs onto the path-based
+  // cloud-browse provider. Google never reaches here.
+  const activeCloudProvider: CloudProvider = providerTab === 's3'
+    ? 's3'
+    : providerTab === 'microsoft'
+      ? 'microsoft'
+      : 'rclone'
+
+  function buildCloudConfig(): CloudBrowseConfig {
+    switch (activeCloudProvider) {
+      case 's3':
+        return {
+          endpoint: s3Endpoint.trim(),
+          region: s3Region.trim(),
+          bucket: s3Bucket.trim(),
+          accessKeyID: s3AccessKeyID.trim(),
+          secretAccessKey: s3SecretAccessKey,
+          sessionToken: s3SessionToken.trim(),
+          pathStyle: s3PathStyle,
+        }
+      case 'microsoft':
+        return {
+          tenantID: msTenantID.trim(),
+          clientID: msClientID.trim(),
+          clientSecret: msClientSecret,
+          accessToken: msAccessToken.trim(),
+          refreshToken: msRefreshToken.trim(),
+          driveID: msDriveID.trim(),
+          siteID: msSiteID.trim(),
+        }
+      default:
+        return { remote: rcloneRemote.trim(), configRef: rcloneConfigRef.trim() }
+    }
+  }
+
+  // cloudReady reports whether enough credentials exist to browse the remote.
+  function cloudReady(): boolean {
+    switch (activeCloudProvider) {
+      case 's3':
+        return Boolean(s3Bucket.trim())
+      case 'microsoft':
+        return Boolean(msAccessToken.trim() || (msClientID.trim() && msClientSecret))
+      default:
+        return Boolean(rcloneRemote.trim())
+    }
+  }
+
+  async function loadCloudPath(path?: string) {
+    if (!cloudReady()) {
+      setCloudError('Enter connection details first.')
       return
     }
-    setRcloneLoading(true)
-    setRcloneError('')
+    setCloudLoading(true)
+    setCloudError('')
     try {
-      const result = await browseRclonePath(authToken, rcloneRemote.trim(), path)
-      setRcloneCurrentPath(result.currentPath ?? '')
-      setRcloneParentPath(result.parentPath)
-      setRcloneFolders(result.folders)
-      setRcloneFiles(result.files)
-      setRcloneLoaded(true)
+      const result = await browseCloudPath(authToken, activeCloudProvider, buildCloudConfig(), path)
+      setCloudCurrentPath(result.currentPath ?? '')
+      setCloudParentPath(result.parentPath)
+      setCloudFolders(result.folders)
+      setCloudFiles(result.files)
+      setCloudLoaded(true)
     } catch (err) {
-      setRcloneError(err instanceof Error ? err.message : 'Failed to browse rclone path')
-      setRcloneFolders([])
-      setRcloneFiles([])
-      setRcloneLoaded(false)
+      setCloudError(err instanceof Error ? err.message : 'Failed to browse remote path')
+      setCloudFolders([])
+      setCloudFiles([])
+      setCloudLoaded(false)
     } finally {
-      setRcloneLoading(false)
+      setCloudLoading(false)
     }
   }
 
-  function rclonePathParts() {
-    const current = rcloneCurrentPath.replace(/^\/+|\/+$/g, '')
+  function cloudPathParts() {
+    const current = cloudCurrentPath.replace(/^\/+|\/+$/g, '')
     if (!current) return [{ label: '/', path: '' }]
     const parts = current.split('/')
     const out: Array<{ label: string; path: string }> = [{ label: '/', path: '' }]
@@ -600,7 +705,7 @@ export default function AddSourceModal({
     return out
   }
 
-  const rcloneBreadcrumbs = rclonePathParts()
+  const cloudBreadcrumbs = cloudPathParts()
 
   return (
     <div
@@ -662,43 +767,34 @@ export default function AddSourceModal({
             />
           </Field>
 
-          <div style={{ display: 'flex', gap: '8px', padding: '4px', border: '1px solid var(--border)', borderRadius: '10px', background: 'rgba(255,255,255,0.02)' }}>
-            <button
-              type="button"
-              onClick={() => setProviderTab('google')}
-              style={{
-                flex: 1,
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: providerTab === 'google' ? 'rgba(0,212,180,0.12)' : 'transparent',
-                color: providerTab === 'google' ? 'var(--accent)' : 'var(--text-muted)',
-                cursor: 'pointer',
-                fontFamily: 'Space Grotesk, sans-serif',
-                fontSize: '12px',
-                fontWeight: 600,
-                padding: '8px 10px',
-              }}
-            >
-              Google Drive (Recommended)
-            </button>
-            <button
-              type="button"
-              onClick={() => setProviderTab('rclone')}
-              style={{
-                flex: 1,
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: providerTab === 'rclone' ? 'rgba(0,212,180,0.12)' : 'transparent',
-                color: providerTab === 'rclone' ? 'var(--accent)' : 'var(--text-muted)',
-                cursor: 'pointer',
-                fontFamily: 'Space Grotesk, sans-serif',
-                fontSize: '12px',
-                fontWeight: 600,
-                padding: '8px 10px',
-              }}
-            >
-              Other Clouds
-            </button>
+          <div style={{ display: 'flex', gap: '8px', padding: '4px', border: '1px solid var(--border)', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
+            {([
+              { id: 'google', label: 'Google Drive' },
+              { id: 's3', label: 'S3' },
+              { id: 'microsoft', label: 'OneDrive / SharePoint' },
+              { id: 'rclone', label: 'Other Clouds' },
+            ] as Array<{ id: typeof providerTab; label: string }>).map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setProviderTab(tab.id)}
+                style={{
+                  flex: '1 1 auto',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border)',
+                  background: providerTab === tab.id ? 'rgba(0,212,180,0.12)' : 'transparent',
+                  color: providerTab === tab.id ? 'var(--accent)' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  fontFamily: 'Space Grotesk, sans-serif',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  padding: '8px 10px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {providerTab === 'google' && (
@@ -840,34 +936,119 @@ export default function AddSourceModal({
             </>
           )}
 
-          {providerTab === 'rclone' && (
+          {providerTab !== 'google' && (
             <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.025)', borderRadius: '10px', border: `1px solid ${errors.rcloneRemote ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
-                <Field label="Storage Remote *" hint="Example: gdrive, onedrive, dropbox, s3" error={errors.rcloneRemote}>
-                  <input
-                    type="text"
-                    placeholder="gdrive"
-                    value={rcloneRemote}
-                    onChange={e => {
-                      setRcloneRemote(e.target.value)
-                      clearFieldError('rcloneRemote')
-                    }}
-                    style={{ ...inputStyle, borderColor: errors.rcloneRemote ? 'rgba(255,107,107,0.5)' : undefined }}
-                  />
-                </Field>
+              {providerTab === 's3' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.025)', borderRadius: '10px', border: `1px solid ${errors.s3Bucket || errors.microsoft ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
+                  <Field label="Bucket *" error={errors.s3Bucket}>
+                    <input type="text" placeholder="my-bucket" value={s3Bucket} onChange={e => { setS3Bucket(e.target.value); clearFieldError('s3Bucket') }} style={{ ...inputStyle, borderColor: errors.s3Bucket ? 'rgba(255,107,107,0.5)' : undefined }} />
+                  </Field>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Region" hint="e.g. us-east-1">
+                        <input type="text" placeholder="us-east-1" value={s3Region} onChange={e => setS3Region(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Endpoint" hint="optional, for MinIO / S3-compatible">
+                        <input type="text" placeholder="https://s3.example.com" value={s3Endpoint} onChange={e => setS3Endpoint(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Access Key ID">
+                        <input type="text" autoComplete="off" placeholder="AKIA…" value={s3AccessKeyID} onChange={e => setS3AccessKeyID(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Secret Access Key">
+                        <input type="password" autoComplete="off" placeholder="••••••" value={s3SecretAccessKey} onChange={e => setS3SecretAccessKey(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                  </div>
+                  <Field label="Session Token (optional)">
+                    <input type="password" autoComplete="off" placeholder="optional STS token" value={s3SessionToken} onChange={e => setS3SessionToken(e.target.value)} style={inputStyle} />
+                  </Field>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={s3PathStyle} onChange={e => setS3PathStyle(e.target.checked)} style={{ accentColor: 'var(--accent)' }} />
+                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text)' }}>Use path-style addressing (MinIO / custom endpoints)</span>
+                  </label>
+                </div>
+              )}
 
-                <Field label="Config Ref (optional)" hint="Optional config reference if backend expects it.">
-                  <input
-                    type="text"
-                    placeholder="secret/cloud-storage"
-                    value={rcloneConfigRef}
-                    onChange={e => setRcloneConfigRef(e.target.value)}
-                    style={inputStyle}
-                  />
-                </Field>
-              </div>
+              {providerTab === 'microsoft' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.025)', borderRadius: '10px', border: `1px solid ${errors.microsoft ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
+                  <Field label="Access Token" hint="Graph access token; or use client id + secret below" error={errors.microsoft}>
+                    <input type="password" autoComplete="off" placeholder="eyJ0…" value={msAccessToken} onChange={e => { setMsAccessToken(e.target.value); clearFieldError('microsoft') }} style={inputStyle} />
+                  </Field>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Tenant ID">
+                        <input type="text" placeholder="common / tenant guid" value={msTenantID} onChange={e => setMsTenantID(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Client ID">
+                        <input type="text" autoComplete="off" placeholder="app client id" value={msClientID} onChange={e => { setMsClientID(e.target.value); clearFieldError('microsoft') }} style={inputStyle} />
+                      </Field>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Client Secret">
+                        <input type="password" autoComplete="off" placeholder="••••••" value={msClientSecret} onChange={e => { setMsClientSecret(e.target.value); clearFieldError('microsoft') }} style={inputStyle} />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Refresh Token (optional)">
+                        <input type="password" autoComplete="off" placeholder="optional" value={msRefreshToken} onChange={e => setMsRefreshToken(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Drive ID (optional)" hint="OneDrive drive id">
+                        <input type="text" placeholder="optional" value={msDriveID} onChange={e => setMsDriveID(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <Field label="Site ID (optional)" hint="SharePoint site id">
+                        <input type="text" placeholder="optional" value={msSiteID} onChange={e => setMsSiteID(e.target.value)} style={inputStyle} />
+                      </Field>
+                    </div>
+                  </div>
+                </div>
+              )}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', border: `1px solid ${errors.rcloneSelection ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
+              {providerTab === 'rclone' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.025)', borderRadius: '10px', border: `1px solid ${errors.rcloneRemote ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
+                  <Field label="Storage Remote *" hint="Example: gdrive, onedrive, dropbox, s3" error={errors.rcloneRemote}>
+                    <input
+                      type="text"
+                      placeholder="gdrive"
+                      value={rcloneRemote}
+                      onChange={e => {
+                        setRcloneRemote(e.target.value)
+                        clearFieldError('rcloneRemote')
+                      }}
+                      style={{ ...inputStyle, borderColor: errors.rcloneRemote ? 'rgba(255,107,107,0.5)' : undefined }}
+                    />
+                  </Field>
+
+                  <Field label="Config Ref (optional)" hint="Optional config reference if backend expects it.">
+                    <input
+                      type="text"
+                      placeholder="secret/cloud-storage"
+                      value={rcloneConfigRef}
+                      onChange={e => setRcloneConfigRef(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </Field>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.03)', borderRadius: '10px', border: `1px solid ${errors.cloudSelection ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                   <div>
                     <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '13px', color: 'var(--text)' }}>
@@ -879,32 +1060,32 @@ export default function AddSourceModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => { void loadRclonePath(rcloneCurrentPath || undefined) }}
-                    disabled={rcloneLoading || !rcloneRemote.trim()}
-                    style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '7px 10px', borderRadius: '8px', cursor: rcloneLoading || !rcloneRemote.trim() ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', opacity: rcloneLoading || !rcloneRemote.trim() ? 0.7 : 1 }}
+                    onClick={() => { void loadCloudPath(cloudCurrentPath || undefined) }}
+                    disabled={cloudLoading || !cloudReady()}
+                    style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text)', padding: '7px 10px', borderRadius: '8px', cursor: cloudLoading || !cloudReady() ? 'default' : 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', opacity: cloudLoading || !cloudReady() ? 0.7 : 1 }}
                   >
-                    {rcloneLoading ? 'Loading…' : rcloneLoaded ? 'Refresh' : 'Load'}
+                    {cloudLoading ? 'Loading…' : cloudLoaded ? 'Refresh' : 'Load'}
                   </button>
                 </div>
 
-                {rcloneLoaded && (
+                {cloudLoaded && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                    {rcloneBreadcrumbs.map((crumb, index) => (
+                    {cloudBreadcrumbs.map((crumb, index) => (
                       <div key={`${crumb.path || 'root'}-${index}`} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {index > 0 && <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>/</span>}
                         <button
                           type="button"
-                          onClick={() => { void loadRclonePath(crumb.path || undefined) }}
-                          style={{ background: index === rcloneBreadcrumbs.length - 1 ? 'rgba(0,212,180,0.12)' : 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text)', padding: '4px 7px', borderRadius: '7px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
+                          onClick={() => { void loadCloudPath(crumb.path || undefined) }}
+                          style={{ background: index === cloudBreadcrumbs.length - 1 ? 'rgba(0,212,180,0.12)' : 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--text)', padding: '4px 7px', borderRadius: '7px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
                         >
                           {crumb.label}
                         </button>
                       </div>
                     ))}
-                    {rcloneParentPath !== undefined && (
+                    {cloudParentPath !== undefined && (
                       <button
                         type="button"
-                        onClick={() => { void loadRclonePath(rcloneParentPath || undefined) }}
+                        onClick={() => { void loadCloudPath(cloudParentPath || undefined) }}
                         style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', padding: '4px 7px', borderRadius: '7px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
                       >
                         Up
@@ -913,26 +1094,26 @@ export default function AddSourceModal({
                   </div>
                 )}
 
-                {rcloneLoaded && (
+                {cloudLoaded && (
                   <input
                     type="text"
                     placeholder="Filter folders/files..."
-                    value={rcloneSearch}
-                    onChange={e => setRcloneSearch(e.target.value)}
+                    value={cloudSearch}
+                    onChange={e => setCloudSearch(e.target.value)}
                     style={{ ...inputStyle, fontSize: '12px' }}
                   />
                 )}
 
-                {rcloneLoaded && (
+                {cloudLoaded && (
                   <div style={{ maxHeight: '260px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                    {visibleRcloneFolders.map(folder => {
-                      const checked = rcloneSelection.includes(folder.path)
+                    {visibleCloudFolders.map(folder => {
+                      const checked = cloudSelection.includes(folder.path)
                       return (
                         <label key={`dir-${folder.path}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '8px 10px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                           <input
                             type="checkbox"
                             checked={checked}
-                            onChange={e => toggleRcloneSelection(folder.path, e.target.checked, folder.name, 'folder')}
+                            onChange={e => toggleCloudSelection(folder.path, e.target.checked, folder.name, 'folder')}
                             style={{ marginTop: '2px', accentColor: 'var(--accent)' }}
                           />
                           <div style={{ minWidth: 0 }}>
@@ -946,14 +1127,14 @@ export default function AddSourceModal({
                       )
                     })}
 
-                    {visibleRcloneFiles.map(file => {
-                      const checked = rcloneSelection.includes(file.path)
+                    {visibleCloudFiles.map(file => {
+                      const checked = cloudSelection.includes(file.path)
                       return (
                         <label key={`file-${file.path}`} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '8px 10px', borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                           <input
                             type="checkbox"
                             checked={checked}
-                            onChange={e => toggleRcloneSelection(file.path, e.target.checked, file.name, 'file')}
+                            onChange={e => toggleCloudSelection(file.path, e.target.checked, file.name, 'file')}
                             style={{ marginTop: '2px', accentColor: 'var(--accent)' }}
                           />
                           <div style={{ minWidth: 0 }}>
@@ -967,20 +1148,20 @@ export default function AddSourceModal({
                       )
                     })}
 
-                    {visibleRcloneFolders.length === 0 && visibleRcloneFiles.length === 0 && (
+                    {visibleCloudFolders.length === 0 && visibleCloudFiles.length === 0 && (
                       <div style={{ ...hintStyle, padding: '10px' }}>No items in this path.</div>
                     )}
                   </div>
                 )}
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-                  <div style={hintStyle}>{rcloneSelection.length} paths selected</div>
+                  <div style={hintStyle}>{cloudSelection.length} paths selected</div>
                   <button
                     type="button"
                     onClick={() => {
-                      setRcloneSelection([])
-                      setRcloneSelectionMetaMap({})
-                      clearFieldError('rcloneSelection')
+                      setCloudSelection([])
+                      setCloudSelectionMetaMap({})
+                      clearFieldError('cloudSelection')
                     }}
                     style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', padding: '5px 8px', borderRadius: '7px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
                   >
@@ -988,17 +1169,17 @@ export default function AddSourceModal({
                   </button>
                 </div>
 
-                {rcloneSelection.length > 0 && (
+                {cloudSelection.length > 0 && (
                   <div style={{ maxHeight: '100px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', padding: '6px 8px', background: 'rgba(255,255,255,0.02)' }}>
-                    {rcloneSelection.map(path => {
-                      const meta = rcloneSelectionMeta[path]
+                    {cloudSelection.map(path => {
+                      const meta = cloudSelectionMeta[path]
                       return (
                         <div key={path} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                           <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>{meta?.kind === 'folder' ? '[DIR]' : '[FILE]'}</span>
                           <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>{meta?.name ?? path}</span>
                           <button
                             type="button"
-                            onClick={() => toggleRcloneSelection(path, false, meta?.name ?? path, meta?.kind ?? 'file')}
+                            onClick={() => toggleCloudSelection(path, false, meta?.name ?? path, meta?.kind ?? 'file')}
                             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
                           >
                             Remove
@@ -1009,8 +1190,8 @@ export default function AddSourceModal({
                   </div>
                 )}
 
-                {rcloneError && <div style={errorStyle}>{rcloneError}</div>}
-                {errors.rcloneSelection && <div style={errorStyle}>{errors.rcloneSelection}</div>}
+                {cloudError && <div style={errorStyle}>{cloudError}</div>}
+                {errors.cloudSelection && <div style={errorStyle}>{errors.cloudSelection}</div>}
               </div>
             </>
           )}

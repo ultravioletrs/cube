@@ -78,7 +78,36 @@ export interface Conversation {
   updatedAt: string
 }
 
-export type SourceType = 'google_drive' | 'rclone'
+export type SourceType = 'google_drive' | 's3' | 'microsoft' | 'rclone'
+
+// S3Config holds native S3/MinIO connection + scope fields.
+export interface S3Config {
+  endpoint?: string
+  region?: string
+  bucket?: string
+  accessKeyID?: string
+  secretAccessKey?: string
+  sessionToken?: string
+  useSSL?: boolean
+  pathStyle?: boolean
+  rootPath?: string
+  scopePaths?: string[]
+  selectedPaths?: string[]
+}
+
+// MicrosoftConfig holds native OneDrive/SharePoint (Graph) connection + scope fields.
+export interface MicrosoftConfig {
+  tenantID?: string
+  clientID?: string
+  clientSecret?: string
+  accessToken?: string
+  refreshToken?: string
+  driveID?: string
+  siteID?: string
+  rootPath?: string
+  scopePaths?: string[]
+  selectedPaths?: string[]
+}
 
 export interface DriveSourceDraft {
   sourceType: SourceType
@@ -88,6 +117,8 @@ export interface DriveSourceDraft {
   rcloneScopePaths?: string[]
   selectedRclonePaths?: string[]
   rcloneConfigRef?: string
+  s3?: S3Config
+  microsoft?: MicrosoftConfig
   folderLink: string
   accessToken: string
   refreshToken: string
@@ -108,6 +139,8 @@ export interface DriveSource {
   rcloneScopePaths?: string[]
   selectedRclonePaths?: string[]
   rcloneConfigRef?: string
+  s3?: S3Config
+  microsoft?: MicrosoftConfig
   folderLink: string
   accessToken: string
   refreshToken: string
