@@ -8,24 +8,14 @@ import type { AppContext, DriveSource, DriveSourceDraft } from '@/types'
 import UserMenu from '@/components/UserMenu'
 import AddSourceModal from '@/components/AddSourceModal'
 import EditSourceSelectionModal from '@/components/EditSourceSelectionModal'
+import SourceProviderIcon from '@/components/SourceProviderIcon'
+import { sourceProviderLabel } from '@/lib/embedder/source-provider'
 
 const driveStatusColors = {
   active:       { bg: 'rgba(0,212,180,0.1)',   color: '#00d4b4', dot: '#00d4b4' },
   syncing:      { bg: 'rgba(255,180,0,0.1)',   color: '#ffb400', dot: '#ffb400' },
   error:        { bg: 'rgba(255,80,80,0.1)',   color: '#ff5050', dot: '#ff5050' },
   disconnected: { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
-}
-
-function DriveIcon() {
-  return (
-    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(66,133,244,0.12)', border: '1px solid rgba(66,133,244,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <path d="M8.5 3H15.5L22 13H16L13 8.5L10 13H2L8.5 3Z" fill="#4285f4" opacity="0.85"/>
-        <path d="M2 13L5.5 19H18.5L22 13H16L13 18H11L8 13H2Z" fill="#34a853" opacity="0.85"/>
-        <path d="M10 13L13 8.5L16 13H10Z" fill="#fbbc04"/>
-      </svg>
-    </div>
-  )
 }
 
 function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () => void }) {
@@ -61,11 +51,7 @@ function SourceRow(
   },
 ) {
   const c = driveStatusColors[source.status] ?? driveStatusColors.active
-  const sourceKindLabel = source.sourceType === 'google_drive'
-    ? 'Google Drive'
-    : source.sourceType === 's3'
-      ? 'S3'
-      : 'OneDrive / SharePoint'
+  const sourceKindLabel = sourceProviderLabel(source.sourceType)
   function pathScope(rootPath?: string, selectedPaths?: string[]): string {
     if (selectedPaths && selectedPaths.length > 0) return `${selectedPaths.length} selected paths`
     return rootPath || 'full scope'
@@ -82,7 +68,7 @@ function SourceRow(
   return (
     <div style={{ display: 'flex', alignItems: 'center', padding: '14px 32px', borderBottom: '1px solid var(--border)', gap: '8px', borderLeft: '2px solid transparent' }}>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-        <DriveIcon />
+        <SourceProviderIcon sourceType={source.sourceType} framed />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13.5px', color: 'var(--text)', fontWeight: '500', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '340px' }}>{source.name}</div>
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>

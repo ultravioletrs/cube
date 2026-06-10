@@ -10,6 +10,8 @@ import UserMenu from '@/components/UserMenu'
 import AddRecordModal from '@/components/AddRecordModal'
 import AddSourceModal from '@/components/AddSourceModal'
 import EditSourceSelectionModal from '@/components/EditSourceSelectionModal'
+import SourceProviderIcon from '@/components/SourceProviderIcon'
+import { sourceProviderLabel } from '@/lib/embedder/source-provider'
 
 const statusColors = {
   queued:     { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', dot: '#9ca3af' },
@@ -66,18 +68,6 @@ function LinkRecordIcon() {
       <svg width="17" height="17" viewBox="0 0 20 20" fill="none">
         <path d="M8.5 11.5a4.5 4.5 0 006.364 0l2-2a4.5 4.5 0 00-6.364-6.364l-1.5 1.5" stroke="#00d4b4" strokeWidth="1.4" strokeLinecap="round"/>
         <path d="M11.5 8.5a4.5 4.5 0 00-6.364 0l-2 2a4.5 4.5 0 006.364 6.364l1.5-1.5" stroke="#00d4b4" strokeWidth="1.4" strokeLinecap="round"/>
-      </svg>
-    </div>
-  )
-}
-
-function DriveIcon() {
-  return (
-    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(66,133,244,0.12)', border: '1px solid rgba(66,133,244,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-        <path d="M8.5 3H15.5L22 13H16L13 8.5L10 13H2L8.5 3Z" fill="#4285f4" opacity="0.85"/>
-        <path d="M2 13L5.5 19H18.5L22 13H16L13 18H11L8 13H2Z" fill="#34a853" opacity="0.85"/>
-        <path d="M10 13L13 8.5L16 13H10Z" fill="#fbbc04"/>
       </svg>
     </div>
   )
@@ -556,7 +546,7 @@ export default function HomePage() {
               </div>
               {driveSources.map(ds => {
                 const c = driveStatusColors[ds.status] ?? driveStatusColors.active
-                const sourceKind = ds.sourceType === 'google_drive' ? 'Google Drive' : 'Cloud Storage'
+                const sourceKind = sourceProviderLabel(ds.sourceType)
                 const canEditSelection = ds.sourceType === 'google_drive'
                 const isSyncing = ds.status === 'syncing' || syncingSourceIDs.includes(ds.id)
                 const syncLabel = ds.status === 'error' || ds.status === 'disconnected'
@@ -578,7 +568,7 @@ export default function HomePage() {
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', width: '100%' }}>
                       <div style={{ flex: 1, display: 'flex', alignItems: 'flex-start', gap: '12px', minWidth: 0 }}>
-                        <DriveIcon />
+                        <SourceProviderIcon sourceType={ds.sourceType} framed />
                         <div style={{ minWidth: 0, width: '100%' }}>
                           <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '13.5px', color: 'var(--text)', fontWeight: '500', marginBottom: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '380px' }}>{ds.name}</div>
                           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import { useEffect, useMemo, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
+import SourceProviderIcon from '@/components/SourceProviderIcon'
 import {
   browseCloudPath,
   browseGoogleDrive,
@@ -14,7 +15,7 @@ import {
   type DriveFolderOption,
 } from '@/lib/embedder/service'
 import { resolveDriveFileTypeVisual } from '@/lib/embedder/file-type'
-import type { DriveSourceDraft, MicrosoftConfig, S3Config } from '@/types'
+import type { DriveSourceDraft, MicrosoftConfig, S3Config, SourceType } from '@/types'
 
 interface Props {
   authToken: string
@@ -74,16 +75,6 @@ function Field({ label, hint, error, children }: { label: string; hint?: string;
   )
 }
 
-function GoogleDriveIcon({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <path d="M8.5 3H15.5L22 13H16L13 8.5L10 13H2L8.5 3Z" fill="#4285f4" opacity="0.85"/>
-      <path d="M2 13L5.5 19H18.5L22 13H16L13 18H11L8 13H2Z" fill="#34a853" opacity="0.85"/>
-      <path d="M10 13L13 8.5L16 13H10Z" fill="#fbbc04"/>
-    </svg>
-  )
-}
-
 export default function AddSourceModal({
   authToken,
   onClose,
@@ -92,6 +83,7 @@ export default function AddSourceModal({
   initialGoogleRefreshToken = '',
 }: Props) {
   const [providerTab, setProviderTab] = useState<'google' | 's3' | 'microsoft'>('google')
+  const activeSourceType: SourceType = providerTab === 'google' ? 'google_drive' : providerTab
   const [name, setName] = useState('')
   const [importMode, setImportMode] = useState<'selected' | 'all'>('selected')
 
@@ -715,9 +707,7 @@ export default function AddSourceModal({
         onClick={e => e.stopPropagation()}
       >
         <div style={{ padding: '22px 24px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(66,133,244,0.12)', border: '1px solid rgba(66,133,244,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <GoogleDriveIcon size={18} />
-          </div>
+          <SourceProviderIcon sourceType={activeSourceType} framed />
           <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '700', fontSize: '16px', color: 'var(--text)', flex: 1 }}>
             Add Source
           </span>
@@ -743,10 +733,10 @@ export default function AddSourceModal({
 
           <div style={{ display: 'flex', gap: '8px', padding: '4px', border: '1px solid var(--border)', borderRadius: '10px', background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
             {([
-              { id: 'google', label: 'Google Drive' },
-              { id: 's3', label: 'S3' },
-              { id: 'microsoft', label: 'OneDrive / SharePoint' },
-            ] as Array<{ id: typeof providerTab; label: string }>).map(tab => (
+              { id: 'google', label: 'Google Drive', sourceType: 'google_drive' },
+              { id: 'microsoft', label: 'OneDrive / SharePoint', sourceType: 'microsoft' },
+              { id: 's3', label: 'S3', sourceType: 's3' },
+            ] as Array<{ id: typeof providerTab; label: string; sourceType: SourceType }>).map(tab => (
               <button
                 key={tab.id}
                 type="button"
@@ -763,8 +753,13 @@ export default function AddSourceModal({
                   fontWeight: 600,
                   padding: '8px 10px',
                   whiteSpace: 'nowrap',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '7px',
                 }}
               >
+                <SourceProviderIcon sourceType={tab.sourceType} size={16} />
                 {tab.label}
               </button>
             ))}
