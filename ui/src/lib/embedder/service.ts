@@ -18,6 +18,8 @@ interface RecordDTO {
   size_bytes?: number | null
   pages?: number | null
   external_url?: string
+  folder_path?: string | null
+  folder_id?: string | null
 }
 
 interface SourceDTO {
@@ -35,6 +37,7 @@ interface SourceDTO {
 
 interface RecordListDTO {
   records: RecordDTO[]
+  total?: number
 }
 
 interface SourceListDTO {
@@ -213,8 +216,15 @@ export interface RecordListOptions {
   status?: AppRecord['status'] | 'all'
   format?: RecordFormat | 'all'
   sourceID?: string
+  q?: string
+  folder?: string
   limit?: number
   offset?: number
+}
+
+export interface RecordPage {
+  records: AppRecord[]
+  total: number
 }
 
 type RawRecordStatus = 'queued' | 'processing' | 'indexed' | 'failed' | 'cancelled'
@@ -296,6 +306,8 @@ function mapRecord(dto: RecordDTO): AppRecord {
     pages: dto.pages ?? null,
     size: bytesToLabel(dto.size_bytes ?? undefined),
     url: dto.external_url || undefined,
+    folderPath: dto.folder_path ?? undefined,
+    folderID: dto.folder_id ?? undefined,
   }
 }
 
@@ -411,9 +423,12 @@ function recordListPath(opts: RecordListOptions, status?: RawRecordStatus): stri
   if (opts.offset) params.set('offset', String(opts.offset))
   if (status) params.set('status', status)
   if (opts.format && opts.format !== 'all') params.set('format', opts.format)
-  if (opts.sourceID) params.set('source_id', opts.sourceID)
+  if (opts.q && opts.q.trim()) params.set('q', opts.q.trim())
+  if (opts.folder && opts.folder.trim()) params.set('folder', opts.folder.trim())
+  // A scoped list uses the per-source route; source_id stays off the query.
+  const base = opts.sourceID ? `/api/v1/sources/${opts.sourceID}/records` : '/api/v1/records'
 
-  return `/api/v1/records?${params.toString()}`
+  return `${base}?${params.toString()}`
 }
 
 async function fetchRecords(token: string, domainID: string, opts: RecordListOptions, status?: RawRecordStatus): Promise<RecordDTO[]> {
@@ -443,6 +458,15 @@ export async function listRecords(token: string, domainID: string, opts: RecordL
 export async function listRecordsBySource(token: string, domainID: string, sourceID: string): Promise<AppRecord[]> {
   const data = await apiJSON<RecordListDTO>(`/api/v1/sources/${sourceID}/records?limit=1000`, token, domainInit(domainID, { method: 'GET' }))
   return data.records.map(mapRecord)
+}
+
+// listRecordsPage returns a single page of records with the server-side total,
+// honoring name search (q), status, source scope, limit and offset. Used by the
+// chat customize panel to search/paginate at scale instead of loading everything.
+export async function listRecordsPage(token: string, domainID: string, opts: RecordListOptions = {}): Promise<RecordPage> {
+  const status = opts.status && opts.status !== 'all' ? (opts.status as RawRecordStatus) : undefined
+  const data = await apiJSON<RecordListDTO>(recordListPath(opts, status), token, domainInit(domainID, { method: 'GET' }))
+  return { records: data.records.map(mapRecord), total: data.total ?? data.records.length }
 }
 
 export async function listSources(token: string, domainID: string): Promise<DriveSource[]> {

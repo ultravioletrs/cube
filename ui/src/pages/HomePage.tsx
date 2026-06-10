@@ -374,10 +374,10 @@ export default function HomePage() {
     }
   }
 
-  async function handleSaveSourceSelection(source: DriveSource, selectedFileIDs: string[]) {
+  async function handleSaveSourceSelection(source: DriveSource, selectedFileIDs: string[], selectedFolderIDs: string[]) {
     if (!accessToken) return
     try {
-      await updateGoogleSourceSelection(accessToken, domainID, source.id, selectedFileIDs, source.selectedFolderIDs ?? [])
+      await updateGoogleSourceSelection(accessToken, domainID, source.id, selectedFileIDs, selectedFolderIDs)
       await handleRetrySourceSync(source.id)
       setLoadError('')
       await refreshData()
@@ -754,8 +754,8 @@ export default function HomePage() {
           authToken={accessToken}
           source={editingSource}
           onClose={() => setEditingSource(null)}
-          onSave={async selectedFileIDs => {
-            await handleSaveSourceSelection(editingSource, selectedFileIDs)
+          onSave={async (selectedFileIDs, selectedFolderIDs) => {
+            await handleSaveSourceSelection(editingSource, selectedFileIDs, selectedFolderIDs)
             setEditingSource(null)
           }}
         />

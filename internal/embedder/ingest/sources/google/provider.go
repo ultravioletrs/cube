@@ -6,6 +6,7 @@ package google
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -64,6 +65,10 @@ func (p *sourceProvider) ListFiles(
 
 	out := make([]ingest.SourceFile, 0, len(files))
 	for _, file := range files {
+		folderID := file.FolderID
+		if folderID == "" && len(file.Parents) > 0 {
+			folderID = file.Parents[0]
+		}
 		out = append(out, ingest.SourceFile{
 			ExternalID:       file.ID,
 			Name:             file.Name,
@@ -72,6 +77,8 @@ func (p *sourceProvider) ListFiles(
 			MimeType:         file.MimeType,
 			SourceVersion:    file.Version,
 			SourceModifiedAt: parseRFC3339Ptr(file.ModifiedTime),
+			FolderPath:       file.FolderPath,
+			FolderID:         folderID,
 		})
 	}
 	return out, nil
@@ -156,7 +163,18 @@ func applyDriveSelection(
 	for _, id := range selectedFiles {
 		if file, ok := baseByID[id]; ok {
 			collected[file.ID] = file
+			continue
 		}
+		file, err := reader.GetFile(ctx, id)
+		if err != nil {
+			// Skip a selected file that has gone away or can't be ingested rather
+			// than failing the entire sync over one stale reference.
+			if errors.Is(err, ingest.ErrDriveNotFound) || errors.Is(err, ingest.ErrUnsupportedDriveFile) {
+				continue
+			}
+			return nil, err
+		}
+		collected[file.ID] = file
 	}
 
 	for _, folderID := range selectedFolders {

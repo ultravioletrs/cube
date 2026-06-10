@@ -28,7 +28,7 @@
 
 [http.services.ui.loadBalancer]
   [[http.services.ui.loadBalancer.servers]]
-    url = "http://cube-ui:5173"
+    url = "http://ui:5173"
   [http.services.ui.loadBalancer.healthCheck]
     scheme = "http"
     path = "/health"

@@ -19,6 +19,10 @@ type SourceFile struct {
 	MimeType         string
 	SourceVersion    string
 	SourceModifiedAt *time.Time
+	// FolderPath is the human-readable containing-folder path (e.g. /Docs/2024);
+	// FolderID is the immediate parent folder ID. Both optional / best-effort.
+	FolderPath string
+	FolderID   string
 }
 
 // SourceProviderCapabilities describes what integration operations are supported.

@@ -60,12 +60,32 @@ npm run dev -- --host 0.0.0.0
 
 ## Available scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server with HMR |
-| `npm run build` | Type-check and build for production (output: `dist/`) |
-| `npm run preview` | Serve the production build locally |
-| `npm run lint` | Run ESLint |
+| Script            | Description                                           |
+| ----------------- | ----------------------------------------------------- |
+| `npm run dev`     | Start development server with HMR                     |
+| `npm run build`   | Type-check and build for production (output: `dist/`) |
+| `npm run preview` | Serve the production build locally                    |
+| `npm run lint`    | Run ESLint                                            |
+
+## Chat record selection
+
+Chat answers are grounded in indexed records (RAG). The records panel on the
+right of the chat controls which records the model can retrieve from:
+
+- **All records** (default) — every indexed record is active. No selection
+  needed; the panel header shows `N active · all`. The chat sends no
+  `record_ids`, so the backend searches all records via its index (scales to
+  large corpora without enumerating the list).
+- **Customized** — click **Customize** to limit the chat to a chosen allowlist.
+  The search box queries records by name on the server (paginated, so it works
+  past the client load cap). Toggle individual records, or **Select all** /
+  **Clear** to (de)select every record matching the current search. **Reset**
+  returns to all records. A selection is capped (1000 records); "all" is the way
+  to use more.
+- **Scoped** — opening chat from a Source or Record pins it to that scope:
+  - A **source** scope limits the pool to that source's records, and can still
+    be narrowed further with the customize filter.
+  - A **single record** scope is locked and cannot be customized.
 
 ## Tech stack
 

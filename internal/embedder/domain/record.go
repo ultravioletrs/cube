@@ -57,6 +57,12 @@ type Record struct {
 	ExternalRef string
 	MimeType    string
 
+	// FolderPath is the human-readable containing-folder path within the source
+	// (e.g. /Docs/2024/Q3); FolderID is the immediate parent folder ID. Both are
+	// populated for folder-tree ingests (Google Drive); nil otherwise.
+	FolderPath *string
+	FolderID   *string
+
 	// Content metadata populated after successful ingestion.
 	Description         string
 	ChunkCount          *int
@@ -99,6 +105,11 @@ type RecordFilter struct {
 	SourceID *string
 	Status   *RecordStatus
 	Format   *RecordFormat
+	// Name is a case-insensitive substring matched against the record name.
+	Name *string
+	// FolderPrefix matches records whose folder_path equals or is nested under
+	// the given path (prefix match), e.g. "/Docs/2024".
+	FolderPrefix *string
 }
 
 // IngestResult holds post-ingestion metadata written back to the record.

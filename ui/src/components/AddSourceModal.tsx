@@ -103,6 +103,9 @@ export default function AddSourceModal({
   const [files, setFiles] = useState<DriveFileOption[]>([])
   const [selectedFileIDs, setSelectedFileIDs] = useState<string[]>([])
   const [selectedFileMetaByID, setSelectedFileMetaByID] = useState<Record<string, DriveFileOption>>({})
+  const [selectedFolderIDs, setSelectedFolderIDs] = useState<string[]>([])
+  const [selectedFolderMetaByID, setSelectedFolderMetaByID] = useState<Record<string, { id: string; name: string }>>({})
+  const [pickerFolderSelectionIDs, setPickerFolderSelectionIDs] = useState<string[]>([])
 
   const [fileSearch, setFileSearch] = useState('')
   const [pickerBrowseTab, setPickerBrowseTab] = useState<PickerBrowseTab>('folders')
@@ -207,6 +210,22 @@ export default function AddSourceModal({
     clearSelectionError()
   }
 
+  function removeSelectedFolder(id: string) {
+    setSelectedFolderIDs(prev => prev.filter(folderID => folderID !== id))
+    setSelectedFolderMetaByID(prev => {
+      if (!prev[id]) return prev
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    clearSelectionError()
+  }
+
+  function togglePickerFolder(folder: DriveFolderOption, checked: boolean) {
+    setPickerFolderSelectionIDs(prev => checked ? Array.from(new Set([...prev, folder.id])) : prev.filter(id => id !== folder.id))
+    setSelectedFolderMetaByID(prev => ({ ...prev, [folder.id]: { id: folder.id, name: folder.name } }))
+  }
+
   async function loadFolder(
     folderID: string,
     nextStack: Array<{ id: string; name: string }>,
@@ -306,6 +325,9 @@ export default function AddSourceModal({
         setFolderStack([])
         setSelectedFileIDs([])
         setSelectedFileMetaByID({})
+        setSelectedFolderIDs([])
+        setSelectedFolderMetaByID({})
+        setPickerFolderSelectionIDs([])
         await loadFolder('', [])
       } catch (err) {
         setFormError(err instanceof Error ? err.message : 'Failed to finish Google OAuth')
@@ -326,8 +348,8 @@ export default function AddSourceModal({
     if (!name.trim()) e.name = 'Required'
     if (providerTab === 'google') {
       if (!oauthConnected || !googleAccessToken) e.google = 'Connect Google Drive first'
-      if (importMode === 'selected' && selectedFileIDs.length === 0) {
-        e.selectedFileIDs = 'Select at least one file to sync'
+      if (importMode === 'selected' && selectedFileIDs.length === 0 && selectedFolderIDs.length === 0) {
+        e.selectedFileIDs = 'Select at least one file or folder to sync'
       }
     } else {
       if (!rcloneRemote.trim()) e.rcloneRemote = 'Rclone remote is required'
@@ -359,7 +381,9 @@ export default function AddSourceModal({
         clientId: '',
         clientSecret: '',
         selectedFileIDs: importMode === 'selected' ? selectedFileIDs : [],
-        selectedFolderIDs: importMode === 'all' && currentFolderID ? [currentFolderID] : [],
+        selectedFolderIDs: importMode === 'selected'
+          ? selectedFolderIDs
+          : (currentFolderID ? [currentFolderID] : []),
         syncEnabled,
         autoSyncInterval: syncEnabled ? Number.parseInt(autoSyncInterval, 10) : 0,
         rcloneRemote: '',
@@ -409,6 +433,7 @@ export default function AddSourceModal({
 
   async function openFilePicker() {
     setPickerSelectionIDs(selectedFileIDs)
+    setPickerFolderSelectionIDs(selectedFolderIDs)
     setShowFilePicker(true)
     if (!filesLoaded) {
       if (pickerBrowseTab === 'recent') {
@@ -430,6 +455,7 @@ export default function AddSourceModal({
 
   function savePickerSelection() {
     setSelectedFileIDs(Array.from(new Set(pickerSelectionIDs)))
+    setSelectedFolderIDs(Array.from(new Set(pickerFolderSelectionIDs)))
     clearSelectionError()
     setShowFilePicker(false)
   }
@@ -719,37 +745,57 @@ export default function AddSourceModal({
               </button>
             </div>
 
-            <div style={{ minHeight: selectedFiles.length > 0 ? '104px' : '84px', borderRadius: '8px', border: '1px dashed var(--border)', background: 'rgba(255,255,255,0.02)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {selectedFiles.length === 0 ? (
+            <div style={{ minHeight: selectedFiles.length > 0 || selectedFolderIDs.length > 0 ? '104px' : '84px', borderRadius: '8px', border: '1px dashed var(--border)', background: 'rgba(255,255,255,0.02)', padding: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {selectedFiles.length === 0 && selectedFolderIDs.length === 0 ? (
                 <div style={{ ...hintStyle, marginTop: 0 }}>
-                  No files selected yet.
+                  No files or folders selected yet.
                 </div>
               ) : (
-                selectedFiles.map(file => (
-                  <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, border: '1px solid var(--border)', borderRadius: '7px', padding: '6px 8px', background: 'rgba(255,255,255,0.03)' }}>
-                    <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', flexShrink: 0 }}>FILE</span>
-                    <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
-                      {file.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeSelectedFile(file.id)}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 4px', borderRadius: '5px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))
+                <>
+                  {selectedFolderIDs.map(id => (
+                    <div key={`folder-${id}`} style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, border: '1px solid var(--border)', borderRadius: '7px', padding: '6px 8px', background: 'rgba(255,255,255,0.03)' }}>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', flexShrink: 0 }}>DIR</span>
+                      <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                        {selectedFolderMetaByID[id]?.name ?? id}
+                        <span style={{ color: 'var(--text-dim)', marginLeft: '6px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}>recursive</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedFolder(id)}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 4px', borderRadius: '5px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  {selectedFiles.map(file => (
+                    <div key={file.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, border: '1px solid var(--border)', borderRadius: '7px', padding: '6px 8px', background: 'rgba(255,255,255,0.03)' }}>
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)', flexShrink: 0 }}>FILE</span>
+                      <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
+                        {file.name}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeSelectedFile(file.id)}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px 4px', borderRadius: '5px', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              <div style={hintStyle}>{selectedFileIDs.length} files selected</div>
+              <div style={hintStyle}>{selectedFileIDs.length} files · {selectedFolderIDs.length} folders selected</div>
               <button
                 type="button"
                 onClick={() => {
                   setSelectedFileIDs([])
                   setSelectedFileMetaByID({})
+                  setSelectedFolderIDs([])
+                  setSelectedFolderMetaByID({})
                   clearSelectionError()
                 }}
                 style={{ background: 'none', border: '1px solid var(--border)', color: 'var(--text-muted)', padding: '5px 8px', borderRadius: '7px', cursor: 'pointer', fontFamily: 'JetBrains Mono, monospace', fontSize: '10px' }}
@@ -775,7 +821,7 @@ export default function AddSourceModal({
                 style={{ accentColor: 'var(--accent)' }}
               />
               <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text)' }}>
-                Choose files manually
+                Choose files and folders manually
               </span>
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
@@ -1143,27 +1189,45 @@ export default function AddSourceModal({
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--card-bg)', padding: '12px 16px 16px' }}>
               {folders.length > 0 && (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: '10px', marginBottom: '14px' }}>
-                  {shownFolders.map(folder => (
-                    <button
-                      key={folder.id}
-                      type="button"
-                      onClick={() => {
-                        if (pickerBrowseTab === 'shared_drives' && !pickerSharedDriveID && folder.mimeType === 'application/vnd.google-apps.drive') {
-                          const driveStack = [{ id: folder.id, name: folder.name }]
-                          void loadFolder('', driveStack, 'shared_drives', folder.id)
-                          return
-                        }
-                        const next = [...folderStack, { id: folder.id, name: folder.name }]
-                        void loadFolder(folder.id, next, pickerBrowseTab === 'upload' ? 'folders' : pickerBrowseTab, pickerSharedDriveID)
-                      }}
-                      style={{ border: '1px solid var(--border)', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', height: '36px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', cursor: 'pointer', color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px' }}
-                    >
-                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>[DIR]</span>
-                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {folder.name}
-                      </span>
-                    </button>
-                  ))}
+                  {shownFolders.map(folder => {
+                    const isSharedDriveRoot = pickerBrowseTab === 'shared_drives' && !pickerSharedDriveID && folder.mimeType === 'application/vnd.google-apps.drive'
+                    const folderChecked = pickerFolderSelectionIDs.includes(folder.id)
+                    return (
+                      <div
+                        key={folder.id}
+                        style={{ border: `1px solid ${folderChecked ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '8px', background: 'rgba(255,255,255,0.03)', height: '36px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px' }}
+                      >
+                        {!isSharedDriveRoot && (
+                          <input
+                            type="checkbox"
+                            checked={folderChecked}
+                            onChange={e => togglePickerFolder(folder, e.target.checked)}
+                            title="Select folder (recursive import)"
+                            style={{ accentColor: 'var(--accent)', flexShrink: 0, cursor: 'pointer' }}
+                          />
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isSharedDriveRoot) {
+                              const driveStack = [{ id: folder.id, name: folder.name }]
+                              void loadFolder('', driveStack, 'shared_drives', folder.id)
+                              return
+                            }
+                            const next = [...folderStack, { id: folder.id, name: folder.name }]
+                            void loadFolder(folder.id, next, pickerBrowseTab === 'upload' ? 'folders' : pickerBrowseTab, pickerSharedDriveID)
+                          }}
+                          title="Open folder"
+                          style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, cursor: 'pointer', color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', textAlign: 'left' }}
+                        >
+                          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>[DIR]</span>
+                          <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {folder.name}
+                          </span>
+                        </button>
+                      </div>
+                    )
+                  })}
                   {folders.length > shownFolders.length && (
                     <button
                       type="button"
@@ -1338,7 +1402,7 @@ export default function AddSourceModal({
 
             <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)' }}>
-                {pickerSelectionIDs.length} files marked
+                {pickerSelectionIDs.length} files · {pickerFolderSelectionIDs.length} folders marked
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button

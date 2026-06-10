@@ -6,6 +6,7 @@ package transport
 import (
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/ultravioletrs/cube/internal/embedder/auth"
@@ -46,6 +47,8 @@ type recordResponse struct {
 	ExternalURL         string                `json:"external_url"`
 	ExternalRef         string                `json:"external_ref,omitempty"`
 	MimeType            string                `json:"mime_type,omitempty"`
+	FolderPath          *string               `json:"folder_path,omitempty"`
+	FolderID            *string               `json:"folder_id,omitempty"`
 	Description         string                `json:"description,omitempty"`
 	ChunkCount          *int                  `json:"chunks,omitempty"`
 	IngestTotalChunks   *int                  `json:"ingest_total_chunks,omitempty"`
@@ -78,6 +81,8 @@ func toRecordResponse(rec domain.Record) recordResponse {
 		ExternalURL:         rec.ExternalURL,
 		ExternalRef:         rec.ExternalRef,
 		MimeType:            rec.MimeType,
+		FolderPath:          rec.FolderPath,
+		FolderID:            rec.FolderID,
 		Description:         rec.Description,
 		ChunkCount:          rec.ChunkCount,
 		IngestTotalChunks:   rec.IngestTotalChunks,
@@ -223,6 +228,12 @@ func parseRecordFilter(r *http.Request) domain.RecordFilter {
 	if s := r.URL.Query().Get("format"); s != "" {
 		fmt := domain.RecordFormat(s)
 		f.Format = &fmt
+	}
+	if s := strings.TrimSpace(r.URL.Query().Get("q")); s != "" {
+		f.Name = &s
+	}
+	if s := strings.TrimSpace(r.URL.Query().Get("folder")); s != "" {
+		f.FolderPrefix = &s
 	}
 	return f
 }

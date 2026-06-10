@@ -9,7 +9,7 @@ interface Props {
   authToken: string
   source: DriveSource
   onClose: () => void
-  onSave: (selectedFileIDs: string[]) => Promise<void>
+  onSave: (selectedFileIDs: string[], selectedFolderIDs: string[]) => Promise<void>
 }
 
 type PickerBrowseTab = 'folders' | 'shared_drives' | 'recent' | 'upload'
@@ -21,6 +21,7 @@ export default function EditSourceSelectionModal({ authToken, source, onClose, o
   const [folders, setFolders] = useState<DriveFolderOption[]>([])
   const [files, setFiles] = useState<DriveFileOption[]>([])
   const [selectedFileIDs, setSelectedFileIDs] = useState<string[]>(source.selectedFileIDs ?? [])
+  const [selectedFolderIDs, setSelectedFolderIDs] = useState<string[]>(source.selectedFolderIDs ?? [])
   const [fileSearch, setFileSearch] = useState('')
   const [pickerBrowseTab, setPickerBrowseTab] = useState<PickerBrowseTab>('folders')
   const [pickerSharedDriveID, setPickerSharedDriveID] = useState('')
@@ -109,6 +110,13 @@ export default function EditSourceSelectionModal({ authToken, source, onClose, o
     setSelectedFileIDs(prev => {
       if (checked) return Array.from(new Set([...prev, fileID]))
       return prev.filter(id => id !== fileID)
+    })
+  }
+
+  function toggleFolder(folderID: string, checked: boolean) {
+    setSelectedFolderIDs(prev => {
+      if (checked) return Array.from(new Set([...prev, folderID]))
+      return prev.filter(id => id !== folderID)
     })
   }
 
@@ -232,7 +240,7 @@ export default function EditSourceSelectionModal({ authToken, source, onClose, o
     setSaveError('')
     setSaving(true)
     try {
-      await onSave(selectedFileIDs)
+      await onSave(selectedFileIDs, selectedFolderIDs)
       onClose()
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save source selection')
@@ -383,27 +391,45 @@ export default function EditSourceSelectionModal({ authToken, source, onClose, o
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--card-bg)', padding: '12px 16px 16px' }}>
           {folders.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(175px, 1fr))', gap: '10px', marginBottom: '14px' }}>
-              {shownFolders.map(folder => (
-                <button
-                  key={folder.id}
-                  type="button"
-                  onClick={() => {
-                    if (pickerBrowseTab === 'shared_drives' && !pickerSharedDriveID && folder.mimeType === 'application/vnd.google-apps.drive') {
-                      const driveStack = [{ id: folder.id, name: folder.name }]
-                      void loadFolder('', driveStack, 'shared_drives', folder.id)
-                      return
-                    }
-                    const next = [...folderStack, { id: folder.id, name: folder.name }]
-                    void loadFolder(folder.id, next, pickerBrowseTab === 'upload' ? 'folders' : pickerBrowseTab, pickerSharedDriveID)
-                  }}
-                  style={{ border: '1px solid var(--border)', borderRadius: '8px', background: 'rgba(255,255,255,0.03)', height: '36px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px', cursor: 'pointer', color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px' }}
-                >
-                  <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>[DIR]</span>
-                  <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {folder.name}
-                  </span>
-                </button>
-              ))}
+              {shownFolders.map(folder => {
+                const isSharedDriveRoot = pickerBrowseTab === 'shared_drives' && !pickerSharedDriveID && folder.mimeType === 'application/vnd.google-apps.drive'
+                const folderChecked = selectedFolderIDs.includes(folder.id)
+                return (
+                  <div
+                    key={folder.id}
+                    style={{ border: `1px solid ${folderChecked ? 'var(--accent)' : 'var(--border)'}`, borderRadius: '8px', background: 'rgba(255,255,255,0.03)', height: '36px', display: 'flex', alignItems: 'center', gap: '8px', padding: '0 10px' }}
+                  >
+                    {!isSharedDriveRoot && (
+                      <input
+                        type="checkbox"
+                        checked={folderChecked}
+                        onChange={e => toggleFolder(folder.id, e.target.checked)}
+                        title="Select folder (recursive import)"
+                        style={{ accentColor: 'var(--accent)', flexShrink: 0, cursor: 'pointer' }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isSharedDriveRoot) {
+                          const driveStack = [{ id: folder.id, name: folder.name }]
+                          void loadFolder('', driveStack, 'shared_drives', folder.id)
+                          return
+                        }
+                        const next = [...folderStack, { id: folder.id, name: folder.name }]
+                        void loadFolder(folder.id, next, pickerBrowseTab === 'upload' ? 'folders' : pickerBrowseTab, pickerSharedDriveID)
+                      }}
+                      title="Open folder"
+                      style={{ flex: 1, minWidth: 0, height: '100%', border: 'none', background: 'none', display: 'flex', alignItems: 'center', gap: '8px', padding: 0, cursor: 'pointer', color: 'var(--text)', fontFamily: 'Space Grotesk, sans-serif', fontSize: '12px', textAlign: 'left' }}
+                    >
+                      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>[DIR]</span>
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {folder.name}
+                      </span>
+                    </button>
+                  </div>
+                )
+              })}
               {folders.length > shownFolders.length && (
                 <button
                   type="button"
@@ -578,7 +604,7 @@ export default function EditSourceSelectionModal({ authToken, source, onClose, o
 
         <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
           <div style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: 'var(--text-dim)' }}>
-            {selectedFileIDs.length} files marked
+            {selectedFileIDs.length} files · {selectedFolderIDs.length} folders marked
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <button
