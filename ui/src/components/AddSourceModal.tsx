@@ -697,7 +697,7 @@ export default function AddSourceModal({
                 padding: '8px 10px',
               }}
             >
-              Other Clouds (rclone)
+              Other Clouds
             </button>
           </div>
 
@@ -843,7 +843,7 @@ export default function AddSourceModal({
           {providerTab === 'rclone' && (
             <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px 14px', background: 'rgba(255,255,255,0.025)', borderRadius: '10px', border: `1px solid ${errors.rcloneRemote ? 'rgba(255,107,107,0.5)' : 'var(--border)'}` }}>
-                <Field label="Rclone Remote *" hint="Example: gdrive, onedrive, dropbox, s3" error={errors.rcloneRemote}>
+                <Field label="Storage Remote *" hint="Example: gdrive, onedrive, dropbox, s3" error={errors.rcloneRemote}>
                   <input
                     type="text"
                     placeholder="gdrive"
@@ -859,7 +859,7 @@ export default function AddSourceModal({
                 <Field label="Config Ref (optional)" hint="Optional config reference if backend expects it.">
                   <input
                     type="text"
-                    placeholder="secret/rclone"
+                    placeholder="secret/cloud-storage"
                     value={rcloneConfigRef}
                     onChange={e => setRcloneConfigRef(e.target.value)}
                     style={inputStyle}
@@ -871,7 +871,7 @@ export default function AddSourceModal({
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                   <div>
                     <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontWeight: '600', fontSize: '13px', color: 'var(--text)' }}>
-                      Rclone Browser
+                      Cloud Browser
                     </div>
                     <div style={{ ...hintStyle, marginTop: '2px' }}>
                       Browse remote and select files/folders to sync.

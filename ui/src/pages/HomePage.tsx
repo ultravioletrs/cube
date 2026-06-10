@@ -556,7 +556,7 @@ export default function HomePage() {
               </div>
               {driveSources.map(ds => {
                 const c = driveStatusColors[ds.status] ?? driveStatusColors.active
-                const sourceKind = ds.sourceType === 'google_drive' ? 'Google Drive' : 'Rclone'
+                const sourceKind = ds.sourceType === 'google_drive' ? 'Google Drive' : 'Cloud Storage'
                 const canEditSelection = ds.sourceType === 'google_drive'
                 const isSyncing = ds.status === 'syncing' || syncingSourceIDs.includes(ds.id)
                 const syncLabel = ds.status === 'error' || ds.status === 'disconnected'

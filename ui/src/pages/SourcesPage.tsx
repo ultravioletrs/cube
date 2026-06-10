@@ -61,7 +61,7 @@ function SourceRow(
   },
 ) {
   const c = driveStatusColors[source.status] ?? driveStatusColors.active
-  const sourceKindLabel = source.sourceType === 'google_drive' ? 'Google Drive' : 'Rclone'
+  const sourceKindLabel = source.sourceType === 'google_drive' ? 'Google Drive' : 'Cloud Storage'
   const sourceLocation = source.sourceType === 'google_drive'
     ? (source.selectedFileIDs.length > 0
       ? `${source.selectedFileIDs.length} selected files`
